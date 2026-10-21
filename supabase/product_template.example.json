@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ARSComputersProductTemplate",
+  "description": "Template specification and empty starter schema for onboarding verified physical hardware products to ARS Computers.",
+  "metadata": {
+    "organization": "ARS Computers",
+    "step": "Step 2B: Product Catalogue Structure",
+    "security_warning": "cost_price is for internal procurement and inventory records only. It must NEVER be queried in public endpoints or exposed in frontend clients."
+  },
+  "blank_template": {
+    "category_slug": null,
+    "name": null,
+    "slug": null,
+    "sku": null,
+    "brand": null,
+    "model": null,
+    "spec_summary": null,
+    "spec_attributes": {},
+    "price": null,
+    "cost_price": null,
+    "stock_quantity": 0,
+    "min_stock_alert": 2,
+    "is_featured": false,
+    "is_active": true,
+    "is_generic": false,
+    "warranty_text": null,
+    "hsn_code": null,
+    "availability_status": "on_demand",
+    "images": []
+  },
+  "reference_examples": [
+    {
+      "category_slug": "computer-laptop",
+      "name": "Dell Latitude 3440 Business Laptop",
+      "slug": "dell-latitude-3440-i5-1335u-16gb-512gb",
+      "sku": "ARS-LAP-DEL-3440",
+      "brand": "Dell",
+      "model": "Latitude 3440",
+      "spec_summary": "Intel Core i5-1335U (13th Gen), 16GB DDR4 RAM, 512GB PCIe NVMe SSD, 14.0\" FHD Anti-Glare",
+      "spec_attributes": {
+        "processor": "Intel Core i5-1335U (10 Cores, 12 Threads, up to 4.60 GHz)",
+        "ram": "16 GB DDR4 3200MHz",
+        "storage": "512 GB M.2 PCIe NVMe Gen 4 SSD",
+        "display": "14.0-inch FHD (1920 x 1080) Anti-Glare Non-Touch, 250 nits",
+        "graphics": "Intel Iris Xe Graphics",
+        "operating_system": "Windows 11 Pro 64-bit Official OEM License",
+        "ports": "1x USB-C 3.2 Gen 2, 3x USB 3.2 Gen 1, 1x HDMI 1.4, 1x RJ45 Gigabit Ethernet",
+        "connectivity": "Intel Wi-Fi 6E AX211 + Bluetooth 5.3"
+      },
+      "price": 62500.00,
+      "cost_price": 54200.00,
+      "stock_quantity": 3,
+      "min_stock_alert": 1,
+      "is_featured": true,
+      "is_active": true,
+      "is_generic": false,
+      "warranty_text": "3 Years On-site Next-Business-Day Hardware Warranty by Dell India",
+      "hsn_code": "84713010",
+      "availability_status": "in_stock",
+      "images": [
+        "https://your-project-id.supabase.co/storage/v1/object/public/product-images/laptops/dell-latitude-3440.webp"
+      ]
+    },
+    {
+      "category_slug": "cctv",
+      "name": "Hikvision 4K ColorVu Fixed Bullet Network Camera",
+      "slug": "hikvision-ds-2cd2047g2-lu-4k-colorvu-bullet",
+      "sku": "ARS-CAM-HIK-2047",
+      "brand": "Hikvision",
+      "model": "DS-2CD2047G2-LU",
+      "spec_summary": "4 MP / 4K resolution, 24/7 colorful imaging with F1.0 aperture, built-in mic, IP67 weatherproof",
+      "spec_attributes": {
+        "sensor_resolution": "4 Megapixel (2688 x 1520)",
+        "lens_focal_length": "2.8 mm Fixed Lens, Horizontal FOV 112°",
+        "aperture": "F1.0 Super Aperture for ultra low-light performance",
+        "supplement_light": "White Light up to 40 meters range",
+        "audio": "Built-in microphone with real-time environment filtering",
+        "ingress_protection": "IP67 Weather & Dust Resistant",
+        "power_options": "12 VDC ± 25% or PoE (802.3af, Class 3)"
+      },
+      "price": 5800.00,
+      "cost_price": 4650.00,
+      "stock_quantity": 12,
+      "min_stock_alert": 4,
+      "is_featured": true,
+      "is_active": true,
+      "is_generic": false,
+      "warranty_text": "2 Years Official Manufacturer Replacement Warranty by Prama Hikvision India",
+      "hsn_code": "85258900",
+      "availability_status": "in_stock",
+      "images": [
+        "https://your-project-id.supabase.co/storage/v1/object/public/product-images/cctv/hikvision-ds-2cd2047g2.webp"
+      ]
+    },
+    {
+      "category_slug": "printer",
+      "name": "Epson EcoTank L3250 Wi-Fi All-in-One Ink Tank Printer",
+      "slug": "epson-ecotank-l3250-wifi-all-in-one-printer",
+      "sku": "ARS-PRN-EPS-L3250",
+      "brand": "Epson",
+      "model": "EcoTank L3250",
+      "spec_summary": "Print, Scan, Copy with Wi-Fi & Wi-Fi Direct, ultra-high page yield (up to 4,500 pages black, 7,500 pages color)",
+      "spec_attributes": {
+        "functionality": "Print, Scan, Copy",
+        "print_speed": "Up to 33.0 ppm (Black) / 15.0 ppm (Color)",
+        "print_resolution": "5760 x 1440 dpi",
+        "connectivity": "USB 2.0, Wi-Fi, Wi-Fi Direct, Epson Smart Panel App",
+        "scanner_type": "Flatbed color image scanner (1200 x 2400 dpi)",
+        "compatible_ink": "Epson 003 Black, Cyan, Magenta, Yellow bottles"
+      },
+      "price": 14200.00,
+      "cost_price": 12400.00,
+      "stock_quantity": 5,
+      "min_stock_alert": 2,
+      "is_featured": true,
+      "is_active": true,
+      "is_generic": false,
+      "warranty_text": "1 Year or 30,000 pages (whichever comes first) On-site Warranty by Epson India",
+      "hsn_code": "84433100",
+      "availability_status": "in_stock",
+      "images": [
+        "https://your-project-id.supabase.co/storage/v1/object/public/product-images/printers/epson-l3250.webp"
+      ]
+    }
+  ]
+}
