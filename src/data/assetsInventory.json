@@ -1,0 +1,682 @@
+[
+  {
+    "name": "hero.png",
+    "relPath": "hero.png",
+    "size": 13057,
+    "ext": ".png",
+    "width": 343,
+    "height": 361
+  },
+  {
+    "name": "logo.png",
+    "relPath": "logo.png",
+    "size": 4007,
+    "ext": ".png",
+    "width": 65536,
+    "height": 4293001688
+  },
+  {
+    "name": "logo.svg",
+    "relPath": "logo.svg",
+    "size": 1357,
+    "ext": ".svg",
+    "width": null,
+    "height": null
+  },
+  {
+    "name": "react.svg",
+    "relPath": "react.svg",
+    "size": 4126,
+    "ext": ".svg",
+    "width": null,
+    "height": null
+  },
+  {
+    "name": "vite.svg",
+    "relPath": "vite.svg",
+    "size": 8709,
+    "ext": ".svg",
+    "width": null,
+    "height": null
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.17 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.17 PM (1).jpeg",
+    "size": 50018,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 1029
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.17 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.17 PM.jpeg",
+    "size": 89335,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 949
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.18 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.18 PM (1).jpeg",
+    "size": 44969,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 1081
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.18 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.18 PM.jpeg",
+    "size": 28515,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 765
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.19 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.19 PM (1).jpeg",
+    "size": 41035,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 1079
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.19 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.19 PM.jpeg",
+    "size": 37783,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 783
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.20 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.20 PM (1).jpeg",
+    "size": 56119,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 835
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.20 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.20 PM (2).jpeg",
+    "size": 61013,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 853
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.20 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.20 PM.jpeg",
+    "size": 39149,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 736
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.21 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.21 PM (1).jpeg",
+    "size": 59826,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 670
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.21 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.21 PM (2).jpeg",
+    "size": 22479,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 705
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.21 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.21 PM.jpeg",
+    "size": 61888,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 883
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.22 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.22 PM (1).jpeg",
+    "size": 43325,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 692
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.22 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.22 PM.jpeg",
+    "size": 41272,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 716
+  },
+  {
+    "name": "WhatsApp Image 2026-10-20 at 3.05.23 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-20 at 3.05.23 PM.jpeg",
+    "size": 58897,
+    "ext": ".jpeg",
+    "width": 1080,
+    "height": 606
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.09 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.09 PM (1).jpeg",
+    "size": 53539,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.09 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.09 PM.jpeg",
+    "size": 53204,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.10 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.10 PM (1).jpeg",
+    "size": 47939,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.10 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.10 PM (2).jpeg",
+    "size": 62959,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.10 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.10 PM.jpeg",
+    "size": 51847,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.47 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.47 PM.jpeg",
+    "size": 65170,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.48 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.48 PM (1).jpeg",
+    "size": 62196,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.48 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.48 PM (2).jpeg",
+    "size": 70883,
+    "ext": ".jpeg",
+    "width": 1200,
+    "height": 1600
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.48 PM (3).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.48 PM (3).jpeg",
+    "size": 73334,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.53.48 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.53.48 PM.jpeg",
+    "size": 51127,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.56.36 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.56.36 PM (1).jpeg",
+    "size": 54220,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.56.36 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.56.36 PM.jpeg",
+    "size": 47967,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.56.37 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.56.37 PM (1).jpeg",
+    "size": 57453,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.56.37 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.56.37 PM (2).jpeg",
+    "size": 66149,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.56.37 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.56.37 PM.jpeg",
+    "size": 58735,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.13 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.13 PM (1).jpeg",
+    "size": 49278,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.13 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.13 PM.jpeg",
+    "size": 64433,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.14 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.14 PM (1).jpeg",
+    "size": 43744,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.14 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.14 PM (2).jpeg",
+    "size": 78277,
+    "ext": ".jpeg",
+    "width": 1600,
+    "height": 1600
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.14 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.14 PM.jpeg",
+    "size": 50840,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.32 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.32 PM (1).jpeg",
+    "size": 94394,
+    "ext": ".jpeg",
+    "width": 1600,
+    "height": 1600
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.32 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.32 PM (2).jpeg",
+    "size": 77285,
+    "ext": ".jpeg",
+    "width": 1600,
+    "height": 1600
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.32 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.32 PM.jpeg",
+    "size": 44516,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.33 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.33 PM (1).jpeg",
+    "size": 103684,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.57.33 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.57.33 PM.jpeg",
+    "size": 122234,
+    "ext": ".jpeg",
+    "width": 1600,
+    "height": 1600
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.59.33 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.59.33 PM.jpeg",
+    "size": 68549,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.59.34 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.59.34 PM (1).jpeg",
+    "size": 84597,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.59.34 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.59.34 PM (2).jpeg",
+    "size": 82779,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.59.34 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.59.34 PM.jpeg",
+    "size": 83988,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 4.59.35 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 4.59.35 PM.jpeg",
+    "size": 71774,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.00.56 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.00.56 PM (1).jpeg",
+    "size": 76049,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.00.56 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.00.56 PM.jpeg",
+    "size": 71972,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.00.57 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.00.57 PM (1).jpeg",
+    "size": 90589,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.00.57 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.00.57 PM (2).jpeg",
+    "size": 55331,
+    "ext": ".jpeg",
+    "width": 738,
+    "height": 1600
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.00.57 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.00.57 PM.jpeg",
+    "size": 119644,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.03.10 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.03.10 PM (1).jpeg",
+    "size": 69975,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.03.10 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.03.10 PM (2).jpeg",
+    "size": 44028,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.03.10 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.03.10 PM.jpeg",
+    "size": 75214,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.03.11 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.03.11 PM (1).jpeg",
+    "size": 75176,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.03.11 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.03.11 PM.jpeg",
+    "size": 37626,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.03 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.03 PM (1).jpeg",
+    "size": 115321,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.03 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.03 PM.jpeg",
+    "size": 80493,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.04 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.04 PM (1).jpeg",
+    "size": 105009,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.04 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.04 PM.jpeg",
+    "size": 74712,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.05 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.05 PM.jpeg",
+    "size": 63293,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.06 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.06 PM (1).jpeg",
+    "size": 72375,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.06 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.06 PM (2).jpeg",
+    "size": 93760,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.06 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.06 PM.jpeg",
+    "size": 93429,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.08 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.08 PM.jpeg",
+    "size": 74326,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.09 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.09 PM (1).jpeg",
+    "size": 46369,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.09 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.09 PM (2).jpeg",
+    "size": 123846,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.09 PM (3).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.09 PM (3).jpeg",
+    "size": 110904,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.09 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.09 PM.jpeg",
+    "size": 44159,
+    "ext": ".jpeg",
+    "width": 1600,
+    "height": 800
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.10 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.10 PM (1).jpeg",
+    "size": 125302,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.10 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.10 PM (2).jpeg",
+    "size": 134386,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.10 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.10 PM.jpeg",
+    "size": 126405,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.11 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.11 PM.jpeg",
+    "size": 76270,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.12 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.12 PM (1).jpeg",
+    "size": 91639,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.12 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.12 PM.jpeg",
+    "size": 85089,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.13 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.13 PM (1).jpeg",
+    "size": 95959,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.13 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.13 PM.jpeg",
+    "size": 88706,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.14 PM (1).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.14 PM (1).jpeg",
+    "size": 80376,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.14 PM (2).jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.14 PM (2).jpeg",
+    "size": 117530,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.14 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.14 PM.jpeg",
+    "size": 49109,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  },
+  {
+    "name": "WhatsApp Image 2026-10-21 at 5.20.15 PM.jpeg",
+    "relPath": "WhatsApp Image 2026-10-21 at 5.20.15 PM.jpeg",
+    "size": 64077,
+    "ext": ".jpeg",
+    "width": 1599,
+    "height": 1066
+  }
+]
