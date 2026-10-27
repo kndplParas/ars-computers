@@ -154,6 +154,14 @@ function CustomerHomePage() {
     scrollToSection('services')
   }
 
+  // Handle direct navigation to service enquiry form from hero
+  const handleServiceEnquiryHeroClick = () => {
+    setServiceTab('request')
+    setTimeout(() => {
+      scrollToSection('services')
+    }, 50)
+  }
+
   // Handle direct inquiry click from category card or service card
   const handleInquireCategory = (categoryId) => {
     setFormData(prev => ({
@@ -304,24 +312,9 @@ function CustomerHomePage() {
                 <button className="hero-btn-primary" onClick={() => scrollToSection('products')}>
                   Explore Products &rarr;
                 </button>
-                <button className="hero-btn-secondary" onClick={() => handleCategorySelect('cctv')}>
-                  View Security &amp; CCTV &rarr;
+                <button className="hero-btn-secondary" onClick={handleServiceEnquiryHeroClick}>
+                  Service Enquiry &rarr;
                 </button>
-              </div>
-
-              <div className="hero-highlights">
-                <div className="hero-highlight-item">
-                  <span className="hero-check-blue">&check;</span>
-                  <span>Genuine Hardware</span>
-                </div>
-                <div className="hero-highlight-item">
-                  <span className="hero-check-blue">&check;</span>
-                  <span>On-Site Setup</span>
-                </div>
-                <div className="hero-highlight-item">
-                  <span className="hero-check-blue">&check;</span>
-                  <span>Dedicated AMC</span>
-                </div>
               </div>
             </div>
 
