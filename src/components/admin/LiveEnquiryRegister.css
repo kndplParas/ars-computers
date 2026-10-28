@@ -3,7 +3,8 @@
  * Advanced Excel-like Live Operational Spreadsheet View
  * ============================================================================ */
 
-.live-register-overlay {
+.live-register-overlay,
+.live-register-modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 1050;
@@ -16,7 +17,8 @@
   overflow: hidden;
 }
 
-.live-register-modal {
+.live-register-modal,
+.live-register-dialog {
   width: 98vw;
   max-width: 1720px;
   height: 94vh;

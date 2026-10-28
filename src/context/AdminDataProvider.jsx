@@ -14,7 +14,8 @@ const STORAGE_KEYS = {
   CATEGORIES: 'ars_admin_demo_categories_v1',
   ENQUIRIES: 'ars_admin_demo_enquiries_v1',
   STAFF: 'ars_admin_demo_staff_v1',
-  SERVICE_REQUESTS: 'ars_admin_demo_service_requests_v1'
+  SERVICE_REQUESTS: 'ars_admin_demo_service_requests_v1',
+  ORDERS: 'ars_admin_demo_orders_v1'
 }
 
 function safeLoad(key, fallback) {
@@ -59,6 +60,10 @@ export function AdminDataProvider({ children }) {
 
   const [demoServiceRequests, setDemoServiceRequests] = useState(() =>
     safeLoad(STORAGE_KEYS.SERVICE_REQUESTS, INITIAL_DEMO_SERVICE_REQUESTS)
+  )
+
+  const [demoOrders, setDemoOrders] = useState(() =>
+    safeLoad(STORAGE_KEYS.ORDERS, [])
   )
 
   // Sync demo state to LocalStorage ONLY when offline/demo; live records never touch localStorage
@@ -112,23 +117,36 @@ export function AdminDataProvider({ children }) {
     }
   }, [demoServiceRequests, isLiveDatabase])
 
+  useEffect(() => {
+    if (!isLiveDatabase) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(demoOrders))
+      } catch (e) {
+        console.warn('[AdminDataProvider] Failed to save orders to localStorage:', e)
+      }
+    }
+  }, [demoOrders, isLiveDatabase])
+
   // --- Live Supabase Database State ---
   const [liveProducts, setLiveProducts] = useState([])
   const [liveCategories, setLiveCategories] = useState([])
   const [liveEnquiries, setLiveEnquiries] = useState([])
   const [liveStaff, setLiveStaff] = useState([])
   const [liveServiceRequests, setLiveServiceRequests] = useState([])
+  const [liveOrders, setLiveOrders] = useState([])
 
   const [isLoadingProducts, setIsLoadingProducts] = useState(false)
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
   const [isLoadingEnquiries, setIsLoadingEnquiries] = useState(false)
   const [isLoadingStaff, setIsLoadingStaff] = useState(false)
   const [isLoadingServiceRequests, setIsLoadingServiceRequests] = useState(false)
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false)
 
   const [databaseError, setDatabaseError] = useState(null)
   const [enquiriesError, setEnquiriesError] = useState(null)
   const [staffError, setStaffError] = useState(null)
   const [serviceRequestsError, setServiceRequestsError] = useState(null)
+  const [ordersError, setOrdersError] = useState(null)
   const [isPermissionDenied, setIsPermissionDenied] = useState(false)
 
   const [pagination, setPagination] = useState({
@@ -349,6 +367,38 @@ export function AdminDataProvider({ children }) {
     }
   }, [isLiveDatabase, adminUser])
 
+  // --- Fetch Sales Orders from Database ---
+  const loadAdminOrders = useCallback(async () => {
+    if (!isLiveDatabase) return
+
+    setIsLoadingOrders(true)
+    setOrdersError(null)
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase client is not configured.')
+      }
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        setLiveOrders([])
+        setOrdersError(error.message || 'Failed to query sales orders.')
+      } else {
+        setLiveOrders(data || [])
+        setOrdersError(null)
+      }
+    } catch (err) {
+      setLiveOrders([])
+      setOrdersError(err.message || 'Failed to query sales orders.')
+    } finally {
+      setIsLoadingOrders(false)
+    }
+  }, [isLiveDatabase])
+
   // Load database catalog on mount or when auth state transitions to authenticated
   useEffect(() => {
     let ignore = false
@@ -373,8 +423,10 @@ export function AdminDataProvider({ children }) {
         }
         if (adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'inventory_staff') {
           loadAdminServiceRequests()
+          loadAdminOrders()
         } else {
           setLiveServiceRequests([])
+          setLiveOrders([])
         }
       } else {
         setLiveCategories([])
@@ -382,10 +434,12 @@ export function AdminDataProvider({ children }) {
         setLiveEnquiries([])
         setLiveStaff([])
         setLiveServiceRequests([])
+        setLiveOrders([])
         setDatabaseError(null)
         setEnquiriesError(null)
         setStaffError(null)
         setServiceRequestsError(null)
+        setOrdersError(null)
         setIsPermissionDenied(false)
       }
     }
@@ -395,7 +449,7 @@ export function AdminDataProvider({ children }) {
     return () => {
       ignore = true
     }
-  }, [isLiveDatabase, adminUser, loadAdminCategories, loadAdminProducts, loadAdminEnquiries, loadAdminStaff, loadAdminServiceRequests])
+  }, [isLiveDatabase, adminUser, loadAdminCategories, loadAdminProducts, loadAdminEnquiries, loadAdminStaff, loadAdminServiceRequests, loadAdminOrders])
 
   // Active displayed datasets (STRICT: If live is active, use live records or empty on error)
   const products = isLiveDatabase ? liveProducts : demoProducts
@@ -403,6 +457,7 @@ export function AdminDataProvider({ children }) {
   const enquiries = isLiveDatabase ? liveEnquiries : demoEnquiries
   const staff = isLiveDatabase ? liveStaff : demoStaff
   const serviceRequests = isLiveDatabase ? liveServiceRequests : demoServiceRequests
+  const orders = isLiveDatabase ? liveOrders : demoOrders
 
   // --- Category Lookup Helper (Resolves both UUID and Slug) ---
   const findCategory = useCallback(
@@ -1657,6 +1712,227 @@ export function AdminDataProvider({ children }) {
     [isLiveDatabase, adminUser, loadAdminServiceRequests]
   )
 
+  // ==========================================================================
+  // SALES ORDER WORKFLOW MUTATORS
+  // ==========================================================================
+
+  // 1. Create Sales Order
+  const createSalesOrder = useCallback(
+    async ({ customer_name, contact_info, items, paid_amount = 0, payment_method = 'cash', employee_remarks = null }) => {
+      const role = adminUser?.role
+      if (role !== 'superadmin' && role !== 'admin') {
+        throw new Error('Access denied: Active administrator or store employee privileges required to create orders.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('create_sales_order', {
+          p_customer_name: customer_name,
+          p_contact_info: contact_info,
+          p_items: items,
+          p_paid_amount: Number(paid_amount) || 0,
+          p_payment_method: payment_method,
+          p_employee_remarks: employee_remarks || null
+        })
+
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      const totalAmount = items.reduce(
+        (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
+        0
+      )
+      const paid = Number(paid_amount) || 0
+      const paymentStatus = paid === 0 ? 'pending' : paid >= totalAmount ? 'paid' : 'partial'
+      const newOrder = {
+        id: crypto.randomUUID(),
+        order_number: `ARS-ORD-0${Math.floor(1000 + Math.random() * 9000)}`,
+        customer_name,
+        contact_info,
+        status: 'new',
+        total_amount: totalAmount,
+        paid_amount: paid,
+        payment_status: paymentStatus,
+        payment_method,
+        created_by: adminUser?.id,
+        created_by_name: adminUser?.full_name || 'Store Employee',
+        created_by_employee_code: adminUser?.employee_code || null,
+        created_at: new Date().toISOString(),
+        order_items: items.map((it) => ({
+          id: crypto.randomUUID(),
+          product_id: it.product_id || null,
+          product_name_snapshot: it.product_name || 'Hardware Item',
+          brand_snapshot: it.brand || '',
+          model_snapshot: it.model || '',
+          sku_snapshot: it.sku || '',
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          line_total: it.quantity * it.unit_price,
+          created_at: new Date().toISOString()
+        })),
+        is_archived: false,
+        updated_at: new Date().toISOString()
+      }
+      setDemoOrders((prev) => [newOrder, ...prev])
+      return newOrder
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 2. Start Sales Order
+  const startSalesOrder = useCallback(
+    async (orderId) => {
+      const role = adminUser?.role
+      if (role !== 'superadmin' && role !== 'admin') {
+        throw new Error('Access denied: Administrator privileges required to process orders.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('start_sales_order', { p_order_id: orderId })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId ? { ...o, status: 'processing', updated_at: new Date().toISOString() } : o
+        )
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 3. Submit Order Completion
+  const submitOrderCompletion = useCallback(
+    async (orderId, employeeRemarks) => {
+      const role = adminUser?.role
+      if (role !== 'superadmin' && role !== 'admin') {
+        throw new Error('Access denied: Administrator privileges required.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('submit_order_completion', {
+          p_order_id: orderId,
+          p_employee_remarks: employeeRemarks
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      const now = new Date().toISOString()
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status: 'completion_requested',
+                completion_requested_by: adminUser?.id,
+                completion_requested_at: now,
+                completed_by_name: adminUser?.full_name || 'Store Employee',
+                completed_by_employee_code: adminUser?.employee_code || null,
+                employee_remarks: employeeRemarks,
+                updated_at: now
+              }
+            : o
+        )
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 4. Review Order Completion (Superadmin Only)
+  const reviewOrderCompletion = useCallback(
+    async (orderId, headRemarks = '') => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only Superadministrators can review and approve orders.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('review_order_completion', {
+          p_order_id: orderId,
+          p_head_remarks: headRemarks
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      const now = new Date().toISOString()
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status: 'completed',
+                is_archived: true,
+                archived_at: now,
+                completion_approved_by: adminUser?.id,
+                completion_approved_at: now,
+                approved_by_name: adminUser?.full_name || 'Store Head',
+                approved_by_employee_code: adminUser?.employee_code || null,
+                head_remarks: headRemarks,
+                updated_at: now
+              }
+            : o
+        )
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 5. Cancel Sales Order (Superadmin Only)
+  const cancelSalesOrder = useCallback(
+    async (orderId, cancellationReason) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only Superadministrators can cancel sales orders.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('cancel_sales_order', {
+          p_order_id: orderId,
+          p_cancellation_reason: cancellationReason
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      const now = new Date().toISOString()
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status: 'cancelled',
+                is_archived: true,
+                archived_at: now,
+                cancelled_by: adminUser?.id,
+                cancelled_at: now,
+                cancelled_by_name: adminUser?.full_name || 'Store Head',
+                cancellation_reason: cancellationReason,
+                updated_at: now
+              }
+            : o
+        )
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
   // --- Reset All Demo State ---
   const resetDemoData = useCallback(() => {
     if (isLiveDatabase) {
@@ -1669,6 +1945,7 @@ export function AdminDataProvider({ children }) {
       }
       if (adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'inventory_staff') {
         loadAdminServiceRequests()
+        loadAdminOrders()
       }
       return
     }
@@ -1681,16 +1958,18 @@ export function AdminDataProvider({ children }) {
     setDemoEnquiries(INITIAL_DEMO_ENQUIRIES)
     setDemoStaff(INITIAL_DEMO_STAFF)
     setDemoServiceRequests(INITIAL_DEMO_SERVICE_REQUESTS)
+    setDemoOrders([])
     try {
       localStorage.removeItem(STORAGE_KEYS.PRODUCTS)
       localStorage.removeItem(STORAGE_KEYS.CATEGORIES)
       localStorage.removeItem(STORAGE_KEYS.ENQUIRIES)
       localStorage.removeItem(STORAGE_KEYS.STAFF)
       localStorage.removeItem(STORAGE_KEYS.SERVICE_REQUESTS)
+      localStorage.removeItem(STORAGE_KEYS.ORDERS)
     } catch (e) {
       console.warn('[AdminDataProvider] Failed to clear demo localStorage keys:', e)
     }
-  }, [isLiveDatabase, adminUser, loadAdminProducts, loadAdminEnquiries, loadAdminStaff, loadAdminServiceRequests])
+  }, [isLiveDatabase, adminUser, loadAdminProducts, loadAdminEnquiries, loadAdminStaff, loadAdminServiceRequests, loadAdminOrders])
 
   // --- Consistent Derived Metrics ---
   const metrics = useMemo(() => {
@@ -1794,6 +2073,7 @@ export function AdminDataProvider({ children }) {
     enquiries,
     staff,
     serviceRequests,
+    orders,
 
     // Live Database Metadata & Handlers
     isLiveDatabase,
@@ -1803,10 +2083,12 @@ export function AdminDataProvider({ children }) {
     isLoadingEnquiries,
     isLoadingStaff,
     isLoadingServiceRequests,
+    isLoadingOrders,
     databaseError,
     enquiriesError,
     staffError,
     serviceRequestsError,
+    ordersError,
     isPermissionDenied,
     pagination,
     loadAdminCatalog: loadAdminProducts,
@@ -1814,6 +2096,7 @@ export function AdminDataProvider({ children }) {
     loadAdminEnquiries,
     loadAdminStaff,
     loadAdminServiceRequests,
+    loadAdminOrders,
     findCategory,
 
     // Product Mutators
@@ -1864,6 +2147,14 @@ export function AdminDataProvider({ children }) {
     closeServiceTicket,
     reopenServiceTicket,
 
+    // Orders Mutators & Actions (Phase 2)
+    setOrders: setDemoOrders,
+    createSalesOrder,
+    startSalesOrder,
+    submitOrderCompletion,
+    reviewOrderCompletion,
+    cancelSalesOrder,
+
     // Role Permission Capabilities
     isSuperadmin: adminUser?.role === 'superadmin',
     isAdminEmployee: adminUser?.role === 'admin',
@@ -1873,6 +2164,7 @@ export function AdminDataProvider({ children }) {
     canWriteEnquiries: adminUser?.role === 'superadmin',
     canWriteInventory: adminUser?.role === 'superadmin' || adminUser?.role === 'inventory_staff',
     canManageStaff: adminUser?.role === 'superadmin',
+    canCreateOrders: adminUser?.role === 'superadmin' || adminUser?.role === 'admin',
 
     // Global
     metrics,

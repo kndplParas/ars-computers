@@ -13,7 +13,7 @@ import { useAdminData } from '../../context/adminDataContext'
  */
 export default function AdminLayout({ activeTab, onTabChange, children }) {
   const { adminUser, logout } = useAdminAuth()
-  const { metrics, categories, enquiries, isLiveDatabase } = useAdminData()
+  const { metrics, categories, enquiries, orders, isLiveDatabase } = useAdminData()
   const navigate = useNavigate()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
@@ -27,6 +27,7 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
 
   const allNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Overview', roles: ['superadmin', 'admin', 'inventory_staff'] },
+    { id: 'orders', label: 'Orders & Sales', icon: '🛒', badge: `${orders?.length ?? 0} Orders`, roles: ['superadmin', 'admin', 'inventory_staff'] },
     { id: 'products', label: 'Products', icon: '📦', badge: `${metrics?.products?.total ?? 0} Items`, roles: ['superadmin', 'admin'] },
     { id: 'inventory', label: 'Inventory', icon: '⚡', badge: `${(metrics?.products?.lowStock ?? 0) > 0 ? `${metrics.products.lowStock} Low` : 'Stock'}`, roles: ['superadmin', 'admin', 'inventory_staff'] },
     { id: 'categories', label: 'Categories', icon: '📁', badge: `${categories?.length ?? 0} Groups`, roles: ['superadmin', 'admin'] },
@@ -46,7 +47,9 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
     if (onTabChange) {
       onTabChange(itemId)
     }
-    if (itemId === 'products') {
+    if (itemId === 'orders') {
+      navigate('/admin/orders')
+    } else if (itemId === 'products') {
       navigate('/admin/products')
     } else if (itemId === 'inventory') {
       navigate('/admin/inventory')
