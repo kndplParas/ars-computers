@@ -94,7 +94,25 @@ ALTER TABLE public.enquiries ADD CONSTRAINT enquiries_status_enum
   ));
 
 -- ----------------------------------------------------------------------------
--- 5. DATABASE-LEVEL RULES: PERMANENT ARCHIVE PROTECTION
+-- 5. HISTORICAL TRANSITION: MIGRATE APPROVED LEGACY BIN RECORDS TO PERMANENT ARCHIVE
+-- ----------------------------------------------------------------------------
+-- Existing Head-approved enquiries from Phase 1 entered the 7-day Bin lifecycle.
+-- Transition them safely into the permanent archive before enforcing the anti-bin check constraint.
+UPDATE public.enquiries
+SET
+  is_in_bin = false,
+  scheduled_deletion_at = NULL,
+  is_archived = true,
+  status = 'completed'
+WHERE completion_approved_at IS NOT NULL
+  AND (
+    is_in_bin = true
+    OR scheduled_deletion_at IS NOT NULL
+    OR status = 'in_bin'
+  );
+
+-- ----------------------------------------------------------------------------
+-- 6. DATABASE-LEVEL RULES: PERMANENT ARCHIVE PROTECTION
 -- ----------------------------------------------------------------------------
 -- A. CHECK constraint: approved enquiry CANNOT enter Bin or have scheduled deletion
 ALTER TABLE public.enquiries DROP CONSTRAINT IF EXISTS chk_enquiries_approved_not_in_bin;

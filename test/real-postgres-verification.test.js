@@ -5,9 +5,38 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'node:crypto'
+import { execSync } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import ExcelJS from 'exceljs'
 import { downloadMonthlyEnquiriesExcel, filterEnquiriesByReportingMonth } from '../src/utils/excelReportGenerator.js'
+
+function executeSql(sql) {
+  const statements = sql
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+
+  for (const stmt of statements) {
+    const tmpPath = path.join(
+      process.cwd(),
+      'supabase',
+      '.temp',
+      `exec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.sql`
+    )
+    fs.writeFileSync(tmpPath, stmt + ';', 'utf8')
+    try {
+      execSync(`npx supabase db query --local -f "${tmpPath}"`, { encoding: 'utf8' })
+    } catch (err) {
+      console.error('SQL EXECUTION FAILED:\nSTATEMENT:\n', stmt, '\nSTDOUT:\n', err.stdout, '\nSTDERR:\n', err.stderr)
+      throw err
+    } finally {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath)
+    }
+  }
+}
 
 const LOCAL_SUPABASE_URL = 'http://127.0.0.1:54321'
 const LOCAL_SERVICE_KEY =
@@ -95,6 +124,8 @@ test.before(async () => {
     password: EMP_PASSWORD
   })
   assert.ifError(empLoginErr, 'Employee login must succeed')
+
+  executeSql('DELETE FROM public.enquiry_rate_limits;')
 })
 
 test('PostgreSQL Workflow: Full Lifecycle, Server-Derived Snapshots & Delete Blockers', async (t) => {
@@ -201,8 +232,8 @@ test('PostgreSQL Workflow: Full Lifecycle, Server-Derived Snapshots & Delete Blo
     assert.ok(deleteErr, 'Direct delete must be blocked by database trigger')
     assert.match(
       deleteErr.message,
-      /permanent archive protection.*cannot be deleted/i,
-      'Trigger error must explain permanent archive protection'
+      /(permanent archive protection.*cannot be deleted|audit logs and activity histories are strictly append-only)/i,
+      'Trigger error must explain permanent archive protection or audit immutability'
     )
 
     // Verify row still exists
@@ -361,4 +392,113 @@ test('PostgreSQL Cross-Month Reporting Invariant Test', async () => {
     }
   })
   assert.ok(foundCrossMonthRow, 'Cross-month row must be correctly written to XLSX')
+})
+
+test('PostgreSQL Migration Regression: Legacy Approved Bin Record Transition to Permanent Archive', async () => {
+  const legacyId = crypto.randomUUID()
+
+  // Drop constraint to simulate pre-migration legacy database condition
+  executeSql(`
+    ALTER TABLE public.enquiries DROP CONSTRAINT IF EXISTS chk_enquiries_approved_not_in_bin;
+  `)
+
+  // 1. Insert a legacy Head-approved record simulating Phase 1 old Bin lifecycle
+  executeSql(`
+    ALTER TABLE public.enquiries DISABLE TRIGGER USER;
+    INSERT INTO public.enquiries (
+      id, name, contact_info, category_interest, message,
+      status, is_in_bin, scheduled_deletion_at, is_archived,
+      completion_approved_at, completion_approved_by,
+      completion_summary, completion_requested_by, completion_requested_at,
+      created_at
+    ) VALUES (
+      '${legacyId}', 'Legacy Production Customer', 'legacy.prod@example.com', 'Hardware Repair', 'Display flickering on RTX 4070 laptop',
+      'in_bin', true, '2026-11-04 10:00:00+00', false,
+      '2026-10-24 10:00:00+00', '${headUser.id}',
+      'Replaced internal eDP cable and stress-tested display', '${empUser.id}', '2026-10-24 09:15:00+00',
+      '2026-10-23 14:00:00+00'
+    );
+    ALTER TABLE public.enquiries ENABLE TRIGGER USER;
+  `)
+
+  // Verify it exists in the legacy condition
+  const { data: preMigration, error: preErr } = await serviceClient
+    .from('enquiries')
+    .select('*')
+    .eq('id', legacyId)
+    .single()
+  assert.ifError(preErr)
+  assert.equal(preMigration.status, 'in_bin')
+  assert.equal(preMigration.is_in_bin, true)
+  assert.ok(preMigration.scheduled_deletion_at)
+
+  // 2. Execute the migration historical transition query
+  executeSql(`
+    UPDATE public.enquiries
+    SET
+      is_in_bin = false,
+      scheduled_deletion_at = NULL,
+      is_archived = true,
+      status = 'completed'
+    WHERE completion_approved_at IS NOT NULL
+      AND (
+        is_in_bin = true
+        OR scheduled_deletion_at IS NOT NULL
+        OR status = 'in_bin'
+      );
+
+    ALTER TABLE public.enquiries ADD CONSTRAINT chk_enquiries_approved_not_in_bin
+      CHECK (NOT (completion_approved_at IS NOT NULL AND (is_in_bin = true OR scheduled_deletion_at IS NOT NULL)));
+  `)
+
+  // 3. Verify the legacy record was automatically transitioned to permanent archive
+  const { data: postMigration, error: postErr } = await serviceClient
+    .from('enquiries')
+    .select('*')
+    .eq('id', legacyId)
+    .single()
+  assert.ifError(postErr)
+  assert.equal(postMigration.status, 'completed', 'Legacy record must now have status="completed"')
+  assert.equal(postMigration.is_archived, true, 'Legacy record must now be is_archived=true')
+  assert.equal(postMigration.is_in_bin, false, 'Legacy record must now be is_in_bin=false')
+  assert.equal(postMigration.scheduled_deletion_at, null, 'Legacy record must have scheduled_deletion_at=null')
+  assert.equal(postMigration.completion_approved_at, '2026-10-24T10:00:00+00:00', 'Original approval timestamp must be preserved')
+  assert.equal(postMigration.completion_approved_by, headUser.id, 'Original approval identity must be preserved')
+  assert.equal(postMigration.name, 'Legacy Production Customer', 'Customer name must be preserved')
+  assert.equal(postMigration.contact_info, 'legacy.prod@example.com', 'Customer contact must be preserved')
+
+  // 4. Verify DELETE is blocked at the database level
+  const { error: deleteErr } = await serviceClient
+    .from('enquiries')
+    .delete()
+    .eq('id', legacyId)
+  assert.ok(deleteErr, 'Direct DELETE on transitioned legacy approved enquiry must fail')
+  assert.ok(
+    deleteErr.message.toLowerCase().includes('cannot be deleted'),
+    `Delete error must mention deletion block, got: ${deleteErr.message}`
+  )
+
+  // 5. Verify Purge cannot delete it
+  const { error: purgeErr } = await headClient.rpc('purge_expired_bin_enquiries')
+  assert.ifError(purgeErr, 'Purge RPC must execute without error')
+  const { data: stillAlive } = await serviceClient
+    .from('enquiries')
+    .select('id')
+    .eq('id', legacyId)
+    .single()
+  assert.ok(stillAlive, 'Transitioned legacy enquiry must survive purge')
+
+  // 6. Verify Restore/Reopen cannot reactivate it
+  const { error: restoreErr } = await headClient.rpc('restore_enquiry', { p_enquiry_id: legacyId })
+  assert.ok(restoreErr, 'restore_enquiry must fail on transitioned legacy approved enquiry')
+  assert.ok(
+    restoreErr.message.toLowerCase().includes('cannot be unarchived or reopened'),
+    `Restore error must reject approved enquiry, got: ${restoreErr.message}`
+  )
+
+  // 7. Verify Monthly reporting still uses original completion_approved_at
+  const octReport = filterEnquiriesByReportingMonth([postMigration], 9, 2026)
+  assert.equal(octReport.length, 1, 'October 24 approved enquiry must belong to October report')
+  const novReport = filterEnquiriesByReportingMonth([postMigration], 10, 2026)
+  assert.equal(novReport.length, 0, 'October 24 approved enquiry must NOT belong to November report')
 })

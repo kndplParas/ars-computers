@@ -164,6 +164,15 @@ assert(
   '1.12 RPC permissions revoked from PUBLIC/anon and granted strictly to authenticated'
 )
 
+assert(
+  migContent.includes('UPDATE public.enquiries') &&
+  migContent.includes('is_in_bin = false') &&
+  migContent.includes('scheduled_deletion_at = NULL') &&
+  migContent.includes("status = 'completed'") &&
+  migContent.includes('WHERE completion_approved_at IS NOT NULL'),
+  '1.13 Historical transition migrates legacy approved bin enquiries to permanent archive before check constraint'
+)
+
 // ----------------------------------------------------------------------------
 // Suite 2: Reporting Month Logic & Cross-Month Invariants
 // ----------------------------------------------------------------------------
