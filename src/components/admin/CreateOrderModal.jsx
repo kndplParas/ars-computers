@@ -231,7 +231,13 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
       <div
         className="admin-modal-dialog"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '900px', width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
+        style={{
+          maxWidth: '900px',
+          width: 'min(900px, calc(100vw - 20px))',
+          maxHeight: 'min(92vh, calc(100dvh - 24px))',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
       >
         {/* Modal Header */}
         <div className="admin-modal-header">
@@ -248,7 +254,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
             className="modal-close-btn"
             onClick={handleClose}
             disabled={isSubmitting}
-            aria-label="Close modal"
+            aria-label="Close create order modal"
           >
             ✕
           </button>
@@ -267,7 +273,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
             )}
 
             {/* Customer Details */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
               <div className="form-group">
                 <label htmlFor="order-cust-name" className="form-label">
                   Customer Name <span style={{ color: '#ef4444' }}>*</span>
@@ -301,9 +307,9 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
               </div>
             </div>
 
-            {/* Order Items Table */}
+            {/* Order Items Section */}
             <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#1e293b' }}>
                   Order Items ({items.length})
                 </h3>
@@ -312,12 +318,14 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                   className="btn-outline btn-sm"
                   onClick={handleAddItem}
                   disabled={isSubmitting}
+                  style={{ minHeight: '38px', padding: '6px 14px' }}
                 >
                   + Add Another Product
                 </button>
               </div>
 
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+              {/* Desktop Table View */}
+              <div className="order-items-table-desktop" style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <tr>
@@ -395,6 +403,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                                 onClick={() => handleRemoveItem(idx)}
                                 style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '16px' }}
                                 title="Remove line"
+                                aria-label={`Remove Item ${idx + 1}`}
                               >
                                 ✕
                               </button>
@@ -405,6 +414,116 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile Responsive Cards View */}
+              <div className="order-items-cards-mobile">
+                {items.map((it, idx) => {
+                  const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0)
+                  return (
+                    <div key={it.id || idx} className="order-item-card-mobile">
+                      <div className="order-item-card-mobile-header">
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b' }}>
+                          Item #{idx + 1}
+                        </span>
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(idx)}
+                            style={{
+                              background: '#fee2e2',
+                              border: '1px solid #fecaca',
+                              color: '#b91c1c',
+                              borderRadius: '6px',
+                              width: '44px',
+                              height: '44px',
+                              minWidth: '44px',
+                              minHeight: '44px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              fontSize: '1.1rem',
+                              fontWeight: 700
+                            }}
+                            title="Remove line"
+                            aria-label={`Remove Item ${idx + 1}`}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="form-label" style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          Product Selection
+                        </label>
+                        <select
+                          className="form-select"
+                          style={{ width: '100%', marginBottom: '6px' }}
+                          value={it.product_id}
+                          onChange={(e) => handleProductSelect(idx, e.target.value)}
+                          disabled={isSubmitting}
+                        >
+                          <option value="">-- Select Catalog Product or Custom Item --</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} {p.sku ? `[${p.sku}]` : ''} — {p.price ? `₹${p.price}` : 'Manual Quote'}
+                            </option>
+                          ))}
+                        </select>
+                        {!it.product_id && (
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Enter custom item name / specifications..."
+                            value={it.product_name}
+                            onChange={(e) => handleItemChange(idx, 'product_name', e.target.value)}
+                            disabled={isSubmitting}
+                            style={{ fontSize: '13px' }}
+                          />
+                        )}
+                      </div>
+
+                      <div className="order-item-card-mobile-grid">
+                        <div>
+                          <label className="form-label" style={{ fontSize: '12px', marginBottom: '4px' }}>
+                            Quantity
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="form-input"
+                            value={it.quantity}
+                            onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                            disabled={isSubmitting}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '12px', marginBottom: '4px' }}>
+                            Selling Price (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="form-input"
+                            value={it.unit_price}
+                            onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
+                            disabled={isSubmitting}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="order-item-card-mobile-total">
+                        <span>Line Total:</span>
+                        <span>₹{lineTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
@@ -434,7 +553,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                     <button
                       type="button"
                       onClick={handlePayInFull}
-                      style={{ fontSize: '11px', background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', textDecoration: 'underline' }}
+                      style={{ fontSize: '12px', background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', textDecoration: 'underline', padding: '4px' }}
                     >
                       Paid in Full
                     </button>
@@ -509,6 +628,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
               className="btn-outline"
               onClick={handleClose}
               disabled={isSubmitting}
+              style={{ minHeight: '44px', padding: '10px 20px', fontSize: '14px', fontWeight: 600 }}
             >
               Cancel
             </button>
@@ -516,6 +636,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
               type="submit"
               className="btn-primary"
               disabled={isSubmitting}
+              style={{ minHeight: '44px', padding: '10px 20px', fontSize: '14px', fontWeight: 600 }}
             >
               {isSubmitting ? 'Creating Order...' : 'Create Sales Order'}
             </button>

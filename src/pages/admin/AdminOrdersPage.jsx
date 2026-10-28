@@ -435,113 +435,201 @@ export default function AdminOrdersPage() {
           </select>
         </div>
 
-        {/* Orders Table */}
+        {/* Orders Table Container */}
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-              <tr>
-                <th style={{ padding: '12px 14px' }}>Order Reference</th>
-                <th style={{ padding: '12px 14px' }}>Date</th>
-                <th style={{ padding: '12px 14px' }}>Customer</th>
-                <th style={{ padding: '12px 14px' }}>Contact</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right' }}>Total (₹)</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right' }}>Paid (₹)</th>
-                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Payment</th>
-                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Status</th>
-                <th style={{ padding: '12px 14px', textAlign: 'center' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingOrders ? (
+          {/* Desktop Table View */}
+          <div className="admin-orders-table-desktop" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                    Loading sales orders from database...
-                  </td>
+                  <th style={{ padding: '12px 14px' }}>Order Reference</th>
+                  <th style={{ padding: '12px 14px' }}>Date</th>
+                  <th style={{ padding: '12px 14px' }}>Customer</th>
+                  <th style={{ padding: '12px 14px' }}>Contact</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'right' }}>Total (₹)</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'right' }}>Paid (₹)</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'center' }}>Payment</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'center' }}>Status</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'center' }}>Action</th>
                 </tr>
-              ) : filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                    No sales orders found in this view.
-                  </td>
-                </tr>
-              ) : (
-                filteredOrders.map((o) => {
-                  const dateParts = formatDateTimeParts(o.created_at)
-                  return (
-                    <tr
-                      key={o.id}
-                      style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
-                      onClick={() => setSelectedOrder(o)}
+              </thead>
+              <tbody>
+                {isLoadingOrders ? (
+                  <tr>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                      Loading sales orders from database...
+                    </td>
+                  </tr>
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                      No sales orders found in this view.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOrders.map((o) => {
+                    const dateParts = formatDateTimeParts(o.created_at)
+                    return (
+                      <tr
+                        key={o.id}
+                        style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                        onClick={() => setSelectedOrder(o)}
+                      >
+                        <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0284c7' }}>
+                          {o.order_number || o.id}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: '#64748b' }}>
+                          {dateParts.date}
+                        </td>
+                        <td style={{ padding: '12px 14px', fontWeight: 500, color: '#0f172a' }}>
+                          {o.customer_name}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: '#64748b' }}>
+                          {o.contact_info}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600 }}>
+                          ₹{Number(o.total_amount).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#15803d' }}>
+                          ₹{Number(o.paid_amount).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '999px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              background: o.payment_status === 'paid' ? '#dcfce7' : o.payment_status === 'partial' ? '#fef3c7' : '#fee2e2',
+                              color: o.payment_status === 'paid' ? '#166534' : o.payment_status === 'partial' ? '#92400e' : '#991b1b'
+                            }}
+                          >
+                            {(o.payment_status || 'pending').toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '999px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              background: o.status === 'completed' ? '#dcfce7' : o.status === 'cancelled' ? '#f1f5f9' : '#e0f2fe',
+                              color: o.status === 'completed' ? '#166534' : o.status === 'cancelled' ? '#64748b' : '#0369a1'
+                            }}
+                          >
+                            {o.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn-outline btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedOrder(o)
+                            }}
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Orders Cards View */}
+          <div className="admin-orders-cards-mobile" style={{ padding: '12px' }}>
+            {isLoadingOrders ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                Loading sales orders from database...
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                No sales orders found in this view.
+              </div>
+            ) : (
+              filteredOrders.map((o) => {
+                const dateParts = formatDateTimeParts(o.created_at)
+                return (
+                  <div key={o.id} className="admin-order-card-mobile" onClick={() => setSelectedOrder(o)}>
+                    <div className="admin-order-card-mobile-top">
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0284c7' }}>
+                          {o.order_number || o.id}
+                        </span>
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                          {dateParts.date}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          background: o.status === 'completed' ? '#dcfce7' : o.status === 'cancelled' ? '#f1f5f9' : '#e0f2fe',
+                          color: o.status === 'completed' ? '#166534' : o.status === 'cancelled' ? '#64748b' : '#0369a1'
+                        }}
+                      >
+                        {o.status}
+                      </span>
+                    </div>
+
+                    <div className="admin-order-card-mobile-meta">
+                      <div><strong>Customer:</strong> {o.customer_name}</div>
+                      <div><strong>Contact:</strong> {o.contact_info}</div>
+                    </div>
+
+                    <div className="admin-order-card-mobile-finance">
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Total</span>
+                        <strong style={{ fontSize: '0.92rem', color: '#0f172a' }}>₹{Number(o.total_amount).toFixed(2)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Paid</span>
+                        <strong style={{ fontSize: '0.92rem', color: '#15803d' }}>₹{Number(o.paid_amount).toFixed(2)}</strong>
+                      </div>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          background: o.payment_status === 'paid' ? '#dcfce7' : o.payment_status === 'partial' ? '#fef3c7' : '#fee2e2',
+                          color: o.payment_status === 'paid' ? '#166534' : o.payment_status === 'partial' ? '#92400e' : '#991b1b'
+                        }}
+                      >
+                        {(o.payment_status || 'pending').toUpperCase()}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      style={{ width: '100%', minHeight: '44px', marginTop: '4px', fontSize: '13px', fontWeight: 600 }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedOrder(o)
+                      }}
                     >
-                      <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0284c7' }}>
-                        {o.order_number || o.id}
-                      </td>
-                      <td style={{ padding: '12px 14px', color: '#64748b' }}>
-                        {dateParts.date}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontWeight: 500, color: '#0f172a' }}>
-                        {o.customer_name}
-                      </td>
-                      <td style={{ padding: '12px 14px', color: '#64748b' }}>
-                        {o.contact_info}
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600 }}>
-                        ₹{Number(o.total_amount).toFixed(2)}
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#15803d' }}>
-                        ₹{Number(o.paid_amount).toFixed(2)}
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            padding: '2px 8px',
-                            borderRadius: '999px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            background: o.payment_status === 'paid' ? '#dcfce7' : o.payment_status === 'partial' ? '#fef3c7' : '#fee2e2',
-                            color: o.payment_status === 'paid' ? '#166534' : o.payment_status === 'partial' ? '#92400e' : '#991b1b'
-                          }}
-                        >
-                          {(o.payment_status || 'pending').toUpperCase()}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            padding: '2px 8px',
-                            borderRadius: '999px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            background: o.status === 'completed' ? '#dcfce7' : o.status === 'cancelled' ? '#f1f5f9' : '#e0f2fe',
-                            color: o.status === 'completed' ? '#166534' : o.status === 'cancelled' ? '#64748b' : '#0369a1'
-                          }}
-                        >
-                          {o.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className="btn-outline btn-sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedOrder(o)
-                          }}
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                      View Order Details &amp; Actions
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
 
-        {/* Order Detail Drawer */}
+        {/* Order Details Modal */}
         {selectedOrder && (
           <div
             className="admin-modal-backdrop"
@@ -553,8 +641,15 @@ export default function AdminOrdersPage() {
             <div
               className="admin-modal-dialog"
               onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: '780px', width: '92%', maxHeight: '90vh' }}
+              style={{
+                maxWidth: '820px',
+                width: 'min(820px, calc(100vw - 20px))',
+                maxHeight: 'min(92vh, calc(100dvh - 24px))',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
             >
+              {/* Header */}
               <div className="admin-modal-header">
                 <div>
                   <h2 id="order-details-title" className="admin-modal-title">
@@ -579,62 +674,87 @@ export default function AdminOrdersPage() {
                   type="button"
                   className="modal-close-btn"
                   onClick={() => setSelectedOrder(null)}
-                  aria-label="Close details"
+                  aria-label="Close order details"
                 >
                   ✕
                 </button>
               </div>
 
-              <div style={{ padding: '16px 0', fontSize: '13px' }}>
+              {/* Scrollable Body */}
+              <div className="admin-modal-body" style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '16px 20px' }}>
                 {/* Customer Info */}
-                <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px' }}>
+                <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '6px' }}>
                   <div style={{ fontWeight: 600, marginBottom: '6px' }}>Customer Information</div>
                   <div><strong>Name:</strong> {selectedOrder.customer_name}</div>
                   <div><strong>Contact:</strong> {selectedOrder.contact_info}</div>
                 </div>
 
                 {/* Items Breakdown */}
-                <div style={{ marginBottom: '16px' }}>
+                <div>
                   <div style={{ fontWeight: 600, marginBottom: '8px' }}>Line Items</div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e2e8f0' }}>
-                    <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <tr>
-                        <th style={{ padding: '8px', textAlign: 'left' }}>Product</th>
-                        <th style={{ padding: '8px', textAlign: 'center' }}>Qty</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Unit Price</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.isArray(selectedOrder.order_items) && selectedOrder.order_items.length > 0 ? (
-                        selectedOrder.order_items.map((it) => (
-                          <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '8px' }}>
-                              {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
-                            </td>
-                            <td style={{ padding: '8px', textAlign: 'center' }}>{it.quantity}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(it.unit_price).toFixed(2)}</td>
-                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>₹{Number(it.line_total).toFixed(2)}</td>
-                          </tr>
-                        ))
-                      ) : (
+                  {/* Desktop Table View */}
+                  <div className="order-details-table-desktop" style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                         <tr>
-                          <td colSpan="4" style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
-                            No line item details available.
-                          </td>
+                          <th style={{ padding: '8px', textAlign: 'left' }}>Product</th>
+                          <th style={{ padding: '8px', textAlign: 'center' }}>Qty</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Unit Price</th>
+                          <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {Array.isArray(selectedOrder.order_items) && selectedOrder.order_items.length > 0 ? (
+                          selectedOrder.order_items.map((it) => (
+                            <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '8px' }}>
+                                {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>{it.quantity}</td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(it.unit_price).toFixed(2)}</td>
+                              <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>₹{Number(it.line_total).toFixed(2)}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="4" style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
+                              No line item details available.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards View */}
+                  <div className="order-details-cards-mobile">
+                    {Array.isArray(selectedOrder.order_items) && selectedOrder.order_items.length > 0 ? (
+                      selectedOrder.order_items.map((it) => (
+                        <div key={it.id} className="order-detail-card-mobile">
+                          <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                            {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
+                          </div>
+                          <div className="order-detail-card-mobile-row">
+                            <span style={{ color: '#64748b' }}>Qty: <strong>{it.quantity}</strong> × ₹{Number(it.unit_price).toFixed(2)}</span>
+                            <strong style={{ color: '#0f172a' }}>₹{Number(it.line_total).toFixed(2)}</strong>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
+                        No line item details available.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Financial Summary */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px' }}>
                   <div>
                     <div><strong>Payment Method:</strong> {(selectedOrder.payment_method || 'cash').toUpperCase()}</div>
                     <div><strong>Payment Status:</strong> {(selectedOrder.payment_status || 'pending').toUpperCase()}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
+                  <div>
                     <div><strong>Total Amount:</strong> ₹{Number(selectedOrder.total_amount).toFixed(2)}</div>
                     <div><strong>Amount Paid:</strong> ₹{Number(selectedOrder.paid_amount).toFixed(2)}</div>
                     <div style={{ color: Number(selectedOrder.total_amount) - Number(selectedOrder.paid_amount) > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
@@ -667,14 +787,14 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
-              {/* Workflow Actions */}
-              <div className="admin-modal-actions" style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              {/* Sticky Footer Actions */}
+              <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   {isSuperadmin && !['completed', 'cancelled'].includes(selectedOrder.status) && (
                     <button
                       type="button"
                       className="btn-outline"
-                      style={{ color: '#ef4444', borderColor: '#ef4444' }}
+                      style={{ color: '#ef4444', borderColor: '#ef4444', minHeight: '44px', padding: '8px 16px', fontWeight: 600 }}
                       onClick={() => handleOpenActionModal('cancel', selectedOrder)}
                     >
                       Cancel Order
@@ -682,11 +802,12 @@ export default function AdminOrdersPage() {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {selectedOrder.status === 'new' && !isInventoryStaff && (
                     <button
                       type="button"
                       className="btn-primary"
+                      style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
                       onClick={() => handleStartOrder(selectedOrder.id)}
                     >
                       Start Processing
@@ -697,6 +818,7 @@ export default function AdminOrdersPage() {
                     <button
                       type="button"
                       className="btn-primary"
+                      style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
                       onClick={() => handleOpenActionModal('submit_completion', selectedOrder)}
                     >
                       Submit Completion
@@ -707,7 +829,7 @@ export default function AdminOrdersPage() {
                     <button
                       type="button"
                       className="btn-primary"
-                      style={{ background: '#16a34a' }}
+                      style={{ background: '#16a34a', minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
                       disabled={selectedOrder.completion_requested_by === adminUser?.id}
                       title={
                         selectedOrder.completion_requested_by === adminUser?.id
@@ -723,6 +845,7 @@ export default function AdminOrdersPage() {
                   <button
                     type="button"
                     className="btn-outline"
+                    style={{ minHeight: '44px', padding: '8px 16px', fontWeight: 600 }}
                     onClick={() => setSelectedOrder(null)}
                   >
                     Close
@@ -745,7 +868,13 @@ export default function AdminOrdersPage() {
             <div
               className="admin-modal-dialog"
               onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: '520px', width: '92%' }}
+              style={{
+                maxWidth: '520px',
+                width: 'min(520px, calc(100vw - 20px))',
+                maxHeight: 'min(92vh, calc(100dvh - 24px))',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
             >
               <div className="admin-modal-header">
                 <h2 id="action-modal-title" className="admin-modal-title">
@@ -765,50 +894,53 @@ export default function AdminOrdersPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleExecuteAction}>
-                {actionModal.error && (
-                  <div className="admin-banner-disclaimer" style={{ borderColor: '#ef4444', color: '#b91c1c', marginBottom: '12px' }}>
-                    {actionModal.error}
-                  </div>
-                )}
+              <form onSubmit={handleExecuteAction} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                <div className="admin-modal-body" style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '16px 20px' }}>
+                  {actionModal.error && (
+                    <div className="admin-banner-disclaimer" style={{ borderColor: '#ef4444', color: '#b91c1c', marginBottom: '12px' }}>
+                      {actionModal.error}
+                    </div>
+                  )}
 
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="form-label">
-                    {actionModal.type === 'submit_completion'
-                      ? 'Employee Handover Remarks *'
-                      : actionModal.type === 'approve'
-                      ? 'Head Approval Remarks (Optional)'
-                      : 'Cancellation Reason *'}
-                  </label>
-                  <textarea
-                    className="form-input"
-                    rows="4"
-                    placeholder={
-                      actionModal.type === 'submit_completion'
-                        ? 'e.g. Hardware assembled, bench tested, and handed over to customer with GST invoice.'
+                  <div className="form-group" style={{ marginBottom: '8px' }}>
+                    <label className="form-label">
+                      {actionModal.type === 'submit_completion'
+                        ? 'Employee Handover Remarks *'
                         : actionModal.type === 'approve'
-                        ? 'e.g. Verified payments and hardware serials. Approved for permanent archive.'
-                        : 'e.g. Customer cancelled requirement prior to assembly.'
-                    }
-                    value={actionModal.notes}
-                    onChange={(e) => setActionModal((prev) => ({ ...prev, notes: e.target.value }))}
-                    required={actionModal.type !== 'approve'}
-                  ></textarea>
+                        ? 'Head Approval Remarks (Optional)'
+                        : 'Cancellation Reason *'}
+                    </label>
+                    <textarea
+                      className="form-input"
+                      rows="4"
+                      placeholder={
+                        actionModal.type === 'submit_completion'
+                          ? 'e.g. Hardware assembled, bench tested, and handed over to customer with GST invoice.'
+                          : actionModal.type === 'approve'
+                          ? 'e.g. Verified payments and hardware serials. Approved for permanent archive.'
+                          : 'e.g. Customer cancelled requirement prior to assembly.'
+                      }
+                      value={actionModal.notes}
+                      onChange={(e) => setActionModal((prev) => ({ ...prev, notes: e.target.value }))}
+                      required={actionModal.type !== 'approve'}
+                    ></textarea>
+                  </div>
                 </div>
 
-                <div className="admin-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <div className="admin-modal-footer">
                   <button
                     type="button"
                     className="btn-outline"
                     onClick={() => setActionModal({ type: null, order: null, notes: '', error: null, isSubmitting: false })}
                     disabled={actionModal.isSubmitting}
+                    style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
                   >
                     Back
                   </button>
                   <button
                     type="submit"
                     className={actionModal.type === 'cancel' ? 'btn-outline' : 'btn-primary'}
-                    style={actionModal.type === 'cancel' ? { color: '#ef4444', borderColor: '#ef4444' } : {}}
+                    style={actionModal.type === 'cancel' ? { color: '#ef4444', borderColor: '#ef4444', minHeight: '44px', padding: '8px 18px', fontWeight: 600 } : { minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
                     disabled={actionModal.isSubmitting}
                   >
                     {actionModal.isSubmitting ? 'Processing...' : 'Confirm Action'}
@@ -831,7 +963,13 @@ export default function AdminOrdersPage() {
             <div
               className="admin-modal-dialog"
               onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: '500px', width: '92%' }}
+              style={{
+                maxWidth: '500px',
+                width: 'min(500px, calc(100vw - 20px))',
+                maxHeight: 'min(92vh, calc(100dvh - 24px))',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
             >
               <div className="admin-modal-header">
                 <div>
@@ -850,7 +988,7 @@ export default function AdminOrdersPage() {
                 </button>
               </div>
 
-              <div style={{ padding: '16px 0' }}>
+              <div className="admin-modal-body" style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '16px 20px' }}>
                 <div className="form-group" style={{ marginBottom: '12px' }}>
                   <label className="form-label">Select Month</label>
                   <select
@@ -884,12 +1022,13 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
-              <div className="admin-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <div className="admin-modal-footer">
                 <button
                   type="button"
                   className="btn-outline"
                   onClick={() => setIsExportModalOpen(false)}
                   disabled={isExporting}
+                  style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
                 >
                   Cancel
                 </button>
@@ -898,6 +1037,7 @@ export default function AdminOrdersPage() {
                   className="btn-primary"
                   onClick={handleDownloadMonthlyReport}
                   disabled={isExporting}
+                  style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
                 >
                   {isExporting ? 'Generating XLSX...' : 'Download Excel Report'}
                 </button>

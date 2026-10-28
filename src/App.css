@@ -4116,11 +4116,13 @@
 /* --- Admin Login --- */
 .admin-login-wrapper {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: clamp(16px, 4vw, 40px) clamp(12px, 3vw, 20px);
   background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+  box-sizing: border-box;
 }
 
 .admin-login-card {
@@ -4129,8 +4131,9 @@
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 40px 36px;
+  padding: clamp(24px, 5vw, 40px) clamp(16px, 4vw, 36px);
   box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
 }
 
 .admin-login-brand {
@@ -4484,6 +4487,45 @@
   box-sizing: border-box;
 }
 
+.admin-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 38;
+}
+
+.admin-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.admin-sidebar-close-btn {
+  display: none;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.admin-sidebar-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
 .admin-sidebar-footer {
   margin-top: auto;
   padding-top: 20px;
@@ -4494,7 +4536,6 @@
   letter-spacing: 0.8px;
   font-weight: 700;
   color: var(--text-light);
-  margin-bottom: 12px;
   display: block;
   padding-left: 8px;
 }
@@ -5234,19 +5275,31 @@
   .admin-sidebar {
     position: fixed;
     top: var(--admin-topbar-height, 72px);
-    left: -260px;
-    height: calc(100vh - var(--admin-topbar-height, 72px));
+    left: -280px;
+    width: 280px;
+    height: calc(100dvh - var(--admin-topbar-height, 72px));
     z-index: 40;
-    transition: left 0.25s ease;
+    transition: left 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: var(--shadow-lg);
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
   }
 
   .admin-sidebar.mobile-open {
     left: 0;
   }
 
+  .admin-sidebar-close-btn {
+    display: inline-flex;
+  }
+
   .admin-mobile-toggle {
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .admin-dashboard-split {
@@ -5923,18 +5976,19 @@
    ========================================================================== */
 .admin-modal-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 23, 42, 0.6);
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1100;
-  padding: 20px;
+  padding: clamp(8px, 2.5vw, 20px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  height: 100dvh;
+  max-height: 100dvh;
+  box-sizing: border-box;
   animation: fadeIn 0.15s ease-out;
 }
 
@@ -5951,13 +6005,15 @@
 .admin-modal-dialog {
   background: #ffffff;
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
   width: 100%;
   max-width: 780px;
-  max-height: 90vh;
+  max-height: min(92vh, calc(100dvh - 24px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
   animation: slideUp 0.2s ease-out;
 }
 
@@ -5978,12 +6034,16 @@
 }
 
 .admin-modal-header {
-  padding: 20px 24px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   background: #f8fafc;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  gap: 12px;
 }
 
 .admin-modal-title {
@@ -5991,6 +6051,7 @@
   font-weight: 700;
   color: var(--text-main);
   margin: 0;
+  line-height: 1.2;
 }
 
 .modal-subtitle-note {
@@ -6001,37 +6062,61 @@
 }
 
 .modal-close-btn {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  color: var(--text-muted);
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #334155;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.15s;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  z-index: 10;
 }
 
 .modal-close-btn:hover {
   background: #e2e8f0;
-  color: var(--text-main);
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.modal-close-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .admin-modal-body {
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
-.admin-modal-footer {
-  padding: 16px 24px;
+.admin-modal-footer,
+.admin-modal-actions {
+  padding: 14px 20px;
   border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   background: #f8fafc;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
 }
 
 /* --- Form Fields & Grid Layouts --- */
@@ -6525,17 +6610,243 @@
   }
 
   .admin-modal-backdrop {
-    padding: 10px;
+    padding: clamp(6px, 2vw, 12px);
   }
 
   .admin-modal-dialog {
-    max-height: 94vh;
+    width: calc(100vw - 16px);
+    max-width: 100%;
+    max-height: calc(100dvh - 16px);
+    border-radius: 12px;
   }
 
   .admin-modal-header,
   .admin-modal-body,
-  .admin-modal-footer {
+  .admin-modal-footer,
+  .admin-modal-actions {
+    padding: 12px 14px;
+  }
+}
+
+/* Extra Small Screens & Phones down to 320px */
+@media (max-width: 480px) {
+  .admin-topbar {
+    padding: 0 10px;
+    gap: 6px;
+  }
+
+  .admin-topbar-left {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .admin-topbar-right {
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .admin-topbar-brand {
+    gap: 6px;
+  }
+
+  .admin-logo-flower {
+    width: 32px;
+    height: 32px;
+  }
+
+  .admin-brand-name {
+    font-size: 0.95rem;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .admin-mobile-toggle {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 4px;
+    font-size: 1.2rem;
+  }
+
+  .admin-content-pane {
+    padding: 12px 8px;
+  }
+
+  .admin-modal-backdrop {
+    padding: 6px;
+  }
+
+  .admin-modal-dialog {
+    width: calc(100vw - 12px);
+    max-height: calc(100dvh - 12px);
+    border-radius: 10px;
+  }
+}
+
+/* Responsive Orders Summary Grid */
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+  .admin-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .admin-stat-card {
     padding: 14px 16px;
+  }
+}
+
+/* Order Line Items: Desktop Table vs Mobile Cards */
+.order-items-table-desktop {
+  display: block;
+}
+.order-items-cards-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .order-items-table-desktop {
+    display: none;
+  }
+  .order-items-cards-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .order-item-card-mobile {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .order-item-card-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .order-item-card-mobile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .order-item-card-mobile-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px dashed #e2e8f0;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #0f172a;
+  }
+}
+
+/* Order Details Line Items: Desktop Table vs Mobile Cards */
+.order-details-table-desktop {
+  display: table;
+  width: 100%;
+}
+.order-details-cards-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .order-details-table-desktop {
+    display: none;
+  }
+  .order-details-cards-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .order-detail-card-mobile {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .order-detail-card-mobile-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.86rem;
+  }
+}
+
+/* Admin Orders Management: Desktop Table vs Mobile Cards */
+.admin-orders-table-desktop {
+  display: table;
+  width: 100%;
+}
+.admin-orders-cards-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .admin-orders-table-desktop {
+    display: none;
+  }
+  .admin-orders-cards-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .admin-order-card-mobile {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .admin-order-card-mobile:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  .admin-order-card-mobile-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .admin-order-card-mobile-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.85rem;
+    color: #475569;
+  }
+  .admin-order-card-mobile-finance {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #f8fafc;
+    border-radius: 6px;
+    font-size: 0.85rem;
   }
 }
 

@@ -28,10 +28,10 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
   const allNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Overview', roles: ['superadmin', 'admin', 'inventory_staff'] },
     { id: 'orders', label: 'Orders & Sales', icon: '🛒', badge: `${orders?.length ?? 0} Orders`, roles: ['superadmin', 'admin', 'inventory_staff'] },
+    { id: 'enquiries', label: 'Enquiries', icon: '💬', badge: `${enquiries?.length ?? 0} Leads`, roles: ['superadmin', 'admin'] },
     { id: 'products', label: 'Products', icon: '📦', badge: `${metrics?.products?.total ?? 0} Items`, roles: ['superadmin', 'admin'] },
     { id: 'inventory', label: 'Inventory', icon: '⚡', badge: `${(metrics?.products?.lowStock ?? 0) > 0 ? `${metrics.products.lowStock} Low` : 'Stock'}`, roles: ['superadmin', 'admin', 'inventory_staff'] },
     { id: 'categories', label: 'Categories', icon: '📁', badge: `${categories?.length ?? 0} Groups`, roles: ['superadmin', 'admin'] },
-    { id: 'enquiries', label: 'Enquiries', icon: '💬', badge: `${enquiries?.length ?? 0} Leads`, roles: ['superadmin', 'admin'] },
     { id: 'staff', label: 'Staff Management', icon: '👥', badge: metrics?.staff?.total ? `${metrics.staff.total} Users` : 'Staff', roles: ['superadmin'] }
   ]
 
@@ -134,10 +134,27 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
 
       {/* Main Workspace: Sidebar + Content */}
       <div className="admin-workspace">
+        {/* Mobile Sidebar Backdrop */}
+        {isMobileMenuOpen && (
+          <div
+            className="admin-sidebar-backdrop"
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Sidebar Navigation */}
         <aside className={`admin-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
           <div className="admin-sidebar-header">
             <span className="sidebar-section-title">ADMINISTRATIVE MODULES</span>
+            <button
+              type="button"
+              className="admin-sidebar-close-btn"
+              onClick={() => setIsMobileMenuOpen(false)}
+              aria-label="Close navigation drawer"
+            >
+              ✕
+            </button>
           </div>
 
           <nav className="admin-nav-list">

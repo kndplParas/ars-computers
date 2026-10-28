@@ -13,15 +13,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: clamp(6px, 1.5vw, 16px);
   overflow: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+  box-sizing: border-box;
 }
 
 .live-register-modal,
 .live-register-dialog {
-  width: 98vw;
+  width: min(98vw, calc(100vw - 12px));
   max-width: 1720px;
-  height: 94vh;
+  height: min(96vh, calc(100dvh - 12px));
+  max-height: calc(100dvh - 12px);
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
@@ -29,6 +33,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #cbd5e1;
+  box-sizing: border-box;
 }
 
 /* Modal Header Bar */
@@ -119,16 +124,36 @@
   background: #475569;
 }
 
-.live-register-btn-close {
-  background: transparent;
-  color: #94a3b8;
-  border-color: transparent;
-  font-size: 1.1rem;
-  padding: 4px 8px;
+.live-register-btn-close,
+.live-register-close-btn {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease-in-out;
+  padding: 0;
 }
-.live-register-btn-close:hover {
+.live-register-btn-close:hover,
+.live-register-close-btn:hover {
   color: #ffffff;
   background: #334155;
+  border-color: #64748b;
+}
+.live-register-btn-close:focus-visible,
+.live-register-close-btn:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
 }
 
 /* Toolbars */
@@ -338,9 +363,12 @@
 }
 
 /* Spreadsheet Grid View Area */
-.live-register-grid-container {
-  flex: 1;
+.live-register-grid-container,
+.live-register-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   background: #ffffff;
   position: relative;
   scrollbar-width: thin;
@@ -652,4 +680,82 @@
   15% { opacity: 1; transform: translateY(0); }
   85% { opacity: 1; transform: translateY(0); }
   100% { opacity: 0; transform: translateY(8px); }
+}
+
+/* --- Responsive Adaptations for Live Register --- */
+@media (max-width: 768px) {
+  .live-register-header {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .live-register-title {
+    font-size: 1.05rem;
+  }
+
+  .live-register-header-right,
+  .live-register-actions-top {
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .live-register-search-wrap {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  .live-register-dropdown-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .register-filter-select {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 130px;
+  }
+
+  .live-register-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 14px max(10px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .live-register-pagination-controls {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .live-register-page-btn {
+    min-height: 38px;
+    padding: 6px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .register-filter-select {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  .live-register-count-pill {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+  }
+
+  .live-register-btn-export,
+  .live-register-export-btn {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .live-register-btn-refresh,
+  .live-register-refresh-btn {
+    padding: 6px 10px;
+  }
 }
