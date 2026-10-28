@@ -803,6 +803,77 @@ assert(
   'Migration 8: Purge RPC execution explicitly revoked from PUBLIC and anon'
 )
 
+// 17. Inspect Step 10 Migration: Permanent Archive, Server-Derived Accountability & Sequence
+console.log('\n[Suite 17] Verifying Database Migration for Permanent Archive & Accountability:')
+const mig10Path = path.join(
+  projectRoot,
+  'supabase',
+  'migrations',
+  '20261028000001_permanent_archive_and_accountability.sql'
+)
+const mig10 = fs.readFileSync(mig10Path, 'utf8')
+
+assert(
+  mig10.includes('ADD COLUMN IF NOT EXISTS employee_code TEXT') &&
+  mig10.includes('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_employee_code'),
+  'Migration 10: admin_users extended with nullable employee_code for business reporting'
+)
+
+assert(
+  mig10.includes('CREATE SEQUENCE IF NOT EXISTS public.enquiry_reference_seq') &&
+  mig10.includes('START WITH 1001') &&
+  mig10.includes("pg_catalog.nextval('public.enquiry_reference_seq')"),
+  'Migration 10: Safe PostgreSQL sequence generates atomic collision-free human-readable enquiry IDs'
+)
+
+assert(
+  mig10.includes('chk_enquiries_approved_not_in_bin') &&
+  mig10.includes('NOT (completion_approved_at IS NOT NULL AND (is_in_bin = true OR scheduled_deletion_at IS NOT NULL))'),
+  'Migration 10: Database CHECK constraint prevents approved enquiry from having is_in_bin=true or scheduled_deletion_at'
+)
+
+assert(
+  mig10.includes('CREATE OR REPLACE FUNCTION public.trg_prevent_approved_enquiry_deletion()') &&
+  mig10.includes('BEFORE DELETE ON public.enquiries'),
+  'Migration 10: BEFORE DELETE trigger strictly blocks deletion of completed + Head-approved records'
+)
+
+assert(
+  mig10.includes('CREATE OR REPLACE FUNCTION public.protect_enquiry_customer_and_archive_immutability()') &&
+  mig10.includes('Approved completed enquiries cannot be unarchived or reopened'),
+  'Migration 10: Immutability trigger blocks tampering with approval identity, timestamps, or reopening records'
+)
+
+assert(
+  mig10.includes('CREATE OR REPLACE FUNCTION public.submit_enquiry_completion') &&
+  mig10.includes('SELECT email, role, full_name, employee_code') &&
+  mig10.includes('completed_by_name = COALESCE(v_actor_name, v_actor_email)') &&
+  mig10.includes('completed_by_employee_code = v_actor_code'),
+  'Migration 10: submit_enquiry_completion securely derives employee identity and snapshots server-side'
+)
+
+assert(
+  mig10.includes('CREATE OR REPLACE FUNCTION public.review_enquiry_completion') &&
+  mig10.includes("status = 'completed'") &&
+  mig10.includes('is_archived = true') &&
+  mig10.includes('scheduled_deletion_at = NULL') &&
+  mig10.includes('is_in_bin = false'),
+  'Migration 10: review_enquiry_completion permanently archives approved enquiry with no scheduled deletion'
+)
+
+assert(
+  mig10.includes('CREATE OR REPLACE FUNCTION public.restore_enquiry') &&
+  mig10.includes('Head-approved completed enquiries cannot be unarchived or reopened'),
+  'Migration 10: restore_enquiry blocks unarchiving Head-approved completed records'
+)
+
+assert(
+  mig10.includes('CREATE OR REPLACE FUNCTION public.purge_expired_bin_enquiries') &&
+  mig10.includes('completion_approved_at IS NULL') &&
+  mig10.includes("status != 'completed'"),
+  'Migration 10: purge_expired_bin_enquiries strictly excludes approved enquiries from deletion'
+)
+
 console.log('====================================================================')
 console.log(`Summary: ${passedTests} passed, ${failedTests} failed.`)
 console.log('====================================================================')

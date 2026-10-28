@@ -165,6 +165,7 @@ export const ENQUIRY_STATUSES = [
   { id: 'returned_for_rework', label: 'Returned for Rework', color: '#c2410c', bg: '#fff7ed', border: '#ffedd5', icon: '🔄' },
   { id: 'rejection_requested', label: 'Pending Rejection', color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', icon: '⏳' },
   { id: 'rejected', label: 'Rejected', color: '#991b1b', bg: '#fef2f2', border: '#fecaca', icon: '❌' },
+  { id: 'completed', label: 'Completed (Archived)', color: '#047857', bg: '#ecfdf5', border: '#a7f3d0', icon: '✅' },
   { id: 'in_bin', label: 'In Bin', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', icon: '🗑️' },
   { id: 'closed', label: 'Closed', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', icon: '⚪' }
 ]

@@ -264,35 +264,35 @@ async function runRoleMatrixSuite() {
   })
   assertTest(!resubErr, '2.9 Employee resubmits reworked enquiry for approval', resubErr?.message)
 
-  // Superadmin approves completion (moves to Bin)
+  // Superadmin approves completion (Phase 2 Permanent Archive)
   const { error: appErr } = await superadminClient.rpc('review_enquiry_completion', {
     p_enquiry_id: testId,
     p_decision: 'approved',
-    p_review_notes: 'Verified mobile streaming; work approved',
-    p_retention_days: 7
+    p_review_notes: 'Verified mobile streaming; work approved'
   })
-  assertTest(!appErr, '2.10 Superadmin approves completion, moving enquiry to Bin', appErr?.message)
+  assertTest(!appErr, '2.10 Superadmin approves completion, permanently archiving enquiry', appErr?.message)
 
-  // Verify enquiry is now in_bin
-  const { data: binData } = await superadminClient.from('enquiries').select('status, is_in_bin, scheduled_deletion_at').eq('id', testId).single()
-  assertTest(binData?.status === 'in_bin' && binData?.is_in_bin === true, '2.11 Enquiry is in Bin with is_in_bin=true')
-  assertTest(Boolean(binData?.scheduled_deletion_at), '2.12 Enquiry has scheduled deletion date set')
+  // Verify enquiry is now completed, permanently archived, and NOT in Bin
+  const { data: archiveData } = await superadminClient.from('enquiries').select('status, is_archived, is_in_bin, scheduled_deletion_at').eq('id', testId).single()
+  assertTest(archiveData?.status === 'completed' && archiveData?.is_archived === true, '2.11 Enquiry is completed with is_archived=true')
+  assertTest(archiveData?.is_in_bin === false && archiveData?.scheduled_deletion_at === null, '2.12 Enquiry has no scheduled deletion and is_in_bin=false')
 
-  // Employee cannot restore enquiry from Bin
-  const { error: empRestErr } = await employeeClient.rpc('restore_enquiry_from_bin', {
+  // Employee cannot restore/reopen permanently archived enquiry
+  const { error: empRestErr } = await employeeClient.rpc('restore_enquiry', {
     p_enquiry_id: testId
   })
-  assertTest(Boolean(empRestErr), '2.13 Employee CANNOT restore enquiry from Bin (blocked by backend RPC)')
+  assertTest(Boolean(empRestErr), '2.13 Employee CANNOT restore/reopen permanently archived enquiry (blocked by backend RPC)')
 
-  // Superadmin restores enquiry from Bin
-  const { error: saRestErr } = await superadminClient.rpc('restore_enquiry_from_bin', {
+  // Superadmin also cannot unarchive/reopen permanently approved completed enquiry (DB protection)
+  const { error: saRestErr } = await superadminClient.rpc('restore_enquiry', {
     p_enquiry_id: testId
   })
-  assertTest(!saRestErr, '2.14 Superadmin successfully restores enquiry from Bin to active queue', saRestErr?.message)
+  assertTest(Boolean(saRestErr), '2.14 Superadmin CANNOT reopen approved completed enquiry (permanent archive protected)')
 
-  // Cleanup test record
-  await serviceClient.from('enquiries').delete().eq('id', testId)
-  console.log('\n  Cleanup: Dedicated matrix test enquiry removed cleanly.')
+  // Direct DELETE blocked by database trigger
+  const { error: delErr } = await serviceClient.from('enquiries').delete().eq('id', testId)
+  assertTest(Boolean(delErr), '2.15 Permanent archive record cannot be deleted (BEFORE DELETE trigger blocked)')
+  console.log('\n  Verified: Permanent archive invariants & delete protection validated.')
 
   console.log('\n====================================================================')
   console.log(`Role Matrix Suite Summary: ${passed} passed, ${failed} failed.`)

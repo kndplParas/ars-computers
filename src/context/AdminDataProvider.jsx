@@ -930,6 +930,10 @@ export function AdminDataProvider({ children }) {
                 previous_status: e.status,
                 status: 'completion_requested',
                 completion_summary: completionSummary,
+                completion_requested_by: adminUser?.id,
+                completion_requested_at: new Date().toISOString(),
+                completed_by_name: adminUser?.full_name || 'Store Employee',
+                completed_by_employee_code: adminUser?.employee_code || 'ARS-EMP-001',
                 completion_rework_reason: null
               }
             : e
@@ -941,7 +945,7 @@ export function AdminDataProvider({ children }) {
 
   // 9. Review Enquiry Completion (Superadmin Only: 'approved' | 'returned_for_rework')
   const reviewEnquiryCompletion = useCallback(
-    async (enquiryId, decision, reviewNotes = '', retentionDays = 7) => {
+    async (enquiryId, decision, reviewNotes = '', retentionDays = null) => {
       if (adminUser?.role !== 'superadmin') {
         throw new Error('Unauthorized: Only superadministrators can review completion requests.')
       }
@@ -953,7 +957,7 @@ export function AdminDataProvider({ children }) {
           p_enquiry_id: enquiryId,
           p_decision: decision,
           p_review_notes: reviewNotes || null,
-          p_retention_days: retentionDays || 7
+          p_retention_days: retentionDays
         })
 
         if (error) throw error
@@ -967,13 +971,20 @@ export function AdminDataProvider({ children }) {
           if (e.id !== enquiryId) return e
           if (decision === 'approved') {
             const now = new Date()
-            const deletionDate = new Date(now.getTime() + (retentionDays || 7) * 24 * 60 * 60 * 1000)
             return {
               ...e,
-              status: 'in_bin',
-              is_in_bin: true,
-              bin_entered_at: now.toISOString(),
-              scheduled_deletion_at: deletionDate.toISOString()
+              status: 'completed',
+              is_archived: true,
+              archived_at: now.toISOString(),
+              archived_by: adminUser?.id,
+              is_in_bin: false,
+              bin_entered_at: null,
+              scheduled_deletion_at: null,
+              completion_approved_by: adminUser?.id,
+              completion_approved_at: now.toISOString(),
+              approved_by_name: adminUser?.full_name || 'Admin Head',
+              approved_by_employee_code: adminUser?.employee_code || 'ARS-HEAD-001',
+              approval_remarks: reviewNotes || null
             }
           } else {
             return {

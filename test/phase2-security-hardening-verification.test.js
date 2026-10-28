@@ -59,8 +59,8 @@ async function runTests() {
     .from('admin_users')
     .select('id, email')
     .eq('role', 'superadmin')
-    .eq('is_active', true)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
   const { data: impersonatedLink } = await serviceClient.auth.admin.generateLink({
     type: 'magiclink',

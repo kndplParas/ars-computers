@@ -4,6 +4,12 @@ import { ENQUIRY_STATUSES } from '../../data/mockEnquiries'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { parseServiceEnquiry } from '../../utils/serviceEnquiryHelper'
+import {
+  downloadMonthlyEnquiriesExcel,
+  filterEnquiriesByReportingMonth,
+  getMonthlyReportFilename,
+  MONTH_NAMES
+} from '../../utils/excelReportGenerator'
 
 /**
  * ============================================================================
@@ -137,6 +143,12 @@ export default function AdminEnquiriesPage() {
   const [isRestoringFromBin, setIsRestoringFromBin] = useState(false)
   const [isPurgingBin, setIsPurgingBin] = useState(false)
 
+  // Monthly Excel Report States (Available to ALL active staff)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
+  const [exportMonthIndex, setExportMonthIndex] = useState(() => new Date().getMonth())
+  const [exportYear, setExportYear] = useState(() => new Date().getFullYear())
+  const [isExporting, setIsExporting] = useState(false)
+
   // Derive effective tab: non-superadmin users are restricted from the Bin tab
   const effectiveWorkflowTab = (!isSuperadmin && activeWorkflowTab === 'bin') ? 'all_active' : activeWorkflowTab
 
@@ -144,6 +156,26 @@ export default function AdminEnquiriesPage() {
     setNotification({ text, type })
     setTimeout(() => setNotification(null), 4000)
   }
+
+  // Count approved enquiries eligible for selected monthly reporting
+  const eligibleExportCount = useMemo(
+    () => filterEnquiriesByReportingMonth(enquiries, exportMonthIndex, exportYear).length,
+    [enquiries, exportMonthIndex, exportYear]
+  )
+
+  const handleDownloadReport = async () => {
+    setIsExporting(true)
+    try {
+      const res = await downloadMonthlyEnquiriesExcel(enquiries, exportMonthIndex, exportYear)
+      showNotification(`Report generated: ${res.filename} (${res.count} records)`, 'success')
+      setIsExportModalOpen(false)
+    } catch (err) {
+      showNotification(`Failed to generate Excel report: ${err.message}`, 'error')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
 
   // --- Dynamic Metric Counts ---
   const metrics = useMemo(() => {
@@ -509,12 +541,14 @@ export default function AdminEnquiriesPage() {
         await reviewEnquiryCompletion(enq.id, decision, notes, days)
       }
 
-      const resultingStatus = decision === 'approved' ? 'in_bin' : 'returned_for_rework'
+      const resultingStatus = decision === 'approved' ? 'completed' : 'returned_for_rework'
       if (selectedEnquiry && selectedEnquiry.id === enq.id) {
         setSelectedEnquiry((prev) => ({
           ...prev,
           status: resultingStatus,
-          is_in_bin: decision === 'approved',
+          is_archived: decision === 'approved',
+          is_in_bin: false,
+          completion_approved_at: decision === 'approved' ? new Date().toISOString() : prev.completion_approved_at,
           completion_rework_reason: decision === 'returned_for_rework' ? notes : null
         }))
         await reloadActivities(enq.id)
@@ -523,7 +557,7 @@ export default function AdminEnquiriesPage() {
       setCompletionReviewConfirmTarget(null)
       showNotification(
         decision === 'approved'
-          ? `Work approved. Enquiry moved to Bin with ${days}-day retention.`
+          ? 'Work approved. Enquiry permanently archived.'
           : 'Task returned for rework with reason.'
       )
       if (loadAdminEnquiries) await loadAdminEnquiries()
@@ -752,7 +786,25 @@ export default function AdminEnquiriesPage() {
             </p>
           </div>
 
-          <div className="admin-view-actions">
+          <div className="admin-view-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              id="open-monthly-report-modal-btn"
+              className="btn-primary btn-sm"
+              onClick={() => setIsExportModalOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#047857',
+                borderColor: '#065f46',
+                color: '#ffffff',
+                fontWeight: 600
+              }}
+              title="Download Monthly Audit Report in XLSX format (available to all authorized staff)"
+            >
+              📊 Monthly Excel Report
+            </button>
             {isLiveDatabase && (
               <button
                 type="button"
@@ -1085,6 +1137,50 @@ export default function AdminEnquiriesPage() {
           </div>
         )}
 
+        {/* Permanent Archive Information Banner */}
+        {activeWorkflowTab === 'archived' && (
+          <div
+            style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div>
+              <span style={{ fontWeight: 700, color: '#166534', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🔒</span> Permanent Archive &amp; Monthly Compliance Records
+              </span>
+              <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#15803d' }}>
+                Head-approved completed enquiries become permanent historical records. They are immune to automated deletion and cannot enter the Bin.
+              </p>
+            </div>
+            <button
+              type="button"
+              id="archived-tab-download-excel-btn"
+              onClick={() => setIsExportModalOpen(true)}
+              className="btn-primary btn-sm"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#047857',
+                borderColor: '#065f46',
+                color: '#ffffff',
+                fontWeight: 600
+              }}
+            >
+              📊 Export Monthly XLSX
+            </button>
+          </div>
+        )}
+
         {/* 2. Filter & Search Toolbar */}
         <div className="admin-product-toolbar">
           {/* Search Field */}
@@ -1245,7 +1341,7 @@ export default function AdminEnquiriesPage() {
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                           <span className="enquiry-id-badge" title={enq.id}>
-                            {enq.id}
+                            {enq.enquiry_number || enq.id}
                           </span>
                           {enq.is_archived && (
                             <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>
@@ -1683,7 +1779,7 @@ export default function AdminEnquiriesPage() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <h2 id="enquiry-modal-title" className="admin-modal-title" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>
-                      Enquiry {selectedEnquiry.id}
+                      Enquiry {selectedEnquiry.enquiry_number || selectedEnquiry.id}
                     </h2>
                     <span
                       className="enquiry-status-chip modal-status-badge"
@@ -1707,6 +1803,7 @@ export default function AdminEnquiriesPage() {
                   </div>
                   <span className="modal-subtitle-note" style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
                     Submitted on {formatDateTime(selectedEnquiry.created_at)}
+                    {selectedEnquiry.enquiry_number && ` | UUID: ${selectedEnquiry.id}`}
                   </span>
                 </div>
                 <button
@@ -1724,9 +1821,11 @@ export default function AdminEnquiriesPage() {
 
                 {/* Archive Notice */}
                 {selectedEnquiry.is_archived && (
-                  <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>📦 Archived Record</span>
-                    {isSuperadmin && (
+                  <div style={{ background: selectedEnquiry.completion_approved_at ? '#f0fdf4' : '#f8fafc', border: `1px solid ${selectedEnquiry.completion_approved_at ? '#bbf7d0' : '#cbd5e1'}`, padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <span style={{ fontSize: '0.85rem', color: selectedEnquiry.completion_approved_at ? '#166534' : '#475569', fontWeight: 600 }}>
+                      {selectedEnquiry.completion_approved_at ? '🔒 Permanent Archive (Head-Approved Completed Record)' : '📦 Archived Record'}
+                    </span>
+                    {isSuperadmin && !selectedEnquiry.completion_approved_at && (
                       <button
                         type="button"
                         className="btn-outline btn-sm"
@@ -1735,6 +1834,86 @@ export default function AdminEnquiriesPage() {
                       >
                         ♻️ Restore to Active
                       </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Permanent Archive Accountability Audit Card */}
+                {(selectedEnquiry.completion_approved_at || selectedEnquiry.status === 'completed') && (
+                  <div
+                    style={{
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                      padding: '14px 16px',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                      <span style={{ fontWeight: 700, color: '#166534', fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🔒</span> Permanent Accountability &amp; Audit Trail
+                      </span>
+                      <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                        Completed &amp; Head-Approved
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '0.84rem' }}>
+                      <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Completed By (Staff):
+                        </span>
+                        <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
+                          {selectedEnquiry.completed_by_name || 'Staff Member'}
+                        </strong>
+                        {selectedEnquiry.completed_by_employee_code && (
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                            Code: {selectedEnquiry.completed_by_employee_code}
+                          </span>
+                        )}
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                          Submitted: {formatDateTime(selectedEnquiry.completion_requested_at)}
+                        </span>
+                      </div>
+
+                      <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Approved By (Head Person):
+                        </span>
+                        <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
+                          {selectedEnquiry.approved_by_name || 'Store Head Person'}
+                        </strong>
+                        {selectedEnquiry.approved_by_employee_code && (
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                            Code: {selectedEnquiry.approved_by_employee_code}
+                          </span>
+                        )}
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                          Approved: {formatDateTime(selectedEnquiry.completion_approved_at)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedEnquiry.completion_summary && (
+                      <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                          Employee Completion Summary:
+                        </span>
+                        <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                          {selectedEnquiry.completion_summary}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedEnquiry.approval_remarks && (
+                      <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                          Head-Person Approval Remarks:
+                        </span>
+                        <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                          {selectedEnquiry.approval_remarks}
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
@@ -2703,7 +2882,7 @@ export default function AdminEnquiriesPage() {
             <div className="admin-modal-header">
               <h2 id="completion-review-confirm-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
                 {completionReviewConfirmTarget.decision === 'approved'
-                  ? 'Approve Work Completion & Move to Bin'
+                  ? 'Approve Work Completion & Permanently Archive'
                   : 'Return Task for Employee Rework'}
               </h2>
               <button
@@ -2721,14 +2900,14 @@ export default function AdminEnquiriesPage() {
                 {completionReviewConfirmTarget.decision === 'approved' ? (
                   <>
                     You are approving the completed work for Enquiry{' '}
-                    <strong>{completionReviewConfirmTarget.enquiry.id}</strong>. The enquiry will enter the{' '}
-                    <strong style={{ color: '#dc2626' }}>Bin</strong> with a retention period before scheduled permanent deletion.
-                    You can restore it anytime before the retention deadline.
+                    <strong>{completionReviewConfirmTarget.enquiry.enquiry_number || completionReviewConfirmTarget.enquiry.id}</strong>.
+                    The enquiry will become a <strong style={{ color: '#166534' }}>Permanent Archive Record</strong> with no scheduled deletion,
+                    immune to automated purge, and assigned to the approval month for compliance reporting.
                   </>
                 ) : (
                   <>
                     You are rejecting this completion submission and returning Enquiry{' '}
-                    <strong>{completionReviewConfirmTarget.enquiry.id}</strong> to active status for{' '}
+                    <strong>{completionReviewConfirmTarget.enquiry.enquiry_number || completionReviewConfirmTarget.enquiry.id}</strong> to active status for{' '}
                     <strong style={{ color: '#d97706' }}>Employee Rework</strong>. Staff will be instructed to perform additional work and resubmit.
                   </>
                 )}
@@ -2744,39 +2923,13 @@ export default function AdminEnquiriesPage() {
                 </p>
               </div>
 
-              {/* If Approving: Configurable Retention Days */}
-              {completionReviewConfirmTarget.decision === 'approved' && (
-                <div style={{ marginBottom: '14px', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                  <label
-                    htmlFor="completion-retention-input"
-                    style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
-                  >
-                    Bin Retention Period (Days):
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="number"
-                      id="completion-retention-input"
-                      min="1"
-                      max="30"
-                      value={completionRetentionDays}
-                      onChange={(e) => setCompletionRetentionDays(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 7)))}
-                      style={{ width: '80px', padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                    />
-                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      days (configurable, default 7 days; scheduled for automatic permanent deletion after deadline)
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* Review Notes / Mandatory Rework Reason */}
               <label
                 htmlFor="completion-review-dialog-notes-input"
                 style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
               >
                 {completionReviewConfirmTarget.decision === 'approved'
-                  ? 'Head-Person Review Notes (Optional):'
+                  ? 'Head-Person Review Notes / Approval Remarks (Optional):'
                   : 'Mandatory Reason for Return / Rework Instructions (Min 5 chars):'}
               </label>
               <textarea
@@ -2811,7 +2964,7 @@ export default function AdminEnquiriesPage() {
                   handleReviewCompletion(
                     completionReviewConfirmTarget.decision,
                     completionReviewNotesInput,
-                    completionReviewConfirmTarget.decision === 'approved' ? completionRetentionDays : null,
+                    null,
                     completionReviewConfirmTarget.enquiry
                   )
                 }
@@ -2828,8 +2981,143 @@ export default function AdminEnquiriesPage() {
                 {isSubmittingCompletionReview
                   ? 'Processing...'
                   : completionReviewConfirmTarget.decision === 'approved'
-                  ? '✅ Confirm Approval & Move to Bin'
+                  ? '✅ Confirm Approval & Permanent Archive'
                   : '🔄 Confirm Return for Rework'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Enquiries XLSX Export Modal (Available to All Active Staff) */}
+      {isExportModalOpen && (
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => !isExporting && setIsExportModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="export-monthly-report-modal-title"
+        >
+          <div
+            className="admin-modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '520px' }}
+          >
+            <div className="admin-modal-header">
+              <h2 id="export-monthly-report-modal-title" className="admin-modal-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>📊</span> Monthly Enquiries Excel Report
+              </h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => !isExporting && setIsExportModalOpen(false)}
+                aria-label="Close dialog"
+                disabled={isExporting}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="admin-modal-body" style={{ padding: '18px 20px' }}>
+              <div
+                style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '6px',
+                  padding: '12px 14px',
+                  marginBottom: '16px'
+                }}
+              >
+                <strong style={{ display: 'block', fontSize: '0.84rem', color: '#166534', marginBottom: '3px' }}>
+                  Compliance Reporting Month Rule:
+                </strong>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#15803d', lineHeight: 1.4 }}>
+                  Monthly audit reports are strictly grounded in <code>completion_approved_at</code> (the date and time when the Head Person approved the completion). An enquiry received in an earlier month belongs strictly to the month of final Head approval.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                <div>
+                  <label htmlFor="export-month-select" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                    Reporting Month:
+                  </label>
+                  <select
+                    id="export-month-select"
+                    className="admin-select"
+                    value={exportMonthIndex}
+                    onChange={(e) => setExportMonthIndex(parseInt(e.target.value, 10))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  >
+                    {MONTH_NAMES.map((name, idx) => (
+                      <option key={name} value={idx}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="export-year-select" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                    Reporting Year:
+                  </label>
+                  <select
+                    id="export-year-select"
+                    className="admin-select"
+                    value={exportYear}
+                    onChange={(e) => setExportYear(parseInt(e.target.value, 10))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px 14px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Standard Filename:</span>
+                  <code style={{ fontSize: '0.84rem', color: '#0f172a', fontWeight: 700 }}>
+                    {getMonthlyReportFilename(exportMonthIndex, exportYear)}
+                  </code>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                  <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Eligible Approved Enquiries:</span>
+                  <span style={{ fontSize: '0.88rem', color: eligibleExportCount > 0 ? '#166534' : '#64748b', fontWeight: 700 }}>
+                    {eligibleExportCount} record{eligibleExportCount === 1 ? '' : 's'}
+                  </span>
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4 }}>
+                💡 Excel download is available to all active authorized staff. The generated workbook includes 18 standard audit and accountability columns.
+              </p>
+            </div>
+
+            <div className="admin-modal-footer">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setIsExportModalOpen(false)}
+                disabled={isExporting}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-download-xlsx"
+                className="btn-primary"
+                onClick={handleDownloadReport}
+                disabled={isExporting}
+                style={{
+                  background: '#047857',
+                  borderColor: '#065f46',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {isExporting ? 'Generating Excel...' : '📥 Download XLSX Report'}
               </button>
             </div>
           </div>
