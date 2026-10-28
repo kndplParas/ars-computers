@@ -268,3 +268,209 @@ export async function downloadMonthlyEnquiriesExcel(allEnquiries, targetMonthInd
     buffer
   }
 }
+
+/**
+ * Builds standard filename for Live Enquiry Register export.
+ * Format: ARS_Enquiry_Register_YYYY-MM-DD.xlsx
+ */
+export function getLiveRegisterFilename(targetDate = new Date()) {
+  const d = new Date(targetDate)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `ARS_Enquiry_Register_${year}-${month}-${day}.xlsx`
+}
+
+/**
+ * Generates an Excel workbook for the currently filtered Live Enquiry Register dataset
+ * and initiates download in the browser.
+ *
+ * @param {Array} filteredEnquiries - Filtered enquiries currently displayed in the register
+ * @param {Object} [meta] - Optional metadata (filter summary, exportedBy, etc.)
+ * @returns {Promise<{ filename: string, count: number, buffer: ArrayBuffer }>}
+ */
+export async function exportLiveRegisterViewToExcel(filteredEnquiries = [], meta = {}) {
+  const exportDate = meta.date || new Date()
+  const filename = getLiveRegisterFilename(exportDate)
+
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'ARS Computers Admin Portal'
+  workbook.lastModifiedBy = meta.exportedBy || 'ARS Computers Live Enquiry Register'
+  workbook.created = exportDate
+  workbook.modified = exportDate
+
+  const worksheet = workbook.addWorksheet('Live Enquiry Register', {
+    views: [{ showGridLines: true, state: 'frozen', xSplit: 1, ySplit: 1 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true }
+  })
+
+  // 18 Professional Spreadsheet Columns strictly matching Requirement 4
+  worksheet.columns = [
+    { header: 'Enquiry Reference', key: 'enquiry_ref', width: 20 },
+    { header: 'Received Date', key: 'received_date', width: 14 },
+    { header: 'Received Time', key: 'received_time', width: 14 },
+    { header: 'Customer Name', key: 'customer_name', width: 22 },
+    { header: 'Contact Information', key: 'contact_info', width: 26 },
+    { header: 'Product / Service', key: 'product_service', width: 26 },
+    { header: 'Enquiry / Problem', key: 'enquiry_problem', width: 40 },
+    { header: 'Current Status', key: 'current_status', width: 18 },
+    { header: 'Completed By', key: 'completed_by', width: 22 },
+    { header: 'Employee ID / Code', key: 'completed_by_code', width: 22 },
+    { header: 'Completion Date', key: 'completion_date', width: 16 },
+    { header: 'Completion Time', key: 'completion_time', width: 16 },
+    { header: 'Employee Remarks', key: 'employee_remarks', width: 36 },
+    { header: 'Approved By', key: 'approved_by', width: 22 },
+    { header: 'Approval Date', key: 'approval_date', width: 14 },
+    { header: 'Approval Time', key: 'approval_time', width: 14 },
+    { header: 'Head Remarks', key: 'head_remarks', width: 36 },
+    { header: 'Archive Status', key: 'archive_status', width: 22 }
+  ]
+
+  // Style Header Row (Dark Slate, White Bold, Centered, Frozen)
+  const headerRow = worksheet.getRow(1)
+  headerRow.height = 28
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF0F172A' } // Slate 900
+    }
+    cell.font = {
+      name: 'Calibri',
+      size: 11,
+      bold: true,
+      color: { argb: 'FFFFFFFF' }
+    }
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true
+    }
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF334155' } },
+      bottom: { style: 'medium', color: { argb: 'FF020617' } },
+      left: { style: 'thin', color: { argb: 'FF334155' } },
+      right: { style: 'thin', color: { argb: 'FF334155' } }
+    }
+  })
+
+  // Populate Data Rows
+  filteredEnquiries.forEach((enq, index) => {
+    const received = formatDateTimeParts(enq.created_at)
+    const completed = formatDateTimeParts(enq.completion_requested_at)
+    const approved = formatDateTimeParts(enq.completion_approved_at)
+
+    const productService =
+      enq.service_requested ||
+      enq.category_label ||
+      enq.category_interest ||
+      'General Enquiry'
+
+    const contactInfo = enq.contact_info || enq.phone || enq.email || '—'
+    const customerName = enq.name || enq.customer_name || '—'
+
+    let archiveStatus = 'Active'
+    if (enq.is_archived || enq.status === 'completed') {
+      archiveStatus = 'Permanently Archived'
+    } else if (enq.is_in_bin) {
+      archiveStatus = 'In Bin'
+    }
+
+    const row = worksheet.addRow({
+      enquiry_ref: enq.enquiry_number || enq.id || '—',
+      received_date: received.date,
+      received_time: received.time,
+      customer_name: customerName,
+      contact_info: contactInfo,
+      product_service: productService,
+      enquiry_problem: enq.message || '—',
+      current_status: enq.status || '—',
+      completed_by: enq.completed_by_name || '—',
+      completed_by_code: enq.completed_by_employee_code || '—',
+      completion_date: completed.date,
+      completion_time: completed.time,
+      employee_remarks: enq.completion_summary || '—',
+      approved_by: enq.approved_by_name || '—',
+      approval_date: approved.date,
+      approval_time: approved.time,
+      head_remarks: enq.approval_remarks || '—',
+      archive_status: archiveStatus
+    })
+
+    row.height = 22
+    const isEven = index % 2 === 1
+    row.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Calibri', size: 10 }
+      if (isEven) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF8FAFC' } // Slate 50 zebra stripe
+        }
+      }
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: colNumber === 1 || colNumber === 2 || colNumber === 3 ||
+                    colNumber === 8 || colNumber === 10 || colNumber === 11 ||
+                    colNumber === 12 || colNumber === 15 || colNumber === 16 ||
+                    colNumber === 18
+                      ? 'center'
+                      : 'left'
+      }
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      }
+    })
+  })
+
+  // Empty state handling
+  if (filteredEnquiries.length === 0) {
+    const emptyRow = worksheet.addRow({
+      enquiry_ref: '—',
+      customer_name: 'No enquiries match the current filter selection.',
+      contact_info: '',
+      product_service: '',
+      enquiry_problem: '',
+      received_date: '',
+      received_time: '',
+      current_status: '',
+      completed_by: '',
+      completed_by_code: '',
+      completion_date: '',
+      completion_time: '',
+      employee_remarks: '',
+      approved_by: '',
+      approval_date: '',
+      approval_time: '',
+      head_remarks: '',
+      archive_status: ''
+    })
+    emptyRow.height = 24
+  }
+
+  // Trigger browser download via Blob
+  const buffer = await workbook.xlsx.writeBuffer()
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  })
+
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+
+  return {
+    filename,
+    count: filteredEnquiries.length,
+    buffer
+  }
+}

@@ -5932,7 +5932,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 1100;
   padding: 20px;
   overflow-y: auto;
   animation: fadeIn 0.15s ease-out;

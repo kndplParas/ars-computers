@@ -10,6 +10,7 @@ import {
   getMonthlyReportFilename,
   MONTH_NAMES
 } from '../../utils/excelReportGenerator'
+import LiveEnquiryRegisterModal from '../../components/admin/LiveEnquiryRegisterModal'
 
 /**
  * ============================================================================
@@ -142,6 +143,9 @@ export default function AdminEnquiriesPage() {
   const [binRestoreTarget, setBinRestoreTarget] = useState(null) // { enquiry }
   const [isRestoringFromBin, setIsRestoringFromBin] = useState(false)
   const [isPurgingBin, setIsPurgingBin] = useState(false)
+
+  // Live Enquiry Register State (Available to ALL active staff)
+  const [isLiveRegisterOpen, setIsLiveRegisterOpen] = useState(false)
 
   // Monthly Excel Report States (Available to ALL active staff)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
@@ -787,6 +791,24 @@ export default function AdminEnquiriesPage() {
           </div>
 
           <div className="admin-view-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              id="open-live-register-modal-btn"
+              className="btn-primary btn-sm"
+              onClick={() => setIsLiveRegisterOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#1e40af',
+                borderColor: '#1e3a8a',
+                color: '#ffffff',
+                fontWeight: 600
+              }}
+              title="Open Advanced Live Enquiry Register (Spreadsheet View)"
+            >
+              📋 Live Enquiry Register
+            </button>
             <button
               type="button"
               id="open-monthly-report-modal-btn"
@@ -3186,6 +3208,19 @@ export default function AdminEnquiriesPage() {
           </div>
         </div>
       )}
+
+      {/* 6. Advanced Excel-like Live Enquiry Register Modal */}
+      <LiveEnquiryRegisterModal
+        isOpen={isLiveRegisterOpen}
+        onClose={() => setIsLiveRegisterOpen(false)}
+        enquiries={enquiries}
+        onSelectEnquiry={(enq) => {
+          setSelectedEnquiry(enq)
+        }}
+        onRefresh={() => loadAdminEnquiries && loadAdminEnquiries()}
+        isLoading={isLoadingEnquiries}
+        adminUser={adminUser}
+      />
     </AdminLayout>
   )
 }
