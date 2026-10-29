@@ -320,12 +320,14 @@ function CustomerHomePage() {
 
             <div className="hero-visual-col">
               <div className="hero-showcase-card">
-                <img
-                  src="/hero-storefront.jpg"
-                  alt="ARS Computers Storefront &amp; Service Center in Rudrapur"
-                  className="hero-hardware-img"
-                  onError={(e) => { e.currentTarget.src = '/hero-hardware.jpg' }}
-                />
+                <div className="hero-media-wrapper">
+                  <img
+                    src="/hero-storefront.jpg"
+                    alt="ARS Computers Storefront &amp; Service Center in Rudrapur"
+                    className="hero-hardware-img"
+                    onError={(e) => { e.currentTarget.src = '/hero-hardware.jpg' }}
+                  />
+                </div>
                 <div className="hero-showcase-badge">
                   <span className="badge-live-pulse"></span>
                   <span>Certified Integrator</span>
