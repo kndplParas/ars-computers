@@ -1,14 +1,18 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout.jsx'
-import CreateOrderModal from '../../components/admin/CreateOrderModal.jsx'
-import LiveOrdersRegisterModal from '../../components/admin/LiveOrdersRegisterModal.jsx'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import {
   downloadMonthlySalesExcel,
-  filterOrdersByReportingMonth
+  filterOrdersByReportingMonth,
+  isOrderInCurrentMonthCycle,
+  filterOrdersForHistoricalMonth,
+  calculateMonthlyCycleMetrics
 } from '../../utils/salesReportGenerator.js'
 import { MONTH_NAMES, formatDateTimeParts } from '../../utils/excelReportGenerator.js'
+
+const CreateOrderModal = lazy(() => import('../../components/admin/CreateOrderModal.jsx'))
+const LiveOrdersRegisterModal = lazy(() => import('../../components/admin/LiveOrdersRegisterModal.jsx'))
 
 /**
  * ============================================================================
@@ -35,9 +39,24 @@ export default function AdminOrdersPage() {
     submitOrderCompletion,
     reviewOrderCompletion,
     cancelSalesOrder,
+    recordOrderPayment,
+    getOrderAttachmentDownloadUrl,
+    loadOrderDetails,
     isLoadingOrders,
     ordersError
   } = useAdminData()
+
+  // Monthly Operating Cycle State
+  const [currentCalendarDate] = useState(() => new Date())
+  const currentCalendarMonth = currentCalendarDate.getMonth() // 0-indexed (0 = Jan, 11 = Dec)
+  const currentCalendarYear = currentCalendarDate.getFullYear()
+
+  // Operating Cycle mode: 'current' (default) | 'history'
+  const [cycleMode, setCycleMode] = useState('current')
+
+  // History selector: default to previous calendar month
+  const [historyMonth, setHistoryMonth] = useState(() => (currentCalendarMonth === 0 ? 11 : currentCalendarMonth - 1))
+  const [historyYear, setHistoryYear] = useState(() => (currentCalendarMonth === 0 ? currentCalendarYear - 1 : currentCalendarYear))
 
   // Tabs & Filters
   const [activeTab, setActiveTab] = useState('active') // 'active' | 'pending' | 'completed' | 'cancelled' | 'all'
@@ -64,6 +83,121 @@ export default function AdminOrdersPage() {
     isSubmitting: false
   })
 
+  // Payment Modal State
+  const [paymentModal, setPaymentModal] = useState({
+    isOpen: false,
+    order: null,
+    amountReceived: '',
+    paymentMethod: 'cash',
+    transactionReference: '',
+    remarks: '',
+    error: null,
+    isSubmitting: false
+  })
+
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState(null)
+
+  // Format File Size Helper
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes <= 0) return '0 B'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
+
+  // Payment Modal Handlers
+  const handleOpenPaymentModal = (order) => {
+    const currentBalance = Math.max(0, Number(order.total_amount) - Number(order.paid_amount))
+    setPaymentModal({
+      isOpen: true,
+      order,
+      amountReceived: currentBalance > 0 ? currentBalance.toString() : '',
+      paymentMethod: 'cash',
+      transactionReference: '',
+      remarks: '',
+      error: null,
+      isSubmitting: false
+    })
+  }
+
+  const handleClosePaymentModal = () => {
+    setPaymentModal({
+      isOpen: false,
+      order: null,
+      amountReceived: '',
+      paymentMethod: 'cash',
+      transactionReference: '',
+      remarks: '',
+      error: null,
+      isSubmitting: false
+    })
+  }
+
+  const handleConfirmPayment = async (e) => {
+    e.preventDefault()
+    if (!paymentModal.order) return
+
+    const numAmount = Number(paymentModal.amountReceived)
+    const currentBalance = Math.max(0, Number(paymentModal.order.total_amount) - Number(paymentModal.order.paid_amount))
+
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setPaymentModal((prev) => ({ ...prev, error: 'Payment amount must be greater than zero.' }))
+      return
+    }
+
+    if (numAmount > currentBalance) {
+      setPaymentModal((prev) => ({
+        ...prev,
+        error: `Payment amount (₹${numAmount.toFixed(2)}) cannot exceed remaining balance (₹${currentBalance.toFixed(2)}).`
+      }))
+      return
+    }
+
+    setPaymentModal((prev) => ({ ...prev, isSubmitting: true, error: null }))
+
+    try {
+      await recordOrderPayment({
+        orderId: paymentModal.order.id,
+        amountReceived: numAmount,
+        paymentMethod: paymentModal.paymentMethod,
+        transactionReference: paymentModal.transactionReference.trim() || null,
+        remarks: paymentModal.remarks.trim() || null
+      })
+
+      showToast(`Payment of ₹${numAmount.toFixed(2)} recorded successfully!`)
+      if (loadOrderDetails) {
+        await loadOrderDetails(paymentModal.order.id)
+      }
+      handleClosePaymentModal()
+    } catch (err) {
+      console.error('Failed to record payment:', err)
+      setPaymentModal((prev) => ({
+        ...prev,
+        isSubmitting: false,
+        error: err.message || 'Failed to record payment. Please try again.'
+      }))
+    }
+  }
+
+  // Attachment Download Handler
+  const handleDownloadAttachment = async (attachment) => {
+    if (!attachment?.storage_path) return
+    setDownloadingAttachmentId(attachment.id)
+    try {
+      const url = await getOrderAttachmentDownloadUrl(attachment.storage_path, attachment.original_filename)
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      } else {
+        showToast('Unable to generate download URL for this file.', 'error')
+      }
+    } catch (err) {
+      console.error('Failed to get download URL:', err)
+      showToast(err.message || 'Failed to open attachment.', 'error')
+    } finally {
+      setDownloadingAttachmentId(null)
+    }
+  }
+
   // Toast Notification
   const [toast, setToast] = useState(null)
   const showToast = (text, type = 'success') => {
@@ -78,19 +212,59 @@ export default function AdminOrdersPage() {
     }
   }, [loadAdminOrders])
 
-  // Top Metrics
-  const metrics = useMemo(() => {
-    const active = orders.filter((o) => ['new', 'processing'].includes(o.status)).length
-    const pending = orders.filter((o) => o.status === 'completion_requested').length
-    const completedOrders = orders.filter((o) => o.status === 'completed')
-    const completed = completedOrders.length
-    const revenue = completedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
-    return { active, pending, completed, revenue }
-  }, [orders])
+  // In-flight deduplication ref for lazy-loading order details
+  const loadingDetailsRef = useRef(new Set())
 
-  // Filtered Orders
+  // Lazy-load order details (Payments & Attachments) when modal opens
+  useEffect(() => {
+    if (selectedOrder?.id && loadOrderDetails) {
+      if (!loadingDetailsRef.current.has(selectedOrder.id)) {
+        loadingDetailsRef.current.add(selectedOrder.id)
+        loadOrderDetails(selectedOrder.id).finally(() => {
+          loadingDetailsRef.current.delete(selectedOrder.id)
+        })
+      }
+    }
+  }, [selectedOrder?.id, loadOrderDetails])
+
+  // Extract available years for history selector
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set([currentCalendarYear, currentCalendarYear - 1])
+    orders.forEach((o) => {
+      if (o.created_at) {
+        const y = new Date(o.created_at).getFullYear()
+        if (!Number.isNaN(y)) yearsSet.add(y)
+      }
+      if (o.completion_approved_at) {
+        const y = new Date(o.completion_approved_at).getFullYear()
+        if (!Number.isNaN(y)) yearsSet.add(y)
+      }
+    })
+    return Array.from(yearsSet).sort((a, b) => b - a)
+  }, [orders, currentCalendarYear])
+
+  // Orders partitioned by active operating cycle
+  const cycleOrders = useMemo(() => {
+    if (cycleMode === 'current') {
+      return orders.filter((o) => isOrderInCurrentMonthCycle(o, currentCalendarMonth, currentCalendarYear))
+    } else {
+      return filterOrdersForHistoricalMonth(orders, historyMonth, historyYear)
+    }
+  }, [orders, cycleMode, currentCalendarMonth, currentCalendarYear, historyMonth, historyYear])
+
+  // Active target parameters for metrics
+  const activeTargetMonth = cycleMode === 'current' ? currentCalendarMonth : historyMonth
+  const activeTargetYear = cycleMode === 'current' ? currentCalendarYear : historyYear
+  const isCurrentCycle = cycleMode === 'current'
+
+  // Top Metrics based on operating cycle
+  const metrics = useMemo(() => {
+    return calculateMonthlyCycleMetrics(orders, activeTargetMonth, activeTargetYear, isCurrentCycle)
+  }, [orders, activeTargetMonth, activeTargetYear, isCurrentCycle])
+
+  // Filtered Orders within active cycle
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return cycleOrders.filter((o) => {
       // Tab filter
       if (activeTab === 'active' && !['new', 'processing'].includes(o.status)) return false
       if (activeTab === 'pending' && o.status !== 'completion_requested') return false
@@ -115,7 +289,7 @@ export default function AdminOrdersPage() {
 
       return true
     })
-  }, [orders, activeTab, paymentFilter, searchQuery])
+  }, [cycleOrders, activeTab, paymentFilter, searchQuery])
 
   // Monthly Report Count
   const eligibleExportCount = useMemo(
@@ -129,6 +303,19 @@ export default function AdminOrdersPage() {
       const res = await downloadMonthlySalesExcel(orders, exportMonthIndex, exportYear)
       showToast(`Sales report generated: ${res.filename} (${res.count} records)`, 'success')
       setIsExportModalOpen(false)
+    } catch (err) {
+      showToast(`Failed to generate Excel report: ${err.message}`, 'error')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // 1-Click Monthly Excel download for active or historical cycle
+  const handleDownloadCycleExcel = async (targetMonth, targetYear) => {
+    setIsExporting(true)
+    try {
+      const res = await downloadMonthlySalesExcel(orders, targetMonth, targetYear)
+      showToast(`Sales report generated: ${res.filename} (${res.count} records)`, 'success')
     } catch (err) {
       showToast(`Failed to generate Excel report: ${err.message}`, 'error')
     } finally {
@@ -252,18 +439,199 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
+        {/* Monthly Operating Cycle Control Bar */}
+        <div
+          className="admin-cycle-control-bar"
+          style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            padding: '14px 18px',
+            marginBottom: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}
+        >
+          {/* Left: Operating Cycle Mode Switcher */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Operating Cycle:
+            </span>
+
+            <button
+              type="button"
+              className={`btn-sm ${cycleMode === 'current' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setCycleMode('current')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                fontSize: '13px'
+              }}
+            >
+              <span>📅</span>
+              <span>Current Month — {MONTH_NAMES[currentCalendarMonth]} {currentCalendarYear}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`btn-sm ${cycleMode === 'history' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setCycleMode('history')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                fontSize: '13px'
+              }}
+            >
+              <span>📜</span>
+              <span>Monthly History</span>
+            </button>
+          </div>
+
+          {/* Right: Contextual Controls & Quick Excel Download */}
+          {cycleMode === 'current' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  background: '#ecfdf5',
+                  color: '#065f46',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  border: '1px solid #a7f3d0'
+                }}
+              >
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                Live Working Month
+              </span>
+
+              <button
+                type="button"
+                className="btn-outline btn-sm"
+                onClick={() => handleDownloadCycleExcel(currentCalendarMonth, currentCalendarYear)}
+                disabled={isExporting}
+                title={`Download standard Excel report for ${MONTH_NAMES[currentCalendarMonth]} ${currentCalendarYear}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+              >
+                <span>📥</span>
+                <span>Download Current Month Excel</span>
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Month:</label>
+              <select
+                className="form-select"
+                style={{ width: 'auto', minWidth: '130px', padding: '5px 10px', fontSize: '13px' }}
+                value={historyMonth}
+                onChange={(e) => setHistoryMonth(Number(e.target.value))}
+              >
+                {MONTH_NAMES.map((name, idx) => (
+                  <option key={name} value={idx}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+
+              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Year:</label>
+              <select
+                className="form-select"
+                style={{ width: 'auto', minWidth: '95px', padding: '5px 10px', fontSize: '13px' }}
+                value={historyYear}
+                onChange={(e) => setHistoryYear(Number(e.target.value))}
+              >
+                {availableYears.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                className="btn-outline btn-sm"
+                onClick={() => handleDownloadCycleExcel(historyMonth, historyYear)}
+                disabled={isExporting}
+                title={`Download standard Excel report for ${MONTH_NAMES[historyMonth]} ${historyYear}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+              >
+                <span>📥</span>
+                <span>Download {MONTH_NAMES[historyMonth]} Excel</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Historical Archive Notice Banner */}
+        {cycleMode === 'history' && (
+          <div
+            style={{
+              background: '#f8fafc',
+              border: '1px dashed #94a3b8',
+              borderRadius: '6px',
+              padding: '10px 14px',
+              marginBottom: '16px',
+              fontSize: '13px',
+              color: '#334155',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '8px'
+            }}
+          >
+            <div>
+              <span>📜 <strong>Viewing Historical Archive:</strong> {MONTH_NAMES[historyMonth]} {historyYear} (Read-Only Inspection).</span>
+              <span style={{ display: 'block', fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                All database records remain permanently preserved in Supabase. Unfinished active jobs remain in Current Month.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCycleMode('current')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#0284c7',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '12px',
+                textDecoration: 'underline'
+              }}
+            >
+              Return to Current Month ({MONTH_NAMES[currentCalendarMonth]} {currentCalendarYear}) →
+            </button>
+          </div>
+        )}
+
         {/* Metrics Cards */}
         <div className="admin-summary-grid four-cards" style={{ marginBottom: '24px' }}>
           {/* Card 1: Active Orders */}
           <div className="admin-stat-card">
             <div className="stat-card-icon blue">🛒</div>
             <div className="stat-card-content">
-              <span className="stat-label">Active Orders</span>
+              <span className="stat-label">
+                {cycleMode === 'current' ? 'Active Orders' : 'Historical Active'}
+              </span>
               <div className="stat-number-wrap">
                 <span className="stat-number">{metrics.active}</span>
-                <span className="stat-badge blue" style={{ background: '#eff6ff', color: '#1d4ed8' }}>Live</span>
+                <span className="stat-badge blue" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
+                  {cycleMode === 'current' ? 'Live' : 'Archive'}
+                </span>
               </div>
-              <span className="stat-subtext">New &amp; Processing</span>
+              <span className="stat-subtext">
+                {cycleMode === 'current' ? 'New & Processing (All Live Work)' : `Created in ${MONTH_NAMES[historyMonth]}`}
+              </span>
             </div>
           </div>
 
@@ -282,7 +650,9 @@ export default function AdminOrdersPage() {
                   </span>
                 )}
               </div>
-              <span className="stat-subtext">Awaiting Head Approval</span>
+              <span className="stat-subtext">
+                {cycleMode === 'current' ? 'Awaiting Head Approval' : 'Historical Pending'}
+              </span>
             </div>
           </div>
 
@@ -299,7 +669,9 @@ export default function AdminOrdersPage() {
                   Archived
                 </span>
               </div>
-              <span className="stat-subtext">Permanently Archived</span>
+              <span className="stat-subtext">
+                Approved in {MONTH_NAMES[activeTargetMonth]} {activeTargetYear}
+              </span>
             </div>
           </div>
 
@@ -313,7 +685,9 @@ export default function AdminOrdersPage() {
                   ₹{metrics.revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
-              <span className="stat-subtext">Finalized Sales</span>
+              <span className="stat-subtext">
+                Finalized Sales in {MONTH_NAMES[activeTargetMonth]} {activeTargetYear}
+              </span>
             </div>
           </div>
         </div>
@@ -335,7 +709,7 @@ export default function AdminOrdersPage() {
               borderBottom: activeTab === 'active' ? '2px solid #0284c7' : 'none'
             }}
           >
-            Active Orders ({orders.filter((o) => ['new', 'processing'].includes(o.status)).length})
+            Active Orders ({cycleOrders.filter((o) => ['new', 'processing'].includes(o.status)).length})
           </button>
 
           <button
@@ -353,7 +727,7 @@ export default function AdminOrdersPage() {
               borderBottom: activeTab === 'pending' ? '2px solid #0284c7' : 'none'
             }}
           >
-            Completion Pending ({orders.filter((o) => o.status === 'completion_requested').length})
+            Completion Pending ({cycleOrders.filter((o) => o.status === 'completion_requested').length})
           </button>
 
           <button
@@ -371,7 +745,7 @@ export default function AdminOrdersPage() {
               borderBottom: activeTab === 'completed' ? '2px solid #0284c7' : 'none'
             }}
           >
-            Completed History ({orders.filter((o) => o.status === 'completed').length})
+            Completed History ({cycleOrders.filter((o) => o.status === 'completed').length})
           </button>
 
           <button
@@ -389,7 +763,7 @@ export default function AdminOrdersPage() {
               borderBottom: activeTab === 'cancelled' ? '2px solid #0284c7' : 'none'
             }}
           >
-            Cancelled ({orders.filter((o) => o.status === 'cancelled').length})
+            Cancelled ({cycleOrders.filter((o) => o.status === 'cancelled').length})
           </button>
 
           <button
@@ -407,7 +781,7 @@ export default function AdminOrdersPage() {
               borderBottom: activeTab === 'all' ? '2px solid #0284c7' : 'none'
             }}
           >
-            All Orders ({orders.length})
+            All Cycle Orders ({cycleOrders.length})
           </button>
         </div>
 
@@ -479,7 +853,12 @@ export default function AdminOrdersPage() {
                           {o.order_number || o.id}
                         </td>
                         <td style={{ padding: '12px 14px', color: '#64748b' }}>
-                          {dateParts.date}
+                          <div>{dateParts.date}</div>
+                          {o.completion_approved_at && (
+                            <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px', fontWeight: 500 }}>
+                              Approved: {formatDateTimeParts(o.completion_approved_at).date}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '12px 14px', fontWeight: 500, color: '#0f172a' }}>
                           {o.customer_name}
@@ -564,8 +943,13 @@ export default function AdminOrdersPage() {
                           {o.order_number || o.id}
                         </span>
                         <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                          {dateParts.date}
+                          Created: {dateParts.date}
                         </span>
+                        {o.completion_approved_at && (
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#166534', marginTop: '1px', fontWeight: 500 }}>
+                            Approved: {formatDateTimeParts(o.completion_approved_at).date}
+                          </span>
+                        )}
                       </div>
                       <span
                         style={{
@@ -630,7 +1014,10 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* Order Details Modal */}
-        {selectedOrder && (
+        {selectedOrder && (() => {
+          const displayOrder = orders.find((o) => o.id === selectedOrder.id) || selectedOrder
+          const currentBal = Math.max(0, Number(displayOrder.total_amount) - Number(displayOrder.paid_amount))
+          return (
           <div
             className="admin-modal-backdrop"
             onClick={() => setSelectedOrder(null)}
@@ -749,18 +1136,198 @@ export default function AdminOrdersPage() {
                 </div>
 
                 {/* Financial Summary */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
                   <div>
-                    <div><strong>Payment Method:</strong> {(selectedOrder.payment_method || 'cash').toUpperCase()}</div>
-                    <div><strong>Payment Status:</strong> {(selectedOrder.payment_status || 'pending').toUpperCase()}</div>
+                    <div><strong>Payment Method:</strong> {(displayOrder.payment_method || 'cash').toUpperCase()}</div>
+                    <div><strong>Payment Status:</strong> {(displayOrder.payment_status || 'pending').toUpperCase()}</div>
                   </div>
                   <div>
-                    <div><strong>Total Amount:</strong> ₹{Number(selectedOrder.total_amount).toFixed(2)}</div>
-                    <div><strong>Amount Paid:</strong> ₹{Number(selectedOrder.paid_amount).toFixed(2)}</div>
-                    <div style={{ color: Number(selectedOrder.total_amount) - Number(selectedOrder.paid_amount) > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
-                      Balance Due: ₹{Math.max(0, Number(selectedOrder.total_amount) - Number(selectedOrder.paid_amount)).toFixed(2)}
+                    <div><strong>Total Amount:</strong> ₹{Number(displayOrder.total_amount).toFixed(2)}</div>
+                    <div><strong>Amount Paid:</strong> ₹{Number(displayOrder.paid_amount).toFixed(2)}</div>
+                    <div style={{ color: currentBal > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
+                      Balance Due: ₹{currentBal.toFixed(2)}
                     </div>
                   </div>
+                  {/* Update Payment Button */}
+                  {currentBal > 0 && displayOrder.status !== 'cancelled' && !isInventoryStaff && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        onClick={() => handleOpenPaymentModal(displayOrder)}
+                      >
+                        💳 Update Payment
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payment History */}
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px', color: '#0f172a' }}>
+                    Payment History
+                  </div>
+                  {Array.isArray(displayOrder.order_payments) && displayOrder.order_payments.length > 0 ? (
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                          <tr>
+                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Date & Time</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Amount</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'center' }}>Method</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Reference</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Received By</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...displayOrder.order_payments]
+                            .sort((a, b) => new Date(a.received_at || a.created_at) - new Date(b.received_at || b.created_at))
+                            .map((pay) => (
+                              <tr key={pay.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '8px 10px', color: '#475569' }}>
+                                  {formatDateTimeParts(pay.received_at || pay.created_at).date}{' '}
+                                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                    {formatDateTimeParts(pay.received_at || pay.created_at).time}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: '#166534' }}>
+                                  ₹{Number(pay.amount_received).toFixed(2)}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                  <span
+                                    style={{
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      fontSize: '11px',
+                                      fontWeight: 600,
+                                      background: '#f1f5f9',
+                                      color: '#334155'
+                                    }}
+                                  >
+                                    {(pay.payment_method || 'cash').toUpperCase()}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
+                                  {pay.transaction_reference || '—'}
+                                </td>
+                                <td style={{ padding: '8px 10px', color: '#334155' }}>
+                                  {pay.received_by_name || 'Staff'}{' '}
+                                  {pay.received_by_employee_code ? (
+                                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                      ({pay.received_by_employee_code})
+                                    </span>
+                                  ) : null}
+                                </td>
+                                <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
+                                  {pay.remarks || '—'}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#64748b', fontStyle: 'italic', border: '1px solid #e2e8f0' }}>
+                      No payment transaction history recorded.
+                    </div>
+                  )}
+                </div>
+
+                {/* Supporting Documents (Order Attachments) */}
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px', color: '#0f172a' }}>
+                    Supporting Documents
+                  </div>
+                  {Array.isArray(displayOrder.order_attachments) && displayOrder.order_attachments.length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+                      {displayOrder.order_attachments.map((att) => {
+                        const ext = (att.original_filename || '').split('.').pop().toUpperCase()
+                        const isPdf = ext === 'PDF' || att.mime_type === 'application/pdf'
+                        const isDownloading = downloadingAttachmentId === att.id
+                        return (
+                          <div
+                            key={att.id}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '6px',
+                              padding: '10px 12px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              gap: '8px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                              <span
+                                style={{
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  background: isPdf ? '#fee2e2' : '#e0f2fe',
+                                  color: isPdf ? '#991b1b' : '#0369a1',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {ext || 'FILE'}
+                              </span>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div
+                                  style={{
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    color: '#0f172a',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                  title={att.original_filename}
+                                >
+                                  {att.original_filename}
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                  {formatFileSize(att.file_size)} • {formatDateTimeParts(att.uploaded_at || att.created_at).date}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                              <button
+                                type="button"
+                                className="btn-outline"
+                                style={{
+                                  padding: '4px 10px',
+                                  fontSize: '12px',
+                                  borderRadius: '4px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                disabled={isDownloading}
+                                onClick={() => handleDownloadAttachment(att)}
+                              >
+                                {isDownloading ? 'Opening...' : '📥 View / Download'}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#64748b', fontStyle: 'italic', border: '1px solid #e2e8f0' }}>
+                      No supporting documents attached to this order.
+                    </div>
+                  )}
                 </div>
 
                 {/* Audit & Workflow Trail */}
@@ -854,7 +1421,7 @@ export default function AdminOrdersPage() {
               </div>
             </div>
           </div>
-        )}
+        ); })()}
 
         {/* Action Confirmation Modal */}
         {actionModal.type && (
@@ -1047,27 +1614,205 @@ export default function AdminOrdersPage() {
         )}
 
         {/* Create Order Modal */}
-        <CreateOrderModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onOrderCreated={() => {
-            showToast('Sales order created successfully.')
-            if (loadAdminOrders) loadAdminOrders()
-          }}
-        />
+        {isCreateModalOpen && (
+          <Suspense fallback={null}>
+            <CreateOrderModal
+              isOpen={isCreateModalOpen}
+              onClose={() => setIsCreateModalOpen(false)}
+              onOrderCreated={(createdOrder, attachmentFailures) => {
+                if (attachmentFailures > 0) {
+                  showToast(
+                    `Sales order ${createdOrder?.order_number || ''} created successfully, but some supporting documents could not be uploaded. You can retry from Order Details.`,
+                    'warning'
+                  )
+                } else {
+                  showToast('Sales order created successfully.')
+                }
+                if (loadAdminOrders) loadAdminOrders()
+              }}
+            />
+          </Suspense>
+        )}
 
         {/* Live Orders Register Modal */}
-        <LiveOrdersRegisterModal
-          isOpen={isLiveRegisterOpen}
-          onClose={() => setIsLiveRegisterOpen(false)}
-          orders={orders}
-          onSelectOrder={(ord) => {
-            setIsLiveRegisterOpen(false)
-            setSelectedOrder(ord)
-          }}
-          onRefresh={loadAdminOrders}
-          isLoading={isLoadingOrders}
-        />
+        {isLiveRegisterOpen && (
+          <Suspense fallback={null}>
+            <LiveOrdersRegisterModal
+              isOpen={isLiveRegisterOpen}
+              onClose={() => setIsLiveRegisterOpen(false)}
+              orders={orders}
+              onSelectOrder={(ord) => {
+                setIsLiveRegisterOpen(false)
+                setSelectedOrder(ord)
+              }}
+              onRefresh={loadAdminOrders}
+              isLoading={isLoadingOrders}
+            />
+          </Suspense>
+        )}
+        {/* Update Payment Modal */}
+        {paymentModal.isOpen && paymentModal.order && (
+          <div
+            className="admin-modal-backdrop"
+            onClick={handleClosePaymentModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="payment-modal-title"
+            style={{ zIndex: 1200 }}
+          >
+            <div
+              className="admin-modal-dialog"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: '480px', width: 'min(480px, calc(100vw - 24px))' }}
+            >
+              <div className="admin-modal-header">
+                <h3 id="payment-modal-title" className="admin-modal-title">
+                  Record Payment — {paymentModal.order.order_number || paymentModal.order.id}
+                </h3>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  onClick={handleClosePaymentModal}
+                  disabled={paymentModal.isSubmitting}
+                  aria-label="Close payment modal"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmPayment}>
+                <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px 20px' }}>
+                  {paymentModal.error && (
+                    <div
+                      style={{
+                        background: '#fee2e2',
+                        border: '1px solid #f87171',
+                        borderRadius: '6px',
+                        padding: '10px 12px',
+                        fontSize: '13px',
+                        color: '#991b1b'
+                      }}
+                    >
+                      {paymentModal.error}
+                    </div>
+                  )}
+
+                  {/* Balance context info */}
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+                      <span style={{ color: '#64748b' }}>Order Total:</span>
+                      <strong>₹{Number(paymentModal.order.total_amount).toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+                      <span style={{ color: '#64748b' }}>Already Paid:</span>
+                      <strong>₹{Number(paymentModal.order.paid_amount).toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: '1px solid #e2e8f0', paddingTop: '4px' }}>
+                      <span style={{ fontWeight: 600, color: '#0f172a' }}>Remaining Balance Due:</span>
+                      <strong style={{ color: '#b91c1c' }}>
+                        ₹{Math.max(0, Number(paymentModal.order.total_amount) - Number(paymentModal.order.paid_amount)).toFixed(2)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Amount Received Input */}
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label htmlFor="pay-amount-input" className="form-label" style={{ fontWeight: 600 }}>
+                      Amount Received (₹) *
+                    </label>
+                    <input
+                      id="pay-amount-input"
+                      type="number"
+                      min="0.01"
+                      max={Math.max(0, Number(paymentModal.order.total_amount) - Number(paymentModal.order.paid_amount))}
+                      step="0.01"
+                      className="form-input"
+                      value={paymentModal.amountReceived}
+                      onChange={(e) => setPaymentModal((prev) => ({ ...prev, amountReceived: e.target.value }))}
+                      disabled={paymentModal.isSubmitting}
+                      required
+                      placeholder="Enter amount received"
+                    />
+                  </div>
+
+                  {/* Payment Method */}
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label htmlFor="pay-method-select" className="form-label" style={{ fontWeight: 600 }}>
+                      Payment Method *
+                    </label>
+                    <select
+                      id="pay-method-select"
+                      className="form-select"
+                      value={paymentModal.paymentMethod}
+                      onChange={(e) => setPaymentModal((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                      disabled={paymentModal.isSubmitting}
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI (GPay, PhonePe, Paytm)</option>
+                      <option value="bank_transfer">Bank Transfer (NEFT / IMPS)</option>
+                      <option value="card">Card Payment</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="other">Other / Store Credit</option>
+                    </select>
+                  </div>
+
+                  {/* Transaction Reference */}
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label htmlFor="pay-ref-input" className="form-label">
+                      Transaction / Reference Number (Optional)
+                    </label>
+                    <input
+                      id="pay-ref-input"
+                      type="text"
+                      className="form-input"
+                      value={paymentModal.transactionReference}
+                      onChange={(e) => setPaymentModal((prev) => ({ ...prev, transactionReference: e.target.value }))}
+                      disabled={paymentModal.isSubmitting}
+                      placeholder="e.g. UPI Ref: 3291823901, Cheque #0045"
+                    />
+                  </div>
+
+                  {/* Remarks */}
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label htmlFor="pay-remarks-input" className="form-label">
+                      Remarks / Notes (Optional)
+                    </label>
+                    <textarea
+                      id="pay-remarks-input"
+                      className="form-input"
+                      rows="2"
+                      value={paymentModal.remarks}
+                      onChange={(e) => setPaymentModal((prev) => ({ ...prev, remarks: e.target.value }))}
+                      disabled={paymentModal.isSubmitting}
+                      placeholder="e.g. Second milestone payment received at counter"
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={handleClosePaymentModal}
+                    disabled={paymentModal.isSubmitting}
+                    style={{ minHeight: '40px', padding: '8px 16px', fontSize: '13px' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={paymentModal.isSubmitting}
+                    style={{ minHeight: '40px', padding: '8px 18px', fontSize: '13px', fontWeight: 600 }}
+                  >
+                    {paymentModal.isSubmitting ? 'Recording...' : 'Confirm Payment'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
       </div>
     </AdminLayout>
   )

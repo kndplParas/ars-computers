@@ -16,7 +16,7 @@ import { useAdminData } from '../../context/adminDataContext'
  * ============================================================================
  */
 export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
-  const { products = [], createSalesOrder, loadAdminCatalog } = useAdminData()
+  const { products = [], createSalesOrder, loadAdminCatalog, uploadOrderAttachments } = useAdminData()
 
   // Form State
   const [customerName, setCustomerName] = useState('')
@@ -36,6 +36,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
   const [paidAmount, setPaidAmount] = useState(0)
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [employeeRemarks, setEmployeeRemarks] = useState('')
+  const [attachments, setAttachments] = useState([])
 
   const [formError, setFormError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -66,6 +67,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
     setPaidAmount(0)
     setPaymentMethod('cash')
     setEmployeeRemarks('')
+    setAttachments([])
     setFormError(null)
   }
 
@@ -85,6 +87,56 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
   const numPaid = Math.max(0, Number(paidAmount) || 0)
   const balance = Math.max(0, calculatedTotal - numPaid)
   const derivedPaymentStatus = numPaid === 0 ? 'PENDING' : numPaid >= calculatedTotal ? 'PAID' : 'PARTIAL'
+
+  // File Helpers & Handlers
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
+
+  const handleFilesSelected = (e) => {
+    const selectedFiles = Array.from(e.target.files || [])
+    if (selectedFiles.length === 0) return
+
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'application/pdf']
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf']
+    const maxSizeBytes = 10 * 1024 * 1024 // 10 MB
+
+    const validNewFiles = []
+    let errorMsg = null
+
+    for (const file of selectedFiles) {
+      const ext = file.name.split('.').pop().toLowerCase()
+      if (!allowedMimeTypes.includes(file.type) && !allowedExtensions.includes(ext)) {
+        errorMsg = `File "${file.name}" is not supported. Only JPG, PNG, and PDF files are allowed.`
+        break
+      }
+      if (file.size > maxSizeBytes) {
+        errorMsg = `File "${file.name}" exceeds the 10 MB size limit.`
+        break
+      }
+      const isDuplicate = attachments.some(
+        (existing) => existing.name === file.name && existing.size === file.size
+      )
+      if (!isDuplicate) {
+        validNewFiles.push(file)
+      }
+    }
+
+    if (errorMsg) {
+      setFormError(errorMsg)
+    } else {
+      setFormError(null)
+      setAttachments((prev) => [...prev, ...validNewFiles])
+    }
+
+    e.target.value = ''
+  }
+
+  const handleRemoveAttachment = (indexToRemove) => {
+    setAttachments((prev) => prev.filter((_, idx) => idx !== indexToRemove))
+  }
 
   // Item Handlers
   const handleProductSelect = (index, productId) => {
@@ -208,8 +260,19 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
         employee_remarks: employeeRemarks.trim() || null
       })
 
+      // Upload supporting attachments if provided
+      let attachmentFailures = 0
+      if (attachments.length > 0 && result?.id && uploadOrderAttachments) {
+        try {
+          await uploadOrderAttachments(result.id, attachments)
+        } catch (attErr) {
+          console.error('Order created but failed to upload some attachments:', attErr)
+          attachmentFailures++
+        }
+      }
+
       if (onOrderCreated) {
-        onOrderCreated(result)
+        onOrderCreated(result, attachmentFailures)
       }
       handleClose()
     } catch (err) {
@@ -602,6 +665,123 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                   </span>
                 </div>
               </div>
+            </div>
+
+            {/* Supporting Documents Section (Optional) */}
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <label className="form-label" style={{ margin: 0, fontWeight: 600, color: '#0f172a' }}>
+                    Supporting Documents (Optional)
+                  </label>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    Attach customer documents, quotations, purchase records, payment proof, or requirement sheets (JPG, PNG, PDF up to 10 MB each).
+                  </div>
+                </div>
+                <label
+                  className="btn-outline"
+                  style={{
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    padding: '6px 14px',
+                    borderRadius: '6px',
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    color: '#334155',
+                    fontWeight: 500
+                  }}
+                >
+                  <span>📎 Choose Files</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                    onChange={handleFilesSelected}
+                    disabled={isSubmitting}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+
+              {attachments.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                  {attachments.map((file, idx) => {
+                    const ext = file.name.split('.').pop().toUpperCase()
+                    const isPdf = ext === 'PDF' || file.type === 'application/pdf'
+                    return (
+                      <div
+                        key={`${file.name}-${idx}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: '#ffffff',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #e2e8f0',
+                          fontSize: '13px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1, marginRight: '12px' }}>
+                          <span
+                            style={{
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: isPdf ? '#fee2e2' : '#e0f2fe',
+                              color: isPdf ? '#991b1b' : '#0369a1',
+                              flexShrink: 0
+                            }}
+                          >
+                            {ext || 'FILE'}
+                          </span>
+                          <span
+                            style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              color: '#1e293b',
+                              fontWeight: 500
+                            }}
+                            title={file.name}
+                          >
+                            {file.name}
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#64748b', flexShrink: 0 }}>
+                            ({formatFileSize(file.size)})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(idx)}
+                          disabled={isSubmitting}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                            fontSize: '16px',
+                            padding: '4px 8px',
+                            lineHeight: 1
+                          }}
+                          title="Remove file"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', marginTop: '6px' }}>
+                  No supporting documents selected.
+                </div>
+              )}
             </div>
 
             {/* Employee Remarks */}

@@ -1933,6 +1933,229 @@ export function AdminDataProvider({ children }) {
     [isLiveDatabase, adminUser, loadAdminOrders]
   )
 
+  // 6. Record Incremental Order Payment (Phase 2 Extension)
+  const recordOrderPayment = useCallback(
+    async ({ orderId, amountReceived, paymentMethod = 'cash', transactionReference = null, remarks = null }) => {
+      const role = adminUser?.role
+      if (role !== 'superadmin' && role !== 'admin') {
+        throw new Error('Access denied: Active administrator or store employee privileges required to record payments.')
+      }
+
+      const numAmount = Number(amountReceived)
+      if (isNaN(numAmount) || numAmount <= 0) {
+        throw new Error('Payment amount must be greater than zero.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('record_order_payment', {
+          p_order_id: orderId,
+          p_amount_received: numAmount,
+          p_payment_method: paymentMethod,
+          p_transaction_reference: transactionReference ? transactionReference.trim() : null,
+          p_remarks: remarks ? remarks.trim() : null
+        })
+
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      let updatedOrder = null
+      setDemoOrders((prev) =>
+        prev.map((o) => {
+          if (o.id === orderId) {
+            if (o.status === 'cancelled') {
+              throw new Error('Cannot record payment for a cancelled order.')
+            }
+            const currentBalance = Math.max(0, Number(o.total_amount) - Number(o.paid_amount))
+            if (numAmount > currentBalance) {
+              throw new Error(`Payment amount (₹${numAmount}) cannot exceed remaining balance (₹${currentBalance}).`)
+            }
+            const newPaid = Number(o.paid_amount) + numAmount
+            const newStatus = newPaid >= Number(o.total_amount) ? 'paid' : 'partial'
+            const newPayment = {
+              id: crypto.randomUUID(),
+              order_id: orderId,
+              amount_received: numAmount,
+              payment_method: paymentMethod,
+              transaction_reference: transactionReference ? transactionReference.trim() : null,
+              remarks: remarks ? remarks.trim() : null,
+              received_by: adminUser?.id,
+              received_by_name: adminUser?.full_name || 'Admin',
+              received_by_employee_code: adminUser?.employee_code || 'EMP001',
+              received_at: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            }
+            const existingPayments = Array.isArray(o.order_payments) ? o.order_payments : []
+            updatedOrder = {
+              ...o,
+              paid_amount: newPaid,
+              payment_status: newStatus,
+              order_payments: [...existingPayments, newPayment],
+              updated_at: new Date().toISOString()
+            }
+            return updatedOrder
+          }
+          return o
+        })
+      )
+      return updatedOrder
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 7. Load Specific Order Details (Payments & Attachments on demand)
+  const loadOrderDetails = useCallback(
+    async (orderId) => {
+      if (!orderId) return null
+      if (isLiveDatabase) {
+        if (!supabase) return null
+        const [payRes, attRes] = await Promise.all([
+          supabase
+            .from('order_payments')
+            .select('*')
+            .eq('order_id', orderId)
+            .order('received_at', { ascending: true }),
+          supabase
+            .from('order_attachments')
+            .select('*')
+            .eq('order_id', orderId)
+            .order('created_at', { ascending: true })
+        ])
+
+        const payments = payRes.data || []
+        const attachments = attRes.data || []
+
+        setLiveOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, order_payments: payments, order_attachments: attachments } : o))
+        )
+
+        return { payments, attachments }
+      }
+
+      // Demo Mode
+      const order = demoOrders.find((o) => o.id === orderId)
+      return {
+        payments: order?.order_payments || [],
+        attachments: order?.order_attachments || []
+      }
+    },
+    [isLiveDatabase, demoOrders]
+  )
+
+  // 8. Upload Supporting Order Documents (Phase 2 Extension)
+  const uploadOrderAttachments = useCallback(
+    async (orderId, files) => {
+      if (!files || files.length === 0) return []
+      const role = adminUser?.role
+      if (role !== 'superadmin' && role !== 'admin') {
+        throw new Error('Access denied: Staff privileges required to upload order attachments.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const uploadedRecords = []
+
+        for (const file of files) {
+          if (file.size > 10 * 1024 * 1024) {
+            throw new Error(`File "${file.name}" exceeds 10MB size limit.`)
+          }
+          const ext = file.name.split('.').pop().toLowerCase()
+          const cleanExt = ext === 'jpeg' ? 'jpg' : ext
+          const isAllowedExt = ['jpg', 'png', 'pdf'].includes(cleanExt)
+          const allowedMime = ['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)
+          if (!allowedMime && !isAllowedExt) {
+            throw new Error(`File "${file.name}" is not an allowed type. Only JPG, PNG, and PDF are supported.`)
+          }
+
+          // Safe storage path contract: <order_id>/<random-uuid>.<ext>
+          const randomId = crypto.randomUUID()
+          const storageFilename = `${randomId}.${cleanExt}`
+          const storagePath = `${orderId}/${storageFilename}`
+
+          const { error: uploadError } = await supabase.storage
+            .from('order-attachments')
+            .upload(storagePath, file, { cacheControl: '3600', upsert: false })
+
+          if (uploadError) {
+            console.error(`Failed to upload ${file.name} to storage:`, uploadError)
+            throw new Error(`Failed to upload file "${file.name}": ${uploadError.message}`)
+          }
+
+          const mimeType = file.type || (cleanExt === 'pdf' ? 'application/pdf' : 'image/jpeg')
+
+          // Secure server-derived identity registration RPC
+          const { data: metaData, error: metaError } = await supabase.rpc('register_order_attachment', {
+            p_order_id: orderId,
+            p_storage_path: storagePath,
+            p_original_filename: file.name,
+            p_mime_type: mimeType,
+            p_file_size: file.size
+          })
+
+          if (metaError) {
+            console.error(`Failed to register attachment metadata for ${file.name}:`, metaError)
+            await supabase.storage.from('order-attachments').remove([storagePath])
+            throw new Error(`Failed to record attachment metadata: ${metaError.message}`)
+          }
+
+          uploadedRecords.push(metaData)
+        }
+
+        await loadOrderDetails(orderId)
+        return uploadedRecords
+      }
+
+      // Demo Mode
+      const demoRecords = files.map((file) => ({
+        id: crypto.randomUUID(),
+        order_id: orderId,
+        storage_path: `${orderId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`,
+        original_filename: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        file_size: file.size,
+        uploaded_by: adminUser?.id,
+        uploaded_by_name: adminUser?.full_name || 'Store Employee',
+        uploaded_at: new Date().toISOString()
+      }))
+
+      setDemoOrders((prev) =>
+        prev.map((o) => {
+          if (o.id === orderId) {
+            const currentAtts = Array.isArray(o.order_attachments) ? o.order_attachments : []
+            return {
+              ...o,
+              order_attachments: [...currentAtts, ...demoRecords]
+            }
+          }
+          return o
+        })
+      )
+      return demoRecords
+    },
+    [isLiveDatabase, adminUser, loadOrderDetails]
+  )
+
+  // 8. Generate Secure Temporary Signed URL for Order Attachment
+  const getOrderAttachmentDownloadUrl = useCallback(
+    async (storagePath, filename) => {
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.storage
+          .from('order-attachments')
+          .createSignedUrl(storagePath, 60, {
+            download: filename || true
+          })
+        if (error) throw error
+        return data?.signedUrl
+      }
+      return null
+    },
+    [isLiveDatabase]
+  )
+
   // --- Reset All Demo State ---
   const resetDemoData = useCallback(() => {
     if (isLiveDatabase) {
@@ -2154,6 +2377,10 @@ export function AdminDataProvider({ children }) {
     submitOrderCompletion,
     reviewOrderCompletion,
     cancelSalesOrder,
+    recordOrderPayment,
+    uploadOrderAttachments,
+    getOrderAttachmentDownloadUrl,
+    loadOrderDetails,
 
     // Role Permission Capabilities
     isSuperadmin: adminUser?.role === 'superadmin',
