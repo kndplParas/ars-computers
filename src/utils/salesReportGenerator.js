@@ -13,8 +13,7 @@
  * ============================================================================
  */
 
-import ExcelJS from 'exceljs'
-import { MONTH_NAMES, formatDateTimeParts } from './excelReportGenerator.js'
+import { MONTH_NAMES, formatDateTimeParts, getExcelJS } from './excelReportGenerator.js'
 
 /**
  * Filters orders strictly by `completion_approved_at` matching the target month & year.
@@ -45,12 +44,173 @@ export function filterOrdersByReportingMonth(orders, targetMonthIndex, targetYea
 }
 
 /**
+ * Determines whether an order belongs to the Current Month operational cycle.
+ *
+ * Rules:
+ * 1. ACTIVE orders ('new', 'processing', 'completion_requested'):
+ *    ALWAYS remain visible in current month operational view regardless of creation date,
+ *    so unfinished cross-month work is never lost.
+ * 2. COMPLETED orders:
+ *    Membership is strictly based on completion_approved_at falling within target month & year.
+ * 3. CANCELLED orders:
+ *    Membership is based on cancelled_at (or created_at fallback) falling within target month & year.
+ *
+ * @param {Object} order
+ * @param {number} currentMonthIndex - 0-indexed (0 = Jan, 11 = Dec)
+ * @param {number} currentYear - Full year (e.g. 2026)
+ * @returns {boolean}
+ */
+export function isOrderInCurrentMonthCycle(order, currentMonthIndex, currentYear) {
+  if (!order || typeof order !== 'object') return false
+
+  // 1. Active / in-progress orders: always keep visible in current month operational view
+  if (['new', 'processing', 'completion_requested'].includes(order.status)) {
+    return true
+  }
+
+  // 2. Completed orders: strictly belong to the month of Head approval
+  if (order.status === 'completed') {
+    if (!order.completion_approved_at) return false
+    const d = new Date(order.completion_approved_at)
+    if (Number.isNaN(d.getTime())) return false
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonthIndex
+  }
+
+  // 3. Cancelled orders: belong to cancellation month
+  if (order.status === 'cancelled') {
+    const rawDate = order.cancelled_at || order.created_at
+    if (!rawDate) return false
+    const d = new Date(rawDate)
+    if (Number.isNaN(d.getTime())) return false
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonthIndex
+  }
+
+  return false
+}
+
+/**
+ * Filters orders for a historical month view.
+ *
+ * Rules:
+ * 1. For 'completed' orders: matches if completion_approved_at is in the target month & year.
+ * 2. For 'cancelled' orders: matches if cancelled_at (or created_at fallback) is in target month & year.
+ * 3. For other records: matches if created_at is in target month & year.
+ *
+ * @param {Array} orders
+ * @param {number} targetMonthIndex - 0-indexed
+ * @param {number} targetYear - Full year
+ * @returns {Array}
+ */
+export function filterOrdersForHistoricalMonth(orders, targetMonthIndex, targetYear) {
+  if (!Array.isArray(orders)) return []
+
+  return orders.filter((order) => {
+    if (!order || typeof order !== 'object') return false
+
+    // If completed: strictly check completion_approved_at
+    if (order.status === 'completed') {
+      if (!order.completion_approved_at) return false
+      const d = new Date(order.completion_approved_at)
+      if (Number.isNaN(d.getTime())) return false
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+    }
+
+    // If cancelled: check cancelled_at or created_at
+    if (order.status === 'cancelled') {
+      const rawDate = order.cancelled_at || order.created_at
+      if (!rawDate) return false
+      const d = new Date(rawDate)
+      if (Number.isNaN(d.getTime())) return false
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+    }
+
+    // For active/unresolved records created in that historical month
+    if (order.created_at) {
+      const d = new Date(order.created_at)
+      if (!Number.isNaN(d.getTime())) {
+        return d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+      }
+    }
+
+    return false
+  })
+}
+
+/**
+ * Calculates operational metrics for a specific month view (current or historical).
+ *
+ * @param {Array} orders - Complete orders list
+ * @param {number} targetMonthIndex
+ * @param {number} targetYear
+ * @param {boolean} isCurrentMonth
+ * @returns {Object} { active, pending, completed, revenue, cancelled }
+ */
+export function calculateMonthlyCycleMetrics(orders, targetMonthIndex, targetYear, isCurrentMonth = true) {
+  if (!Array.isArray(orders)) {
+    return { active: 0, pending: 0, completed: 0, revenue: 0, cancelled: 0 }
+  }
+
+  if (isCurrentMonth) {
+    // Current operational cycle:
+    // Active orders include all open work across any creation month
+    const active = orders.filter((o) => ['new', 'processing'].includes(o.status)).length
+    const pending = orders.filter((o) => o.status === 'completion_requested').length
+
+    // Completed sales strictly within current calendar month
+    const completedOrders = orders.filter((o) => {
+      if (o.status !== 'completed' || !o.completion_approved_at) return false
+      const d = new Date(o.completion_approved_at)
+      return !Number.isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+    })
+    const completed = completedOrders.length
+    const revenue = completedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+
+    const cancelled = orders.filter((o) => {
+      if (o.status !== 'cancelled') return false
+      const d = new Date(o.cancelled_at || o.created_at)
+      return !Number.isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+    }).length
+
+    return { active, pending, completed, revenue, cancelled }
+  } else {
+    // Historical month metrics
+    const completedOrders = filterOrdersByReportingMonth(orders, targetMonthIndex, targetYear)
+    const completed = completedOrders.length
+    const revenue = completedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+
+    const cancelled = orders.filter((o) => {
+      if (o.status !== 'cancelled') return false
+      const d = new Date(o.cancelled_at || o.created_at)
+      return !Number.isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+    }).length
+
+    const historicalActive = orders.filter((o) => {
+      if (!['new', 'processing', 'completion_requested'].includes(o.status)) return false
+      const d = new Date(o.created_at)
+      return !Number.isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+    }).length
+
+    return { active: historicalActive, pending: 0, completed, revenue, cancelled }
+  }
+}
+
+/**
  * Builds the standard filename for the monthly sales report.
  * Format: ARS_Sales_<Month>_<Year>.xlsx
  */
 export function getMonthlySalesReportFilename(targetMonthIndex, targetYear) {
   const monthName = MONTH_NAMES[targetMonthIndex] || `Month_${targetMonthIndex + 1}`
   return `ARS_Sales_${monthName}_${targetYear}.xlsx`
+}
+
+export const buildMonthlySalesExcelFilename = getMonthlySalesReportFilename
+
+/**
+ * Generates workbook buffer for monthly sales report (testable in Node & browser).
+ */
+export async function generateMonthlySalesExcelBuffer(allOrders, targetMonthIndex, targetYear) {
+  const res = await downloadMonthlySalesExcel(allOrders, targetMonthIndex, targetYear)
+  return res.buffer
 }
 
 /**
@@ -66,6 +226,7 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
   const monthName = MONTH_NAMES[targetMonthIndex] || `Month_${targetMonthIndex + 1}`
   const filename = getMonthlySalesReportFilename(targetMonthIndex, targetYear)
 
+  const ExcelJS = await getExcelJS()
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'ARS Computers Admin Portal'
   workbook.lastModifiedBy = 'ARS Computers Sales & Accounting'
@@ -257,6 +418,7 @@ export async function exportLiveOrdersRegisterViewToExcel(filteredOrders, custom
   const today = new Date().toISOString().split('T')[0]
   const filename = customFilename || `ARS_Orders_Register_${today}.xlsx`
 
+  const ExcelJS = await getExcelJS()
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'ARS Computers Admin Portal'
   workbook.lastModifiedBy = 'ARS Computers Live Operations'
