@@ -309,7 +309,7 @@ export function AdminDataProvider({ children }) {
 
       const { data, error } = await supabase
         .from('admin_users')
-        .select('id, email, full_name, role, is_active, created_at, updated_at')
+        .select('id, email, full_name, role, is_active, employee_code, phone_number, created_at, updated_at')
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -1152,7 +1152,7 @@ export function AdminDataProvider({ children }) {
 
   // --- Register Staff Member Profile in public.admin_users (Superadmin Only, Permitted roles: 'admin' | 'inventory_staff') ---
   const addStaffMember = useCallback(
-    async ({ id, email, fullName, role = 'admin' }) => {
+    async ({ id, email, fullName, role = 'admin', phoneNumber = null }) => {
       if (adminUser?.role !== 'superadmin') {
         throw new Error('Unauthorized: Only superadministrators can register staff profiles.')
       }
@@ -1180,6 +1180,8 @@ export function AdminDataProvider({ children }) {
         throw new Error('Staff full name must be between 2 and 100 characters.')
       }
 
+      const cleanPhone = typeof phoneNumber === 'string' && phoneNumber.trim() !== '' ? phoneNumber.trim() : null
+
       const PERMITTED_ROLES = ['admin', 'inventory_staff']
       if (!PERMITTED_ROLES.includes(role)) {
         throw new Error(`Invalid role assignment: "${role}". Permitted roles are "admin" or "inventory_staff".`)
@@ -1188,16 +1190,21 @@ export function AdminDataProvider({ children }) {
       if (isLiveDatabase) {
         if (!supabase) throw new Error('Supabase client is not available.')
 
+        const insertPayload = {
+          id: cleanId,
+          email: cleanEmail,
+          full_name: cleanFullName,
+          role,
+          is_active: true
+        }
+        if (cleanPhone) {
+          insertPayload.phone_number = cleanPhone
+        }
+
         const { data, error } = await supabase
           .from('admin_users')
-          .insert({
-            id: cleanId,
-            email: cleanEmail,
-            full_name: cleanFullName,
-            role,
-            is_active: true
-          })
-          .select('id, email, full_name, role, is_active, created_at, updated_at')
+          .insert(insertPayload)
+          .select('id, email, full_name, role, is_active, employee_code, phone_number, created_at, updated_at')
           .single()
 
         if (error) {
@@ -1221,6 +1228,7 @@ export function AdminDataProvider({ children }) {
         full_name: cleanFullName,
         role,
         is_active: true,
+        phone_number: cleanPhone,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -1251,7 +1259,7 @@ export function AdminDataProvider({ children }) {
           .from('admin_users')
           .update({ role: newRole })
           .eq('id', staffId)
-          .select('id, email, full_name, role, is_active, created_at, updated_at')
+          .select('id, email, full_name, role, is_active, employee_code, phone_number, created_at, updated_at')
           .single()
 
         if (error) {
@@ -1303,7 +1311,7 @@ export function AdminDataProvider({ children }) {
           .from('admin_users')
           .update({ is_active: Boolean(newStatus) })
           .eq('id', staffId)
-          .select('id, email, full_name, role, is_active, created_at, updated_at')
+          .select('id, email, full_name, role, is_active, employee_code, phone_number, created_at, updated_at')
           .single()
 
         if (error) {
@@ -1320,13 +1328,194 @@ export function AdminDataProvider({ children }) {
       const updatedTime = new Date().toISOString()
       setDemoStaff((prev) =>
         prev.map((item) =>
-          item.id === staffId
-            ? { ...item, is_active: Boolean(newStatus), updated_at: updatedTime }
-            : item
+          item.id === staffId ? { ...item, is_active: Boolean(newStatus), updated_at: updatedTime } : item
         )
       )
     },
     [isLiveDatabase, adminUser, liveStaff, demoStaff]
+  )
+
+  // --- Update Staff Phone Number (Superadmin Only, for Engineer WhatsApp Dispatch) ---
+  const updateStaffPhone = useCallback(
+    async (staffId, phoneNumber) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only superadministrators can update staff phone numbers.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('update_staff_phone', {
+          p_user_id: staffId,
+          p_phone_number: phoneNumber
+        })
+
+        if (error) throw error
+
+        await loadAdminStaff()
+        return data
+      }
+
+      // Demo Mode Mutation
+      const updatedTime = new Date().toISOString()
+      setDemoStaff((prev) =>
+        prev.map((item) =>
+          item.id === staffId ? { ...item, phone_number: phoneNumber, updated_at: updatedTime } : item
+        )
+      )
+      return { success: true, user_id: staffId, phone_number: phoneNumber }
+    },
+    [isLiveDatabase, adminUser, loadAdminStaff]
+  )
+
+  // --- Enquiry Employee Assignment (Phase 4) ---
+  // 1. Employee Self-Assignment (Admin / Superadmin: Unassigned active enquiries only)
+  const selfAssignEnquiry = useCallback(
+    async (enquiryId) => {
+      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin') {
+        throw new Error('Access denied: Active administrator or technician privileges required to self-assign enquiries.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('self_assign_enquiry', {
+          p_enquiry_id: enquiryId
+        })
+
+        if (error) throw error
+
+        await loadAdminEnquiries()
+        return data
+      }
+
+      // Demo Mode Mutation
+      const now = new Date().toISOString()
+      const staffName = adminUser?.fullName || adminUser?.email || 'Demo Staff'
+      const staffCode = adminUser?.employee_code || 'EMP-001'
+      const staffPhone = adminUser?.phone_number || null
+
+      setDemoEnquiries((prev) =>
+        prev.map((e) => {
+          if (e.id !== enquiryId) return e
+          if (e.assigned_employee_id) {
+            throw new Error('This enquiry has already been assigned to another employee.')
+          }
+          return {
+            ...e,
+            assigned_employee_id: adminUser?.id,
+            assigned_employee_name: staffName,
+            assigned_employee_code: staffCode,
+            assigned_employee_phone: staffPhone,
+            assigned_at: now,
+            assigned_by: adminUser?.id,
+            assigned_by_name: staffName,
+            assigned_by_employee_code: staffCode,
+            updated_at: now
+          }
+        })
+      )
+      return { success: true, enquiry_id: enquiryId }
+    },
+    [isLiveDatabase, adminUser, loadAdminEnquiries]
+  )
+
+  // 2. Head Assign / Reassign / Unassign (Superadmin Only)
+  const assignEnquiryEmployee = useCallback(
+    async (enquiryId, employeeId, reason = null) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Access denied: Superadministrator privileges required to assign, reassign, or unassign staff.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('assign_enquiry_employee', {
+          p_enquiry_id: enquiryId,
+          p_employee_id: employeeId || null,
+          p_reason: reason || null
+        })
+
+        if (error) throw error
+
+        await loadAdminEnquiries()
+        return data
+      }
+
+      // Demo Mode Mutation
+      const now = new Date().toISOString()
+      const headName = adminUser?.fullName || adminUser?.email || 'Store Head'
+      const headCode = adminUser?.employee_code || 'HEAD-001'
+
+      if (!employeeId) {
+        setDemoEnquiries((prev) =>
+          prev.map((e) =>
+            e.id === enquiryId
+              ? {
+                  ...e,
+                  assigned_employee_id: null,
+                  assigned_employee_name: null,
+                  assigned_employee_code: null,
+                  assigned_employee_phone: null,
+                  assigned_at: null,
+                  assigned_by: adminUser?.id,
+                  assigned_by_name: headName,
+                  assigned_by_employee_code: headCode,
+                  updated_at: now
+                }
+              : e
+          )
+        )
+        return { success: true, action: 'unassigned', enquiry_id: enquiryId }
+      }
+
+      const target = (isLiveDatabase ? liveStaff : demoStaff).find((s) => s.id === employeeId)
+      setDemoEnquiries((prev) =>
+        prev.map((e) =>
+          e.id === enquiryId
+            ? {
+                ...e,
+                assigned_employee_id: employeeId,
+                assigned_employee_name: target?.full_name || target?.email || 'Staff Member',
+                assigned_employee_code: target?.employee_code || 'EMP',
+                assigned_employee_phone: target?.phone_number || null,
+                assigned_at: now,
+                assigned_by: adminUser?.id,
+                assigned_by_name: headName,
+                assigned_by_employee_code: headCode,
+                updated_at: now
+              }
+            : e
+        )
+      )
+      return { success: true, action: 'assigned', enquiry_id: enquiryId }
+    },
+    [isLiveDatabase, adminUser, liveStaff, demoStaff, loadAdminEnquiries]
+  )
+
+  const unassignEnquiryEmployee = useCallback(
+    async (enquiryId, reason = null) => {
+      return assignEnquiryEmployee(enquiryId, null, reason)
+    },
+    [assignEnquiryEmployee]
+  )
+
+  // 3. Load Eligible Assignees Directory (Superadmin Only)
+  const loadEligibleEnquiryAssignees = useCallback(
+    async () => {
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('get_eligible_enquiry_assignees')
+        if (error) throw error
+        return data || []
+      }
+
+      return (demoStaff || []).filter(
+        (s) => s.is_active && (s.role === 'superadmin' || s.role === 'admin')
+      )
+    },
+    [isLiveDatabase, demoStaff]
   )
 
   // ==========================================================================
@@ -2355,11 +2544,18 @@ export function AdminDataProvider({ children }) {
     restoreEnquiry,
     fetchEnquiryActivities,
 
+    // Enquiry Employee Assignment (Phase 4)
+    selfAssignEnquiry,
+    assignEnquiryEmployee,
+    unassignEnquiryEmployee,
+    loadEligibleEnquiryAssignees,
+
     // Staff Mutators (Superadmin Only)
     setStaff: setDemoStaff,
     addStaffMember,
     updateStaffRole,
     toggleStaffActive,
+    updateStaffPhone,
 
     // Service Request Mutators & Actions
     createServiceRequest,

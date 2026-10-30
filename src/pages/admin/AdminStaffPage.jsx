@@ -46,7 +46,8 @@ export default function AdminStaffPage() {
     loadAdminStaff,
     updateStaffRole,
     toggleStaffActive,
-    addStaffMember
+    addStaffMember,
+    updateStaffPhone
   } = useAdminData()
 
   useEffect(() => {
@@ -60,7 +61,8 @@ export default function AdminStaffPage() {
     authId: '',
     email: '',
     fullName: '',
-    role: 'admin'
+    role: 'admin',
+    phoneNumber: ''
   })
   const [inviteError, setInviteError] = useState(null)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -74,6 +76,9 @@ export default function AdminStaffPage() {
   const [roleModalTarget, setRoleModalTarget] = useState(null)
   const [newSelectedRole, setNewSelectedRole] = useState('admin')
   const [statusModalTarget, setStatusModalTarget] = useState(null)
+  const [phoneModalTarget, setPhoneModalTarget] = useState(null)
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneError, setPhoneError] = useState(null)
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -83,6 +88,28 @@ export default function AdminStaffPage() {
   const showNotification = (text, type = 'success') => {
     setNotification({ text, type })
     setTimeout(() => setNotification(null), 5000)
+  }
+
+  const handleOpenPhoneModal = (member) => {
+    setPhoneModalTarget(member)
+    setPhoneInput(member.phone_number || '')
+    setPhoneError(null)
+  }
+
+  const handleSavePhone = async (e) => {
+    e.preventDefault()
+    if (!phoneModalTarget) return
+    setPhoneError(null)
+    setIsSubmitting(true)
+    try {
+      await updateStaffPhone(phoneModalTarget.id, phoneInput)
+      showNotification(`Phone number updated for "${phoneModalTarget.full_name}".`, 'success')
+      setPhoneModalTarget(null)
+    } catch (err) {
+      setPhoneError(err.message || 'Failed to update phone number.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleRegisterStaff = async (e) => {
@@ -95,11 +122,12 @@ export default function AdminStaffPage() {
         id: inviteForm.authId,
         email: inviteForm.email,
         fullName: inviteForm.fullName,
-        role: inviteForm.role
+        role: inviteForm.role,
+        phoneNumber: inviteForm.phoneNumber
       })
       showNotification(`Staff profile for "${inviteForm.fullName}" registered successfully.`, 'success')
       setIsInviteModalOpen(false)
-      setInviteForm({ authId: '', email: '', fullName: '', role: 'admin' })
+      setInviteForm({ authId: '', email: '', fullName: '', role: 'admin', phoneNumber: '' })
     } catch (err) {
       setInviteError(err.message || 'Failed to register staff profile.')
     } finally {
@@ -514,6 +542,7 @@ export default function AdminStaffPage() {
               <tr>
                 <th style={{ minWidth: '220px' }}>Staff Member</th>
                 <th>Email Address</th>
+                <th>Phone (WhatsApp)</th>
                 <th>Assigned Role</th>
                 <th>Account Status</th>
                 <th>Date Added</th>
@@ -525,7 +554,7 @@ export default function AdminStaffPage() {
             <tbody>
               {filteredStaff.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="admin-empty-cell">
+                  <td colSpan="7" className="admin-empty-cell">
                     <div className="empty-state-wrap">
                       <span className="empty-icon" aria-hidden="true">👥</span>
                       <h3>No staff records found</h3>
@@ -636,6 +665,16 @@ export default function AdminStaffPage() {
                       </td>
 
                       <td>
+                        {member.phone_number ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16a34a', fontWeight: 600, fontSize: '0.85rem' }}>
+                            <span>📱</span> {member.phone_number}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>—</span>
+                        )}
+                      </td>
+
+                      <td>
                         <span
                           style={{
                             display: 'inline-flex',
@@ -677,6 +716,17 @@ export default function AdminStaffPage() {
 
                       <td className="text-right">
                         <div className="table-actions-group">
+                          {/* Phone Modification Button */}
+                          <button
+                            type="button"
+                            className="btn-action-icon edit"
+                            onClick={() => handleOpenPhoneModal(member)}
+                            title="Update staff phone number for WhatsApp dispatch"
+                            style={{ borderColor: '#0284c7', color: '#0369a1' }}
+                          >
+                            📱 Phone
+                          </button>
+
                           {/* Role Modification Button */}
                           <button
                             type="button"
@@ -987,6 +1037,27 @@ export default function AdminStaffPage() {
                       required
                       disabled={isRegistering}
                     />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="invite-phone"
+                      style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
+                    >
+                      Phone Number (WhatsApp Dispatch) <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                    </label>
+                    <input
+                      id="invite-phone"
+                      type="tel"
+                      className="admin-form-input"
+                      placeholder="e.g. +919876543210 or 9876543210"
+                      value={inviteForm.phoneNumber}
+                      onChange={(e) => setInviteForm({ ...inviteForm, phoneNumber: e.target.value })}
+                      disabled={isRegistering}
+                    />
+                    <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '3px' }}>
+                      Used for dispatching assigned enquiry service jobs to this engineer via WhatsApp.
+                    </small>
                   </div>
 
                   <div>
@@ -1315,6 +1386,106 @@ export default function AdminStaffPage() {
                   : 'Confirm Reactivation'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Update Staff Phone Number Modal */}
+      {phoneModalTarget && (
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => !isSubmitting && setPhoneModalTarget(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="phone-modal-title"
+        >
+          <div
+            className="admin-modal-dialog confirm-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '480px' }}
+          >
+            <div className="admin-modal-header">
+              <div>
+                <h2 id="phone-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                  Update Staff Phone
+                </h2>
+                <span className="modal-subtitle-note">
+                  Setting WhatsApp dispatch number for {phoneModalTarget.full_name}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setPhoneModalTarget(null)}
+                disabled={isSubmitting}
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePhone}>
+              <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
+                <p style={{ margin: '0 0 14px 0', fontSize: '0.88rem', color: '#475569', lineHeight: 1.5 }}>
+                  This mobile number will be used when dispatching assigned service/repair jobs to this engineer via WhatsApp.
+                </p>
+
+                <div className="admin-form-group">
+                  <label htmlFor="staff-phone-input" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                    Phone / WhatsApp Number
+                  </label>
+                  <input
+                    id="staff-phone-input"
+                    type="tel"
+                    className="admin-form-input"
+                    placeholder="e.g. +919876543210 or 9876543210"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    autoFocus
+                    disabled={isSubmitting}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
+                  <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '4px' }}>
+                    10 to 15 digits (E.164 compatible). Clear input and save to remove phone number.
+                  </small>
+                </div>
+
+                {phoneError && (
+                  <div
+                    style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      color: '#991b1b',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      marginTop: '12px',
+                      fontSize: '0.85rem'
+                    }}
+                    role="alert"
+                  >
+                    ⚠️ {phoneError}
+                  </div>
+                )}
+              </div>
+
+              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => setPhoneModalTarget(null)}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Phone Number'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

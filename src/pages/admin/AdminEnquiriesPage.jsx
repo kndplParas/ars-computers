@@ -4,6 +4,7 @@ import { ENQUIRY_STATUSES } from '../../data/mockEnquiries'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { parseServiceEnquiry } from '../../utils/serviceEnquiryHelper'
+import { formatJobDispatchText, buildWhatsAppDispatchUrl } from '../../utils/jobDispatchFormatter'
 import {
   downloadMonthlyEnquiriesExcel,
   filterEnquiriesByReportingMonth,
@@ -95,7 +96,11 @@ export default function AdminEnquiriesPage() {
     purgeExpiredBinEnquiries,
     archiveEnquiry,
     restoreEnquiry,
-    fetchEnquiryActivities
+    fetchEnquiryActivities,
+    selfAssignEnquiry,
+    assignEnquiryEmployee,
+    unassignEnquiryEmployee,
+    loadEligibleEnquiryAssignees
   } = useAdminData()
 
   // Workflow Tabs: 'all_active', 'pending_completion', 'pending_rejection', 'quoted', 'rejected_closed', 'bin', 'archived'
@@ -112,6 +117,16 @@ export default function AdminEnquiriesPage() {
   const [statusConfirmTarget, setStatusConfirmTarget] = useState(null) // { enquiry, nextStatus }
   const [editingNotes, setEditingNotes] = useState('')
   const [notification, setNotification] = useState(null)
+
+  // Phase 4 Employee Assignment States
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
+  const [assigneesList, setAssigneesList] = useState([])
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState('')
+  const [assignReason, setAssignReason] = useState('')
+  const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false)
+  const [assignmentError, setAssignmentError] = useState(null)
+  const [isSelfAssigning, setIsSelfAssigning] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState(false)
 
   // Phase 2 Activity Timeline & Rejection States
   const [enquiryActivities, setEnquiryActivities] = useState([])
@@ -316,6 +331,113 @@ export default function AdminEnquiriesPage() {
       setEnquiryActivities(acts || [])
     } catch (err) {
       console.error('Failed to reload activities:', err)
+    }
+  }
+
+  // --- Phase 4 Employee Assignment Handlers ---
+  const handleSelfAssign = async () => {
+    if (!selectedEnquiry || !isEmployee) return
+    setIsSelfAssigning(true)
+    try {
+      await selfAssignEnquiry(selectedEnquiry.id)
+      showNotification('Enquiry self-assigned to you successfully.', 'success')
+      setSelectedEnquiry((prev) => ({
+        ...prev,
+        assigned_employee_id: adminUser?.id,
+        assigned_employee_name: adminUser?.fullName || adminUser?.email,
+        assigned_employee_code: adminUser?.employee_code || null,
+        assigned_employee_phone: adminUser?.phone_number || null,
+        assigned_at: new Date().toISOString(),
+        assigned_by: adminUser?.id,
+        assigned_by_name: adminUser?.fullName || adminUser?.email,
+        assigned_by_employee_code: adminUser?.employee_code || null
+      }))
+      await reloadActivities(selectedEnquiry.id)
+    } catch (err) {
+      showNotification(err.message || 'Failed to self-assign enquiry.', 'error')
+    } finally {
+      setIsSelfAssigning(false)
+    }
+  }
+
+  const handleOpenAssignModal = async () => {
+    if (!isSuperadmin || !selectedEnquiry) return
+    setAssignmentError(null)
+    setAssignReason('')
+    setSelectedAssigneeId(selectedEnquiry.assigned_employee_id || '')
+    setIsAssignModalOpen(true)
+    try {
+      const list = await loadEligibleEnquiryAssignees()
+      setAssigneesList(list || [])
+    } catch (err) {
+      setAssignmentError(err.message || 'Failed to load eligible assignees directory.')
+    }
+  }
+
+  const handleSaveAssignment = async (e) => {
+    if (e) e.preventDefault()
+    if (!selectedEnquiry || !isSuperadmin) return
+    setAssignmentError(null)
+    setIsSubmittingAssignment(true)
+    try {
+      const targetId = selectedAssigneeId ? selectedAssigneeId : null
+      await assignEnquiryEmployee(selectedEnquiry.id, targetId, assignReason)
+      const targetStaff = assigneesList.find((s) => s.id === targetId)
+
+      setSelectedEnquiry((prev) => ({
+        ...prev,
+        assigned_employee_id: targetId,
+        assigned_employee_name: targetStaff ? (targetStaff.full_name || targetStaff.email) : null,
+        assigned_employee_code: targetStaff ? targetStaff.employee_code : null,
+        assigned_employee_phone: targetStaff ? targetStaff.phone_number : null,
+        assigned_at: targetId ? new Date().toISOString() : null,
+        assigned_by: adminUser?.id,
+        assigned_by_name: adminUser?.fullName || adminUser?.email,
+        assigned_by_employee_code: adminUser?.employee_code || null
+      }))
+
+      showNotification(
+        targetId
+          ? `Enquiry assigned to ${targetStaff?.full_name || 'employee'}.`
+          : 'Enquiry unassigned successfully.',
+        'success'
+      )
+      setIsAssignModalOpen(false)
+      await reloadActivities(selectedEnquiry.id)
+    } catch (err) {
+      setAssignmentError(err.message || 'Failed to update enquiry assignment.')
+    } finally {
+      setIsSubmittingAssignment(false)
+    }
+  }
+
+  const handleWhatsAppDispatch = () => {
+    if (!selectedEnquiry) return
+    if (!selectedEnquiry.assigned_employee_phone) {
+      showNotification(
+        selectedEnquiry.assigned_employee_name
+          ? `Engineer ${selectedEnquiry.assigned_employee_name} does not have a phone number configured. Please add their phone in Staff Management.`
+          : 'Please assign an engineer to this enquiry first.',
+        'error'
+      )
+      return
+    }
+    const url = buildWhatsAppDispatchUrl(selectedEnquiry)
+    if (url) {
+      window.open(url, '_blank')
+    }
+  }
+
+  const handleCopyDispatch = async () => {
+    if (!selectedEnquiry) return
+    try {
+      const text = formatJobDispatchText(selectedEnquiry)
+      await navigator.clipboard.writeText(text)
+      setCopyFeedback(true)
+      showNotification('Job dispatch copied to clipboard.', 'success')
+      setTimeout(() => setCopyFeedback(false), 2500)
+    } catch (err) {
+      showNotification('Could not copy to clipboard: ' + err.message, 'error')
     }
   }
 
@@ -1482,6 +1604,26 @@ export default function AdminEnquiriesPage() {
                             </span>
                           </div>
                         )}
+                        {enq.assigned_employee_name && (
+                          <div style={{ marginTop: '3px' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '0.72rem',
+                                color: enq.assigned_employee_id === adminUser?.id ? '#1e40af' : '#475569',
+                                fontWeight: 600,
+                                background: enq.assigned_employee_id === adminUser?.id ? '#dbeafe' : '#f1f5f9',
+                                padding: '1px 6px',
+                                borderRadius: '8px'
+                              }}
+                              title={`Assigned: ${enq.assigned_employee_name}${enq.assigned_employee_code ? ` [${enq.assigned_employee_code}]` : ''}`}
+                            >
+                              👤 {enq.assigned_employee_id === adminUser?.id ? 'You' : enq.assigned_employee_name}
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Submitted Date */}
@@ -1790,6 +1932,10 @@ export default function AdminEnquiriesPage() {
         const isWorkable = !['completion_requested', 'rejection_requested', 'rejected', 'closed', 'in_bin', 'returned_for_rework'].includes(selectedEnquiry.status) &&
           !selectedEnquiry.is_archived &&
           !selectedEnquiry.is_in_bin
+        const isAssignmentEligible = ['new', 'in_progress', 'quoted', 'returned_for_rework'].includes(selectedEnquiry.status) &&
+          !selectedEnquiry.is_archived &&
+          !selectedEnquiry.is_in_bin &&
+          !selectedEnquiry.completion_approved_at
 
         return (
           <div
@@ -2321,6 +2467,189 @@ export default function AdminEnquiriesPage() {
                   </div>
                 </div>
 
+                {/* Section: Assigned Employee / Engineer */}
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '14px 16px',
+                    marginBottom: '14px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.1rem' }}>👤</span>
+                      <div>
+                        <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>
+                          Assigned Employee / Engineer
+                        </strong>
+                        <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>
+                          Responsible personnel for diagnosis, servicing, and client communication
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Assignment Status Pill */}
+                    {selectedEnquiry.assigned_employee_id ? (
+                      <span
+                        style={{
+                          background: selectedEnquiry.assigned_employee_id === adminUser?.id ? '#dbeafe' : '#f1f5f9',
+                          color: selectedEnquiry.assigned_employee_id === adminUser?.id ? '#1e40af' : '#334155',
+                          border: `1px solid ${selectedEnquiry.assigned_employee_id === adminUser?.id ? '#bfdbfe' : '#cbd5e1'}`,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '0.8rem',
+                          fontWeight: 700
+                        }}
+                      >
+                        {selectedEnquiry.assigned_employee_id === adminUser?.id ? '👤 Assigned to You' : '👤 Assigned'}
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          background: '#fef3c7',
+                          color: '#92400e',
+                          border: '1px solid #fde68a',
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '0.8rem',
+                          fontWeight: 700
+                        }}
+                      >
+                        ⚠️ Unassigned
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Assignment Details or Action Prompts */}
+                  {selectedEnquiry.assigned_employee_id ? (
+                    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px 14px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', fontSize: '0.84rem' }}>
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Engineer Name:
+                          </span>
+                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>
+                            {selectedEnquiry.assigned_employee_name || 'Staff Member'}
+                          </strong>
+                          {selectedEnquiry.assigned_employee_code && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: '#0369a1', fontWeight: 600, marginTop: '2px' }}>
+                              Employee Code: {selectedEnquiry.assigned_employee_code}
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Contact / WhatsApp:
+                          </span>
+                          {selectedEnquiry.assigned_employee_phone ? (
+                            <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.88rem' }}>
+                              📱 {selectedEnquiry.assigned_employee_phone}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>
+                              No phone configured
+                            </span>
+                          )}
+                          {selectedEnquiry.assigned_at && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                              Assigned: {formatDateTime(selectedEnquiry.assigned_at)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {selectedEnquiry.assigned_by_name && (
+                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', fontSize: '0.75rem', color: '#64748b' }}>
+                          Assigned by: <strong>{selectedEnquiry.assigned_by_name}</strong>
+                          {selectedEnquiry.assigned_by_employee_code && ` [${selectedEnquiry.assigned_by_employee_code}]`}
+                        </div>
+                      )}
+
+                      {/* Head Reassign / Unassign Controls (Eligible enquiries only) */}
+                      {isSuperadmin && isAssignmentEligible && (
+                        <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn-outline btn-sm"
+                            onClick={handleOpenAssignModal}
+                            style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                          >
+                            🔄 Reassign Engineer
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-outline btn-sm"
+                            onClick={() => {
+                              if (window.confirm(`Unassign this enquiry from ${selectedEnquiry.assigned_employee_name}?`)) {
+                                unassignEnquiryEmployee(selectedEnquiry.id, 'Unassigned by Head of Store')
+                                  .then(() => {
+                                    showNotification('Enquiry unassigned.', 'success')
+                                    setSelectedEnquiry((prev) => ({
+                                      ...prev,
+                                      assigned_employee_id: null,
+                                      assigned_employee_name: null,
+                                      assigned_employee_code: null,
+                                      assigned_employee_phone: null,
+                                      assigned_at: null
+                                    }))
+                                    reloadActivities(selectedEnquiry.id)
+                                  })
+                                  .catch((err) => showNotification(err.message, 'error'))
+                              }
+                            }}
+                            style={{ borderColor: '#fca5a5', color: '#b91c1c', fontSize: '0.8rem', padding: '4px 10px' }}
+                          >
+                            ✕ Unassign
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* UNASSIGNED BRANCH */
+                    <div style={{ background: '#ffffff', border: '1px solid #fde68a', borderRadius: '6px', padding: '12px 14px' }}>
+                      <p style={{ margin: '0 0 10px 0', fontSize: '0.86rem', color: '#78350f' }}>
+                        No staff member or engineer is currently assigned to this enquiry.
+                      </p>
+
+                      {/* Employee self-assignment button */}
+                      {isEmployee && isAssignmentEligible && (
+                        <button
+                          type="button"
+                          id="take-enquiry-btn"
+                          className="btn-primary"
+                          onClick={handleSelfAssign}
+                          disabled={isSelfAssigning}
+                          style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <span>✋</span> {isSelfAssigning ? 'Assigning to you...' : 'Take This Enquiry'}
+                        </button>
+                      )}
+
+                      {/* Head assign button */}
+                      {isSuperadmin && isAssignmentEligible && (
+                        <button
+                          type="button"
+                          id="head-assign-btn"
+                          className="btn-primary"
+                          onClick={handleOpenAssignModal}
+                          style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <span>👤</span> Assign Employee
+                        </button>
+                      )}
+
+                      {!isAssignmentEligible && (
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                          Assignment cannot be changed in current status or archive state.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Section C: Work & Follow-up (Activity Timeline & Notes) */}
                 <div style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -2553,26 +2882,88 @@ export default function AdminEnquiriesPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="admin-modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div className="admin-modal-footer" style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Circular WhatsApp Dispatch Button */}
+                  <button
+                    type="button"
+                    id="whatsapp-dispatch-btn"
+                    onClick={handleWhatsAppDispatch}
+                    title={
+                      selectedEnquiry.assigned_employee_phone
+                        ? `Send Job Dispatch to ${selectedEnquiry.assigned_employee_name || 'Engineer'} via WhatsApp (${selectedEnquiry.assigned_employee_phone})`
+                        : selectedEnquiry.assigned_employee_name
+                        ? `Engineer ${selectedEnquiry.assigned_employee_name} has no phone configured`
+                        : 'Assign an engineer first to send WhatsApp dispatch'
+                    }
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      minWidth: '44px',
+                      minHeight: '44px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: selectedEnquiry.assigned_employee_phone ? '#25D366' : '#94a3b8',
+                      color: '#ffffff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: selectedEnquiry.assigned_employee_phone ? 'pointer' : 'not-allowed',
+                      boxShadow: selectedEnquiry.assigned_employee_phone ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
+                      padding: 0,
+                      transition: 'all 0.15s ease'
+                    }}
+                    aria-label="Send WhatsApp Dispatch"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z"/>
+                    </svg>
+                  </button>
+
+                  {/* Circular Copy Dispatch Button */}
+                  <button
+                    type="button"
+                    id="copy-dispatch-btn"
+                    onClick={handleCopyDispatch}
+                    title={copyFeedback ? 'Copied to clipboard!' : 'Copy Job Dispatch to Clipboard'}
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      minWidth: '44px',
+                      minHeight: '44px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: copyFeedback ? '#16a34a' : '#0284c7',
+                      color: '#ffffff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
+                      padding: 0,
+                      transition: 'all 0.15s ease'
+                    }}
+                    aria-label="Copy Job Dispatch"
+                  >
+                    {copyFeedback ? (
+                      <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>✓</span>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   className="btn-outline"
                   onClick={handleCloseDetails}
+                  style={{ minHeight: '44px', minWidth: '88px', padding: '8px 20px', fontSize: '14px' }}
                 >
                   Close
                 </button>
-                {email && (() => {
-                  const safeEmail = encodeURIComponent(email.replace(/[\r\n\t]/g, '').trim())
-                  return (
-                    <a
-                      href={`mailto:${safeEmail}?subject=ARS%20Computers%20Quote%20for%20${encodeURIComponent(requirement)}`}
-                      className="btn-primary"
-                      style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      ✉️ Email Client
-                    </a>
-                  )
-                })()}
               </div>
             </div>
           </div>
@@ -3213,6 +3604,120 @@ export default function AdminEnquiriesPage() {
                 {isRestoringFromBin ? 'Restoring...' : '♻️ Confirm Restore from Bin'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 11. Head Assign / Reassign Staff Modal */}
+      {isAssignModalOpen && isSuperadmin && selectedEnquiry && (
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => !isSubmittingAssignment && setIsAssignModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="assign-modal-title"
+        >
+          <div
+            className="admin-modal-dialog confirm-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '480px' }}
+          >
+            <div className="admin-modal-header">
+              <div>
+                <h2 id="assign-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                  {selectedEnquiry.assigned_employee_id ? 'Reassign Enquiry Engineer' : 'Assign Enquiry Engineer'}
+                </h2>
+                <span className="modal-subtitle-note">
+                  Enquiry {selectedEnquiry.enquiry_number || selectedEnquiry.id}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setIsAssignModalOpen(false)}
+                disabled={isSubmittingAssignment}
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAssignment}>
+              <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
+                <div className="admin-form-group">
+                  <label htmlFor="assign-employee-select" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                    Select Active Employee / Engineer:
+                  </label>
+                  <select
+                    id="assign-employee-select"
+                    className="admin-form-input"
+                    value={selectedAssigneeId}
+                    onChange={(e) => setSelectedAssigneeId(e.target.value)}
+                    disabled={isSubmittingAssignment}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  >
+                    <option value="">-- Unassigned --</option>
+                    {assigneesList.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.full_name || emp.email} {emp.employee_code ? `[${emp.employee_code}]` : ''} ({emp.role}) {emp.phone_number ? `• 📱 ${emp.phone_number}` : '• No phone'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="admin-form-group" style={{ marginTop: '12px' }}>
+                  <label htmlFor="assign-reason-input" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                    Assignment / Reassignment Reason <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>:
+                  </label>
+                  <input
+                    id="assign-reason-input"
+                    type="text"
+                    className="admin-form-input"
+                    placeholder="e.g. Workload balancing, onsite hardware technician needed..."
+                    value={assignReason}
+                    onChange={(e) => setAssignReason(e.target.value)}
+                    disabled={isSubmittingAssignment}
+                    maxLength={200}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                {assignmentError && (
+                  <div
+                    style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      color: '#991b1b',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      marginTop: '12px',
+                      fontSize: '0.85rem'
+                    }}
+                    role="alert"
+                  >
+                    ⚠️ {assignmentError}
+                  </div>
+                )}
+              </div>
+
+              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => setIsAssignModalOpen(false)}
+                  disabled={isSubmittingAssignment}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={isSubmittingAssignment}
+                >
+                  {isSubmittingAssignment ? 'Saving...' : 'Save Assignment'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
