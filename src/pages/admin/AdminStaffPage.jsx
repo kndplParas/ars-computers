@@ -1,4 +1,4 @@
-import { useState, useMemo, useId } from 'react'
+import { useState, useMemo, useId, useEffect } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
@@ -48,6 +48,12 @@ export default function AdminStaffPage() {
     toggleStaffActive,
     addStaffMember
   } = useAdminData()
+
+  useEffect(() => {
+    if (loadAdminStaff) {
+      loadAdminStaff()
+    }
+  }, [loadAdminStaff])
 
   // Register Staff Profile Form State
   const [inviteForm, setInviteForm] = useState({

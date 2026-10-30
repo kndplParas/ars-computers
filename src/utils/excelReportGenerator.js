@@ -14,7 +14,14 @@
  * ============================================================================
  */
 
-import ExcelJS from 'exceljs'
+// Lazy dynamic loader for ExcelJS to keep initial customer & admin bundles lean
+let excelJsPromise = null
+export async function getExcelJS() {
+  if (!excelJsPromise) {
+    excelJsPromise = import('exceljs').then((m) => m.default || m)
+  }
+  return excelJsPromise
+}
 
 export const MONTH_NAMES = [
   'January',
@@ -100,6 +107,7 @@ export async function downloadMonthlyEnquiriesExcel(allEnquiries, targetMonthInd
   const monthName = MONTH_NAMES[targetMonthIndex] || `Month_${targetMonthIndex + 1}`
   const filename = getMonthlyReportFilename(targetMonthIndex, targetYear)
 
+  const ExcelJS = await getExcelJS()
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'ARS Computers Admin Portal'
   workbook.lastModifiedBy = 'ARS Computers Compliance & Reporting'
@@ -293,6 +301,7 @@ export async function exportLiveRegisterViewToExcel(filteredEnquiries = [], meta
   const exportDate = meta.date || new Date()
   const filename = getLiveRegisterFilename(exportDate)
 
+  const ExcelJS = await getExcelJS()
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'ARS Computers Admin Portal'
   workbook.lastModifiedBy = meta.exportedBy || 'ARS Computers Live Enquiry Register'

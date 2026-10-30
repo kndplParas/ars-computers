@@ -325,6 +325,8 @@ function CustomerHomePage() {
                     src="/hero-storefront.jpg"
                     alt="ARS Computers Storefront &amp; Service Center in Rudrapur"
                     className="hero-hardware-img"
+                    fetchPriority="high"
+                    decoding="async"
                     onError={(e) => { e.currentTarget.src = '/hero-hardware.jpg' }}
                   />
                 </div>

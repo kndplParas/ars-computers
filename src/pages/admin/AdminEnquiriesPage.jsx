@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ENQUIRY_STATUSES } from '../../data/mockEnquiries'
 import { useAdminData } from '../../context/adminDataContext'
@@ -10,7 +10,8 @@ import {
   getMonthlyReportFilename,
   MONTH_NAMES
 } from '../../utils/excelReportGenerator'
-import LiveEnquiryRegisterModal from '../../components/admin/LiveEnquiryRegisterModal'
+
+const LiveEnquiryRegisterModal = lazy(() => import('../../components/admin/LiveEnquiryRegisterModal'))
 
 /**
  * ============================================================================
@@ -160,6 +161,13 @@ export default function AdminEnquiriesPage() {
     setNotification({ text, type })
     setTimeout(() => setNotification(null), 4000)
   }
+
+  // Load enquiries on mount
+  useEffect(() => {
+    if (loadAdminEnquiries) {
+      loadAdminEnquiries()
+    }
+  }, [loadAdminEnquiries])
 
   // Count approved enquiries eligible for selected monthly reporting
   const eligibleExportCount = useMemo(
@@ -3210,17 +3218,21 @@ export default function AdminEnquiriesPage() {
       )}
 
       {/* 6. Advanced Excel-like Live Enquiry Register Modal */}
-      <LiveEnquiryRegisterModal
-        isOpen={isLiveRegisterOpen}
-        onClose={() => setIsLiveRegisterOpen(false)}
-        enquiries={enquiries}
-        onSelectEnquiry={(enq) => {
-          setSelectedEnquiry(enq)
-        }}
-        onRefresh={() => loadAdminEnquiries && loadAdminEnquiries()}
-        isLoading={isLoadingEnquiries}
-        adminUser={adminUser}
-      />
+      {isLiveRegisterOpen && (
+        <Suspense fallback={null}>
+          <LiveEnquiryRegisterModal
+            isOpen={isLiveRegisterOpen}
+            onClose={() => setIsLiveRegisterOpen(false)}
+            enquiries={enquiries}
+            onSelectEnquiry={(enq) => {
+              setSelectedEnquiry(enq)
+            }}
+            onRefresh={() => loadAdminEnquiries && loadAdminEnquiries()}
+            isLoading={isLoadingEnquiries}
+            adminUser={adminUser}
+          />
+        </Suspense>
+      )}
     </AdminLayout>
   )
 }

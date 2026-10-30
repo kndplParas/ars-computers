@@ -1,12 +1,12 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, useParams, Navigate } from 'react-router-dom'
-import CustomerHomePage from './pages/CustomerHomePage'
 import { AdminAuthProvider } from './context/AdminAuthProvider'
 import { AdminDataProvider } from './context/AdminDataProvider'
 import AdminRouteGuard from './components/admin/AdminRouteGuard'
 import ErrorBoundary from './components/common/ErrorBoundary'
 
-// Lazy-load non-index routes for code splitting and instant initial page load
+// Lazy-load routes for high-performance code splitting
+const CustomerHomePage = lazy(() => import('./pages/CustomerHomePage'))
 const CategoryPage = lazy(() => import('./pages/CategoryPage'))
 const ProductDetailsPage = lazy(() => import('./pages/ProductDetailsPage'))
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'))

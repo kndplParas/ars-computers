@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import {
   SERVICE_STATUS_META,
@@ -49,6 +49,12 @@ export default function AdminServiceRequestsPage() {
     reopenServiceTicket,
     metrics
   } = useAdminData()
+
+  useEffect(() => {
+    if (loadAdminServiceRequests) {
+      loadAdminServiceRequests()
+    }
+  }, [loadAdminServiceRequests])
 
   // Filters state
   const [statusFilter, setStatusFilter] = useState('all')

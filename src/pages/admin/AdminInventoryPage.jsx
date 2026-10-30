@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
@@ -48,7 +48,13 @@ export default function AdminInventoryPage() {
   const isInventoryStaff = adminUser?.role === 'inventory_staff'
   const canUpdateStock = isSuperadmin || isInventoryStaff
 
-  const { products, setProducts, categories, updateProductStock } = useAdminData()
+  const { products, setProducts, categories, updateProductStock, loadAdminCatalog } = useAdminData()
+
+  useEffect(() => {
+    if (loadAdminCatalog) {
+      loadAdminCatalog()
+    }
+  }, [loadAdminCatalog])
 
   // Filtering states
   const [searchQuery, setSearchQuery] = useState('')

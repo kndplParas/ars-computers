@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
@@ -39,7 +39,13 @@ export default function AdminCategoriesPage() {
   const { adminUser } = useAdminAuth()
   const isSuperadmin = adminUser?.role === 'superadmin'
 
-  const { categories, setCategories, products } = useAdminData()
+  const { categories, setCategories, products, loadAdminCategories } = useAdminData()
+
+  useEffect(() => {
+    if (loadAdminCategories) {
+      loadAdminCategories()
+    }
+  }, [loadAdminCategories])
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')

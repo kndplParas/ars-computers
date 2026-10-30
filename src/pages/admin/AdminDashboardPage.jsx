@@ -39,10 +39,28 @@ function AdminDashboardPage() {
   const tabParam = searchParams.get('tab')
 
   const { adminUser } = useAdminAuth()
-  const { metrics, enquiries, categories, products, isLiveDatabase } = useAdminData()
+  const {
+    metrics,
+    enquiries,
+    categories,
+    products,
+    isLiveDatabase,
+    loadAdminCatalog,
+    loadAdminEnquiries
+  } = useAdminData()
 
   const userRole = adminUser?.role || 'inventory_staff'
   const isSuperadminOrAdmin = userRole === 'superadmin' || userRole === 'admin'
+
+  // Load operational dashboard datasets on mount
+  useEffect(() => {
+    if (loadAdminCatalog) {
+      loadAdminCatalog({ page: 1, limit: 50 })
+    }
+    if (isSuperadminOrAdmin && loadAdminEnquiries) {
+      loadAdminEnquiries()
+    }
+  }, [loadAdminCatalog, loadAdminEnquiries, isSuperadminOrAdmin])
 
   // Gracefully handle legacy query-parameter links by redirecting to dedicated routes
   useEffect(() => {
