@@ -6111,6 +6111,15 @@
   max-width: 480px;
 }
 
+.admin-modal-dialog > form,
+.admin-modal-dialog form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .admin-modal-header {
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-subtle);

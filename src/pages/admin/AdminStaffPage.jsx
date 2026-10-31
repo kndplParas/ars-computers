@@ -1642,7 +1642,7 @@ export default function AdminStaffPage() {
                 )}
               </div>
 
-              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+              <div className="admin-modal-footer" style={{ padding: '12px 20px', flexShrink: 0 }}>
                 <button
                   type="button"
                   className="btn-outline btn-sm"
@@ -1678,7 +1678,7 @@ export default function AdminStaffPage() {
         >
           <div
             className="admin-modal-dialog"
-            style={{ maxWidth: '560px' }}
+            style={{ maxWidth: '560px', maxHeight: 'min(90vh, 720px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="admin-modal-header">
@@ -1701,8 +1701,22 @@ export default function AdminStaffPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveProfile}>
-              <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+            <form
+              onSubmit={handleSaveProfile}
+              style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}
+            >
+              <div
+                className="admin-modal-body"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0',
+                  overflowY: 'auto',
+                  flex: '1 1 auto',
+                  minHeight: 0,
+                  padding: '20px'
+                }}
+              >
                 {profileError && (
                   <div
                     style={{
@@ -1987,7 +2001,7 @@ export default function AdminStaffPage() {
                 </div>
               </div>
 
-              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+              <div className="admin-modal-footer" style={{ padding: '12px 20px', flexShrink: 0 }}>
                 <button
                   type="button"
                   className="btn-outline btn-sm"
