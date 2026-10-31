@@ -142,6 +142,7 @@ export default function AdminStaffPage() {
     setIsSubmittingProfile(true)
     try {
       await updateStaffProfile({
+        staffId: profileModalTarget.id,
         id: profileModalTarget.id,
         fullName: profileForm.fullName.trim(),
         employeeCode: profileForm.employeeCode.trim() || null,

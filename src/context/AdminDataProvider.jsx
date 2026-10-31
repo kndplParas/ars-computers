@@ -1345,6 +1345,7 @@ export function AdminDataProvider({ children }) {
   // --- Update Staff Profile (Superadmin Only, Head-Controlled Profile Editor) ---
   const updateStaffProfile = useCallback(
     async ({
+      id,
       staffId,
       fullName,
       employeeCode = null,
@@ -1353,11 +1354,13 @@ export function AdminDataProvider({ children }) {
       role = null,
       isActive = null
     }) => {
+      const targetStaffId = staffId || id
+
       if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'hr') {
         throw new Error('Unauthorized: Only superadministrators and HR can update staff profiles.')
       }
 
-      if (!staffId) {
+      if (!targetStaffId) {
         throw new Error('Validation error: Target staff ID is required.')
       }
 
@@ -1377,7 +1380,7 @@ export function AdminDataProvider({ children }) {
         if (!supabase) throw new Error('Supabase client is not available.')
 
         const { data, error } = await supabase.rpc('update_staff_profile', {
-          p_target_user_id: staffId,
+          p_user_id: targetStaffId,
           p_full_name: fullName.trim(),
           p_employee_code: cleanCode,
           p_phone_number: cleanPhone,
@@ -1401,7 +1404,7 @@ export function AdminDataProvider({ children }) {
 
       // Demo state fallback
       const updated = demoStaff.map((s) => {
-        if (s.id === staffId) {
+        if (s.id === targetStaffId) {
           return {
             ...s,
             full_name: fullName.trim(),
