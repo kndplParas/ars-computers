@@ -228,7 +228,7 @@ export default function AdminStaffPage() {
         (member.email && member.email.toLowerCase().includes(q)) ||
         (member.employee_code && member.employee_code.toLowerCase().includes(q))
 
-      const matchesRole = roleFilter === 'all' || member.role === roleFilter
+      const matchesRole = roleFilter === 'all' ? true : roleFilter === 'engineer' ? (member.role === 'engineer' || member.role === 'admin') : member.role === roleFilter
 
       const matchesStatus =
         statusFilter === 'all'
@@ -258,7 +258,7 @@ export default function AdminStaffPage() {
   // Open Role Assignment Modal
   const handleOpenRoleModal = (member) => {
     setRoleModalTarget(member)
-    setNewSelectedRole(member.role === 'inventory_staff' ? 'inventory_staff' : 'admin')
+    setNewSelectedRole(member.role === 'inventory_staff' ? 'inventory_staff' : member.role === 'hr' ? 'hr' : member.role === 'technical' ? 'technical' : 'engineer')
   }
 
   // Submit Role Change
@@ -423,13 +423,37 @@ export default function AdminStaffPage() {
 
           <div className="admin-metric-card">
             <div className="metric-card-content">
-              <span className="metric-label">Store Admins</span>
+              <span className="metric-label">Engineers</span>
               <span className="metric-value" style={{ color: '#0369a1' }}>
-                {metrics.staff?.admins ?? staff.filter((s) => s.role === 'admin').length}
+                {metrics.staff?.engineers ?? staff.filter((s) => s.role === 'engineer' || s.role === 'admin').length}
               </span>
             </div>
             <div className="metric-icon-wrap" style={{ background: '#e0f2fe', color: '#0284c7' }}>
-              💼
+              🛠️
+            </div>
+          </div>
+
+          <div className="admin-metric-card">
+            <div className="metric-card-content">
+              <span className="metric-label">HR Staff</span>
+              <span className="metric-value" style={{ color: '#7c3aed' }}>
+                {metrics.staff?.hrStaff ?? staff.filter((s) => s.role === 'hr').length}
+              </span>
+            </div>
+            <div className="metric-icon-wrap" style={{ background: '#f5f3ff', color: '#7c3aed' }}>
+              👥
+            </div>
+          </div>
+
+          <div className="admin-metric-card">
+            <div className="metric-card-content">
+              <span className="metric-label">Technical</span>
+              <span className="metric-value" style={{ color: '#0891b2' }}>
+                {metrics.staff?.technicalStaff ?? staff.filter((s) => s.role === 'technical').length}
+              </span>
+            </div>
+            <div className="metric-icon-wrap" style={{ background: '#ecfeff', color: '#0891b2' }}>
+              💻
             </div>
           </div>
 
@@ -507,9 +531,11 @@ export default function AdminStaffPage() {
                 onChange={(e) => setRoleFilter(e.target.value)}
               >
                 <option value="all">All Roles ({staff.length})</option>
-                <option value="superadmin">Superadmin</option>
-                <option value="admin">Store Admin</option>
-                <option value="inventory_staff">Inventory Staff</option>
+                <option value="superadmin">👑 Superadmin</option>
+                <option value="engineer">🛠️ Engineer</option>
+                <option value="hr">👥 HR (Human Resources)</option>
+                <option value="technical">💻 Technical Staff</option>
+                <option value="inventory_staff">📦 Inventory Staff</option>
               </select>
             </div>
 
@@ -666,26 +692,42 @@ export default function AdminStaffPage() {
                     isMemberSuperadmin && member.is_active && activeSuperadminsCount <= 1
 
                   let roleBadgeStyle = {
-                    background: '#e0f2fe',
-                    color: '#0369a1',
-                    border: '1px solid #bae6fd'
+                    background: '#eff6ff',
+                    color: '#1d4ed8',
+                    border: '1px solid #bfdbfe'
                   }
-                  let roleIcon = '💼'
-                  let roleDisplay = 'Store Admin'
+                  let roleIcon = '🛠️'
+                  let roleDisplay = 'Engineer'
 
                   if (member.role === 'superadmin') {
                     roleBadgeStyle = {
-                      background: '#f3e8ff',
-                      color: '#7e22ce',
-                      border: '1px solid #e9d5ff'
+                      background: '#fdf2f8',
+                      color: '#9d174d',
+                      border: '1px solid #fbcfe8'
                     }
-                    roleIcon = '🛡️'
+                    roleIcon = '👑'
                     roleDisplay = 'Superadmin'
+                  } else if (member.role === 'hr') {
+                    roleBadgeStyle = {
+                      background: '#f5f3ff',
+                      color: '#6d28d9',
+                      border: '1px solid #ddd6fe'
+                    }
+                    roleIcon = '👥'
+                    roleDisplay = 'HR'
+                  } else if (member.role === 'technical') {
+                    roleBadgeStyle = {
+                      background: '#ecfeff',
+                      color: '#0e7490',
+                      border: '1px solid #a5f3fc'
+                    }
+                    roleIcon = '💻'
+                    roleDisplay = 'Technical'
                   } else if (member.role === 'inventory_staff') {
                     roleBadgeStyle = {
-                      background: '#ccfbf1',
-                      color: '#0f766e',
-                      border: '1px solid #99f6e4'
+                      background: '#fffbeb',
+                      color: '#b45309',
+                      border: '1px solid #fde68a'
                     }
                     roleIcon = '📦'
                     roleDisplay = 'Inventory Staff'
@@ -1247,25 +1289,80 @@ export default function AdminStaffPage() {
                           alignItems: 'flex-start',
                           gap: '10px',
                           padding: '10px 12px',
-                          border: inviteForm.role === 'admin' ? '2px solid #0284c7' : '1px solid #cbd5e1',
-                          borderRadius: '6px',
-                          background: inviteForm.role === 'admin' ? '#f0f9ff' : '#ffffff',
+                          border: (inviteForm.role === 'engineer' || inviteForm.role === 'admin') ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                          background: (inviteForm.role === 'engineer' || inviteForm.role === 'admin') ? '#f0f9ff' : '#ffffff',
                           cursor: 'pointer'
                         }}
                       >
                         <input
                           type="radio"
                           name="inviteRole"
-                          value="admin"
-                          checked={inviteForm.role === 'admin'}
-                          onChange={() => setInviteForm({ ...inviteForm, role: 'admin' })}
+                          value="engineer"
+                          checked={inviteForm.role === 'engineer' || inviteForm.role === 'admin'}
+                          onChange={() => setInviteForm({ ...inviteForm, role: 'engineer' })}
                           disabled={isRegistering}
                           style={{ marginTop: '3px' }}
                         />
                         <div>
-                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>Admin (Operations Staff)</strong>
+                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>🛠️ Engineer (Field & Service Operations)</strong>
                           <div style={{ color: '#64748b', fontSize: '0.8rem' }}>
-                            Can view products, manage customer enquiries and workflow statuses. Cannot alter inventory stock or delete catalog items.
+                            Handles service enquiries, customer visits, job sheet completion proofs, and orders.
+                          </div>
+                        </div>
+                      </label>
+
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '10px',
+                          padding: '10px 12px',
+                          border: inviteForm.role === 'hr' ? '2px solid #7c3aed' : '1px solid #cbd5e1',
+                          background: inviteForm.role === 'hr' ? '#f5f3ff' : '#ffffff',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="inviteRole"
+                          value="hr"
+                          checked={inviteForm.role === 'hr'}
+                          onChange={() => setInviteForm({ ...inviteForm, role: 'hr' })}
+                          disabled={isRegistering}
+                          style={{ marginTop: '3px' }}
+                        />
+                        <div>
+                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>👥 HR (Human Resources & Personnel)</strong>
+                          <div style={{ color: '#64748b', fontSize: '0.8rem' }}>
+                            Staff profiles, personnel directory, Aadhaar records, and administrative onboarding.
+                          </div>
+                        </div>
+                      </label>
+
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '10px',
+                          padding: '10px 12px',
+                          border: inviteForm.role === 'technical' ? '2px solid #0891b2' : '1px solid #cbd5e1',
+                          background: inviteForm.role === 'technical' ? '#ecfeff' : '#ffffff',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="inviteRole"
+                          value="technical"
+                          checked={inviteForm.role === 'technical'}
+                          onChange={() => setInviteForm({ ...inviteForm, role: 'technical' })}
+                          disabled={isRegistering}
+                          style={{ marginTop: '3px' }}
+                        />
+                        <div>
+                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>💻 Technical Staff (Repairs & Support)</strong>
+                          <div style={{ color: '#64748b', fontSize: '0.8rem' }}>
+                            Hardware/software diagnostics, repairs, service enquiries, and product catalog.
                           </div>
                         </div>
                       </label>
@@ -1378,25 +1475,85 @@ export default function AdminStaffPage() {
                       gap: '12px',
                       padding: '12px',
                       borderRadius: '8px',
-                      border: newSelectedRole === 'admin' ? '2px solid #0284c7' : '1px solid #cbd5e1',
-                      background: newSelectedRole === 'admin' ? '#f0f9ff' : '#ffffff',
+                      border: (newSelectedRole === 'engineer' || newSelectedRole === 'admin') ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                      background: (newSelectedRole === 'engineer' || newSelectedRole === 'admin') ? '#f0f9ff' : '#ffffff',
                       cursor: 'pointer'
                     }}
                   >
                     <input
                       type="radio"
                       name="staffRole"
-                      value="admin"
-                      checked={newSelectedRole === 'admin'}
-                      onChange={() => setNewSelectedRole('admin')}
+                      value="engineer"
+                      checked={newSelectedRole === 'engineer' || newSelectedRole === 'admin'}
+                      onChange={() => setNewSelectedRole('engineer')}
                       style={{ marginTop: '3px' }}
                     />
                     <div>
                       <strong style={{ display: 'block', color: '#0f172a', fontSize: '0.92rem' }}>
-                        💼 Store Administrator (admin)
+                        🛠️ Engineer (engineer)
                       </strong>
                       <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                        Can manage products, categories, stock levels, and respond to customer enquiries. Cannot access staff management.
+                        Can manage customer service enquiries, customer visits, completion proofs, and orders & sales.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: newSelectedRole === 'hr' ? '2px solid #7c3aed' : '1px solid #cbd5e1',
+                      background: newSelectedRole === 'hr' ? '#f5f3ff' : '#ffffff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="staffRole"
+                      value="hr"
+                      checked={newSelectedRole === 'hr'}
+                      onChange={() => setNewSelectedRole('hr')}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <strong style={{ display: 'block', color: '#0f172a', fontSize: '0.92rem' }}>
+                        👥 HR (hr)
+                      </strong>
+                      <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                        Can manage staff profiles, employee directory, Aadhaar records, and onboarding.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: newSelectedRole === 'technical' ? '2px solid #0891b2' : '1px solid #cbd5e1',
+                      background: newSelectedRole === 'technical' ? '#ecfeff' : '#ffffff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="staffRole"
+                      value="technical"
+                      checked={newSelectedRole === 'technical'}
+                      onChange={() => setNewSelectedRole('technical')}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <strong style={{ display: 'block', color: '#0f172a', fontSize: '0.92rem' }}>
+                        💻 Technical Staff (technical)
+                      </strong>
+                      <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                        Technical diagnostics, repairs, hardware/software support, service enquiries, and product catalog.
                       </span>
                     </div>
                   </label>
@@ -1929,7 +2086,12 @@ export default function AdminStaffPage() {
                         disabled={isSubmittingProfile || profileModalTarget.role === 'superadmin'}
                         style={{ width: '100%', boxSizing: 'border-box' }}
                       >
-                        <option value="admin">💼 Store Admin</option>
+                        <option value="engineer">🛠️ Engineer</option>
+                        {profileModalTarget.role === 'admin' && (
+                          <option value="admin">🛠️ Engineer (admin)</option>
+                        )}
+                        <option value="hr">👥 HR (Human Resources)</option>
+                        <option value="technical">💻 Technical Staff</option>
                         <option value="inventory_staff">📦 Inventory Staff</option>
                         {profileModalTarget.role === 'superadmin' && (
                           <option value="superadmin">🛡️ Superadmin</option>

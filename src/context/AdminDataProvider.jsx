@@ -1189,9 +1189,9 @@ export function AdminDataProvider({ children }) {
         throw new Error('Validation error: Aadhaar number must be exactly 12 numeric digits.')
       }
 
-      const PERMITTED_ROLES = ['admin', 'inventory_staff']
+      const PERMITTED_ROLES = ['admin', 'engineer', 'inventory_staff', 'hr', 'technical']
       if (!PERMITTED_ROLES.includes(role)) {
-        throw new Error(`Invalid role assignment: "${role}". Permitted roles are "admin" or "inventory_staff".`)
+        throw new Error(`Invalid role assignment: "${role}". Permitted roles are "engineer", "hr", "technical", or "inventory_staff".`)
       }
 
       if (isLiveDatabase) {
@@ -1254,9 +1254,9 @@ export function AdminDataProvider({ children }) {
       if (staffId === adminUser?.id) {
         throw new Error('Safety violation: You cannot demote or alter your own superadministrator role.')
       }
-      const PERMITTED_ROLES = ['admin', 'inventory_staff']
+      const PERMITTED_ROLES = ['admin', 'engineer', 'inventory_staff', 'hr', 'technical']
       if (!PERMITTED_ROLES.includes(newRole)) {
-        throw new Error(`Invalid role assignment: "${newRole}". Permitted roles are "admin" or "inventory_staff".`)
+        throw new Error(`Invalid role assignment: "${newRole}". Permitted roles are "engineer", "hr", "technical", or "inventory_staff".`)
       }
 
       if (isLiveDatabase) {
@@ -1353,8 +1353,8 @@ export function AdminDataProvider({ children }) {
       role = null,
       isActive = null
     }) => {
-      if (adminUser?.role !== 'superadmin') {
-        throw new Error('Unauthorized: Only superadministrators can update staff profiles.')
+      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'hr') {
+        throw new Error('Unauthorized: Only superadministrators and HR can update staff profiles.')
       }
 
       if (!staffId) {
@@ -2643,7 +2643,10 @@ export function AdminDataProvider({ children }) {
     const activeStaff = staff.filter((s) => s.is_active !== false).length
     const inactiveStaff = staff.filter((s) => s.is_active === false).length
     const superadmins = staff.filter((s) => s.role === 'superadmin').length
-    const admins = staff.filter((s) => s.role === 'admin').length
+    const engineers = staff.filter((s) => s.role === 'engineer' || s.role === 'admin').length
+    const admins = engineers
+    const hrStaff = staff.filter((s) => s.role === 'hr').length
+    const technicalStaff = staff.filter((s) => s.role === 'technical').length
     const inventoryStaff = staff.filter((s) => s.role === 'inventory_staff').length
 
     const totalServiceRequests = serviceRequests.length
@@ -2684,6 +2687,9 @@ export function AdminDataProvider({ children }) {
         inactive: inactiveStaff,
         superadmins,
         admins,
+        engineers,
+        hrStaff,
+        technicalStaff,
         inventoryStaff
       },
       serviceRequests: {
@@ -2808,14 +2814,17 @@ export function AdminDataProvider({ children }) {
 
     // Role Permission Capabilities
     isSuperadmin: adminUser?.role === 'superadmin',
-    isAdminEmployee: adminUser?.role === 'admin',
+    isAdminEmployee: adminUser?.role === 'admin' || adminUser?.role === 'engineer',
+    isEngineer: adminUser?.role === 'engineer' || adminUser?.role === 'admin',
+    isHr: adminUser?.role === 'hr',
+    isTechnical: adminUser?.role === 'technical',
     isInventoryStaff: adminUser?.role === 'inventory_staff',
     canWriteCatalog: adminUser?.role === 'superadmin',
     canWriteCategories: adminUser?.role === 'superadmin',
-    canWriteEnquiries: adminUser?.role === 'superadmin',
+    canWriteEnquiries: adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'engineer' || adminUser?.role === 'technical',
     canWriteInventory: adminUser?.role === 'superadmin' || adminUser?.role === 'inventory_staff',
-    canManageStaff: adminUser?.role === 'superadmin',
-    canCreateOrders: adminUser?.role === 'superadmin' || adminUser?.role === 'admin',
+    canManageStaff: adminUser?.role === 'superadmin' || adminUser?.role === 'hr',
+    canCreateOrders: adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'engineer',
 
     // Global
     metrics,

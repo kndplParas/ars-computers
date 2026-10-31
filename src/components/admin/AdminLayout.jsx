@@ -26,13 +26,13 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
   }
 
   const allNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Overview', roles: ['superadmin', 'admin', 'inventory_staff'] },
-    { id: 'orders', label: 'Orders & Sales', icon: '🛒', badge: `${orders?.length ?? 0} Orders`, roles: ['superadmin', 'admin', 'inventory_staff'] },
-    { id: 'enquiries', label: 'Enquiries', icon: '💬', badge: `${enquiries?.length ?? 0} Leads`, roles: ['superadmin', 'admin'] },
-    { id: 'products', label: 'Products', icon: '📦', badge: `${metrics?.products?.total ?? 0} Items`, roles: ['superadmin', 'admin'] },
-    { id: 'inventory', label: 'Inventory', icon: '⚡', badge: `${(metrics?.products?.lowStock ?? 0) > 0 ? `${metrics.products.lowStock} Low` : 'Stock'}`, roles: ['superadmin', 'admin', 'inventory_staff'] },
-    { id: 'categories', label: 'Categories', icon: '📁', badge: `${categories?.length ?? 0} Groups`, roles: ['superadmin', 'admin'] },
-    { id: 'staff', label: 'Staff Management', icon: '👥', badge: metrics?.staff?.total ? `${metrics.staff.total} Users` : 'Staff', roles: ['superadmin'] }
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Overview', roles: ['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical'] },
+    { id: 'orders', label: 'Orders & Sales', icon: '🛒', badge: `${orders?.length ?? 0} Orders`, roles: ['superadmin', 'admin', 'engineer', 'inventory_staff'] },
+    { id: 'enquiries', label: 'Enquiries', icon: '💬', badge: `${enquiries?.length ?? 0} Leads`, roles: ['superadmin', 'admin', 'engineer', 'technical'] },
+    { id: 'products', label: 'Products', icon: '📦', badge: `${metrics?.products?.total ?? 0} Items`, roles: ['superadmin', 'admin', 'engineer', 'inventory_staff', 'technical'] },
+    { id: 'inventory', label: 'Inventory', icon: '⚡', badge: `${(metrics?.products?.lowStock ?? 0) > 0 ? `${metrics.products.lowStock} Low` : 'Stock'}`, roles: ['superadmin', 'inventory_staff'] },
+    { id: 'categories', label: 'Categories', icon: '📁', badge: `${categories?.length ?? 0} Groups`, roles: ['superadmin', 'admin', 'engineer', 'technical'] },
+    { id: 'staff', label: 'Staff Management', icon: '👥', badge: metrics?.staff?.total ? `${metrics.staff.total} Users` : 'Staff', roles: ['superadmin', 'hr'] }
   ]
 
   const userRole = adminUser?.role || 'inventory_staff'
@@ -111,8 +111,12 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
               <span className={`admin-user-role-chip role-${adminUser?.role || 'staff'}`}>
                 {adminUser?.role === 'superadmin'
                   ? '👑 Superadmin'
-                  : adminUser?.role === 'admin'
-                  ? '💼 Admin (Read-Only)'
+                  : adminUser?.role === 'engineer' || adminUser?.role === 'admin'
+                  ? '🛠️ Engineer'
+                  : adminUser?.role === 'hr'
+                  ? '👥 HR'
+                  : adminUser?.role === 'technical'
+                  ? '💻 Technical'
                   : adminUser?.role === 'inventory_staff'
                   ? '📦 Inventory Staff'
                   : 'Staff User'}

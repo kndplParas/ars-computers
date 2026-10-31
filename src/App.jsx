@@ -75,7 +75,7 @@ function App() {
                 <Route
                   path="/admin"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'inventory_staff']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical']}>
                       <AdminDashboardPage />
                     </AdminRouteGuard>
                   }
@@ -83,7 +83,7 @@ function App() {
                 <Route
                   path="/admin/products"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin', 'admin']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'engineer', 'inventory_staff', 'technical']}>
                       <AdminProductsPage />
                     </AdminRouteGuard>
                   }
@@ -91,7 +91,7 @@ function App() {
                 <Route
                   path="/admin/inventory"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'inventory_staff']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'inventory_staff']}>
                       <AdminInventoryPage />
                     </AdminRouteGuard>
                   }
@@ -99,7 +99,7 @@ function App() {
                 <Route
                   path="/admin/categories"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin', 'admin']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'engineer', 'technical']}>
                       <AdminCategoriesPage />
                     </AdminRouteGuard>
                   }
@@ -107,7 +107,7 @@ function App() {
                 <Route
                   path="/admin/enquiries"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin', 'admin']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'engineer', 'technical']}>
                       <AdminEnquiriesPage />
                     </AdminRouteGuard>
                   }
@@ -115,7 +115,7 @@ function App() {
                 <Route
                   path="/admin/orders"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'inventory_staff']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'engineer', 'inventory_staff']}>
                       <AdminOrdersPage />
                     </AdminRouteGuard>
                   }
@@ -127,7 +127,7 @@ function App() {
                 <Route
                   path="/admin/staff"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'hr']}>
                       <AdminStaffPage />
                     </AdminRouteGuard>
                   }
@@ -135,7 +135,7 @@ function App() {
                 <Route
                   path="/admin/dashboard"
                   element={
-                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'inventory_staff']}>
+                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical']}>
                       <Navigate to="/admin" replace />
                     </AdminRouteGuard>
                   }

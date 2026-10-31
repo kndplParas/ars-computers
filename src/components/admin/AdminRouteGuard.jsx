@@ -39,8 +39,8 @@ export default function AdminRouteGuard({ children, allowedRoles }) {
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = adminUser?.role
     if (!userRole || !allowedRoles.includes(userRole)) {
-      const fallbackPath = userRole === 'inventory_staff' ? '/admin/inventory' : '/admin'
-      const fallbackLabel = userRole === 'inventory_staff' ? 'Inventory Management' : 'Dashboard'
+      const fallbackPath = userRole === 'inventory_staff' ? '/admin/inventory' : userRole === 'hr' ? '/admin/staff' : '/admin'
+      const fallbackLabel = userRole === 'inventory_staff' ? 'Inventory Management' : userRole === 'hr' ? 'Staff Management' : 'Dashboard'
 
       return (
         <div className="admin-page-container" style={{ padding: '60px 24px', minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

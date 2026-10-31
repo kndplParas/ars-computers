@@ -24,11 +24,31 @@ export const INITIAL_DEMO_STAFF = [
   {
     id: 'demo-staff-admin-002',
     email: 'operations.admin@arscomputers.example.com',
-    full_name: 'Store Operations Admin',
-    role: 'admin',
+    full_name: 'Store Service Engineer',
+    role: 'engineer',
     is_active: true,
     created_at: '2026-10-19T08:30:00Z',
     updated_at: '2026-10-19T08:30:00Z',
+    is_demo: true
+  },
+  {
+    id: 'demo-staff-hr-005',
+    email: 'hr.lead@arscomputers.example.com',
+    full_name: 'Personnel HR Lead',
+    role: 'hr',
+    is_active: true,
+    created_at: '2026-10-20T09:00:00Z',
+    updated_at: '2026-10-20T09:00:00Z',
+    is_demo: true
+  },
+  {
+    id: 'demo-staff-technical-006',
+    email: 'tech.support@arscomputers.example.com',
+    full_name: 'Lead Diagnostic Specialist',
+    role: 'technical',
+    is_active: true,
+    created_at: '2026-10-20T10:00:00Z',
+    updated_at: '2026-10-20T10:00:00Z',
     is_demo: true
   },
   {
