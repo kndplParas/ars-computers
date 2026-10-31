@@ -97,6 +97,21 @@ export function formatJobDispatchText(enquiry) {
     if (enquiry.assigned_employee_phone) {
       lines.push(`*Phone:* ${enquiry.assigned_employee_phone}`)
     }
+    if (enquiry.expected_arrival) {
+      lines.push(`*Expected Arrival:* ${enquiry.expected_arrival}`)
+    } else if (enquiry.expected_visit_at) {
+      const visitStr = new Date(enquiry.expected_visit_at).toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      lines.push(`*Expected Visit:* ${visitStr}`)
+    }
+    if (enquiry.assignment_visit_note) {
+      lines.push(`*Visit Note:* ${enquiry.assignment_visit_note}`)
+    }
   }
 
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -115,4 +130,3 @@ export function buildWhatsAppDispatchUrl(enquiry) {
   const text = formatJobDispatchText(enquiry)
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
 }
-

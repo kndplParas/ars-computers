@@ -147,15 +147,13 @@ export default function AdminEnquiriesPage() {
   const [previewProof, setPreviewProof] = useState(null)
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
 
-  // Head Assign Modal — expected visit date/time/note
-  const [assignVisitDate, setAssignVisitDate] = useState('')
-  const [assignVisitTime, setAssignVisitTime] = useState('')
+  // Head Assign Modal — expected arrival duration / visit note
+  const [assignExpectedArrival, setAssignExpectedArrival] = useState('')
   const [assignVisitNote, setAssignVisitNote] = useState('')
 
-  // Self-Assign Confirmation Modal (with optional visit time)
+  // Self-Assign Confirmation Modal (with optional expected arrival duration)
   const [isSelfAssignModalOpen, setIsSelfAssignModalOpen] = useState(false)
-  const [selfVisitDate, setSelfVisitDate] = useState('')
-  const [selfVisitTime, setSelfVisitTime] = useState('')
+  const [selfExpectedArrival, setSelfExpectedArrival] = useState('')
   const [selfVisitNote, setSelfVisitNote] = useState('')
 
   // Phase 2 Activity Timeline & Rejection States
@@ -346,6 +344,14 @@ export default function AdminEnquiriesPage() {
     }
   }
 
+  const handleEmailDispatch = () => {
+    if (!selectedEnquiry) return
+    const text = formatJobDispatchText(selectedEnquiry)
+    const email = selectedEnquiry.assigned_employee_email || ''
+    const subject = `ARS Job Dispatch: Enquiry ${selectedEnquiry.enquiry_number || selectedEnquiry.id}`
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`
+  }
+
   // --- Details Modal Handlers ---
   const reloadProofs = async (enquiryId) => {
     if (!loadEnquiryServiceProofs || !enquiryId) return
@@ -521,9 +527,8 @@ export default function AdminEnquiriesPage() {
   // Opens the self-assign confirmation modal (employee provides optional visit time)
   const handleSelfAssign = () => {
     if (!selectedEnquiry || !isEmployee) return
-    setSelfVisitDate('')
-    setSelfVisitTime('')
-    setSelfVisitNote('')
+    setSelfExpectedArrival(selectedEnquiry.expected_arrival || '')
+    setSelfVisitNote(selectedEnquiry.assignment_visit_note || '')
     setIsSelfAssignModalOpen(true)
   }
 
@@ -533,12 +538,9 @@ export default function AdminEnquiriesPage() {
     if (!selectedEnquiry || !isEmployee) return
     setIsSelfAssigning(true)
     try {
-      let expectedVisitAt = null
-      if (selfVisitDate) {
-        const timeStr = selfVisitTime || '09:00'
-        expectedVisitAt = new Date(`${selfVisitDate}T${timeStr}:00`).toISOString()
-      }
-      await selfAssignEnquiry(selectedEnquiry.id, expectedVisitAt, selfVisitNote.trim() || null)
+      const expectedArrival = selfExpectedArrival || null
+      const visitNote = selfVisitNote.trim() || null
+      await selfAssignEnquiry(selectedEnquiry.id, expectedArrival, visitNote)
       showNotification('Enquiry self-assigned to you successfully.', 'success')
       setSelectedEnquiry((prev) => ({
         ...prev,
@@ -550,8 +552,8 @@ export default function AdminEnquiriesPage() {
         assigned_by: adminUser?.id,
         assigned_by_name: adminUser?.fullName || adminUser?.email,
         assigned_by_employee_code: adminUser?.employee_code || null,
-        expected_visit_at: expectedVisitAt,
-        assignment_visit_note: selfVisitNote.trim() || null
+        expected_arrival: expectedArrival,
+        assignment_visit_note: visitNote
       }))
       setIsSelfAssignModalOpen(false)
       await reloadActivities(selectedEnquiry.id)
@@ -567,6 +569,8 @@ export default function AdminEnquiriesPage() {
     setAssignmentError(null)
     setAssignReason('')
     setSelectedAssigneeId(selectedEnquiry.assigned_employee_id || '')
+    setAssignExpectedArrival(selectedEnquiry.expected_arrival || '')
+    setAssignVisitNote(selectedEnquiry.assignment_visit_note || '')
     setIsAssignModalOpen(true)
     try {
       const list = await loadEligibleEnquiryAssignees()
@@ -583,12 +587,9 @@ export default function AdminEnquiriesPage() {
     setIsSubmittingAssignment(true)
     try {
       const targetId = selectedAssigneeId ? selectedAssigneeId : null
-      let expectedVisitAt = null
-      if (targetId && assignVisitDate) {
-        const timeStr = assignVisitTime || '09:00'
-        expectedVisitAt = new Date(`${assignVisitDate}T${timeStr}:00`).toISOString()
-      }
-      await assignEnquiryEmployee(selectedEnquiry.id, targetId, assignReason, expectedVisitAt, assignVisitNote.trim() || null)
+      const expectedArrival = targetId && assignExpectedArrival ? assignExpectedArrival : null
+      const visitNote = targetId && assignVisitNote.trim() ? assignVisitNote.trim() : null
+      await assignEnquiryEmployee(selectedEnquiry.id, targetId, assignReason, expectedArrival, visitNote)
       const targetStaff = assigneesList.find((s) => s.id === targetId)
 
       setSelectedEnquiry((prev) => ({
@@ -602,8 +603,8 @@ export default function AdminEnquiriesPage() {
         assigned_by: adminUser?.id,
         assigned_by_name: adminUser?.fullName || adminUser?.email,
         assigned_by_employee_code: adminUser?.employee_code || null,
-        expected_visit_at: targetId ? expectedVisitAt : null,
-        assignment_visit_note: targetId ? (assignVisitNote.trim() || null) : null
+        expected_arrival: expectedArrival,
+        assignment_visit_note: visitNote
       }))
 
       showNotification(
@@ -647,6 +648,10 @@ export default function AdminEnquiriesPage() {
     } catch (err) {
       showNotification('Could not copy to clipboard: ' + err.message, 'error')
     }
+  }
+
+  const handleEngineerEmailDispatch = () => {
+    handleEmailDispatch()
   }
 
   // --- Add Follow-Up Note Handler ---
@@ -2836,17 +2841,21 @@ export default function AdminEnquiriesPage() {
                           </div>
                         )}
 
-                        {/* Expected Visit */}
+                        {/* Expected Visit / Arrival */}
                         <div style={{ gridColumn: '1 / -1' }}>
                           <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                            Expected Visit:
+                            Expected Arrival:
                           </span>
-                          {selectedEnquiry.expected_visit_at ? (
+                          {selectedEnquiry.expected_arrival ? (
+                            <span style={{ color: '#0369a1', fontWeight: 600, fontSize: '0.88rem' }}>
+                              ⏱️ {selectedEnquiry.expected_arrival}
+                            </span>
+                          ) : selectedEnquiry.expected_visit_at ? (
                             <span style={{ color: '#0369a1', fontWeight: 600, fontSize: '0.88rem' }}>
                               📅 {formatDateTime(selectedEnquiry.expected_visit_at)}
                             </span>
                           ) : (
-                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>Not scheduled</span>
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>Not specified</span>
                           )}
                           {selectedEnquiry.assignment_visit_note && (
                             <span style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginTop: '2px' }}>
@@ -2934,6 +2943,20 @@ export default function AdminEnquiriesPage() {
                           style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                         >
                           <span>📋</span> Copy Engineer Dispatch
+                        </button>
+                        <button
+                          type="button"
+                          id="engineer-email-dispatch-btn"
+                          className="btn-outline btn-sm"
+                          onClick={handleEngineerEmailDispatch}
+                          title={
+                            selectedEnquiry.assigned_employee_email
+                              ? `Email job details to ${selectedEnquiry.assigned_employee_name || 'Engineer'} (${selectedEnquiry.assigned_employee_email})`
+                              : 'Email job details'
+                          }
+                          style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          <span>✉️</span> Email Dispatch
                         </button>
                       </div>
                     </div>
@@ -3420,6 +3443,41 @@ export default function AdminEnquiriesPage() {
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                       </svg>
                     )}
+                  </button>
+
+                  {/* Circular Email Dispatch Button */}
+                  <button
+                    type="button"
+                    id="email-dispatch-btn"
+                    onClick={handleEmailDispatch}
+                    title={
+                      selectedEnquiry.assigned_employee_email
+                        ? `Email Job Dispatch to ${selectedEnquiry.assigned_employee_name || 'Engineer'} (${selectedEnquiry.assigned_employee_email})`
+                        : 'Email Job Dispatch'
+                    }
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      minWidth: '44px',
+                      minHeight: '44px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: '#4f46e5',
+                      color: '#ffffff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(79, 70, 229, 0.3)',
+                      padding: 0,
+                      transition: 'all 0.15s ease'
+                    }}
+                    aria-label="Email Job Dispatch"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                      <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
                   </button>
                 </div>
 
@@ -4416,41 +4474,31 @@ export default function AdminEnquiriesPage() {
                   </select>
                 </div>
 
-                {/* Expected Visit Date & Time */}
+                {/* Expected Engineer Arrival Dropdown */}
                 {selectedAssigneeId && (
                   <div style={{ marginTop: '12px' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #e2e8f0' }}>
-                      📅 Expected Engineer Visit
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                      <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
-                        <label htmlFor="assign-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                          Visit Date <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
-                        </label>
-                        <input
-                          id="assign-visit-date"
-                          type="date"
-                          className="admin-form-input"
-                          value={assignVisitDate}
-                          onChange={(e) => setAssignVisitDate(e.target.value)}
-                          disabled={isSubmittingAssignment}
-                          style={{ width: '100%', boxSizing: 'border-box' }}
-                        />
-                      </div>
-                      <div className="admin-form-group" style={{ flex: '1 1 130px' }}>
-                        <label htmlFor="assign-visit-time" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                          Arrival Time <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
-                        </label>
-                        <input
-                          id="assign-visit-time"
-                          type="time"
-                          className="admin-form-input"
-                          value={assignVisitTime}
-                          onChange={(e) => setAssignVisitTime(e.target.value)}
-                          disabled={isSubmittingAssignment || !assignVisitDate}
-                          style={{ width: '100%', boxSizing: 'border-box' }}
-                        />
-                      </div>
+                    <div className="admin-form-group">
+                      <label htmlFor="assign-expected-arrival" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                        Expected Engineer Arrival <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <select
+                        id="assign-expected-arrival"
+                        className="admin-form-input"
+                        value={assignExpectedArrival}
+                        onChange={(e) => setAssignExpectedArrival(e.target.value)}
+                        disabled={isSubmittingAssignment}
+                        style={{ width: '100%', boxSizing: 'border-box' }}
+                      >
+                        <option value="">-- Select expected arrival (Optional) --</option>
+                        <option value="Within 1 hour">Within 1 hour</option>
+                        <option value="Within 2 hours">Within 2 hours</option>
+                        <option value="Within 4 hours">Within 4 hours</option>
+                        <option value="Within 6 hours">Within 6 hours</option>
+                        <option value="Within 12 hours">Within 12 hours</option>
+                        <option value="Within 24 hours">Within 24 hours</option>
+                        <option value="Tomorrow">Tomorrow</option>
+                        <option value="To be confirmed">To be confirmed</option>
+                      </select>
                     </div>
                     <div className="admin-form-group" style={{ marginTop: '8px' }}>
                       <label htmlFor="assign-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
@@ -4585,39 +4633,28 @@ export default function AdminEnquiriesPage() {
                   You are about to take responsibility for this enquiry. Your identity will be recorded server-side from your authenticated session.
                 </p>
 
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #e2e8f0' }}>
-                  📅 Expected Arrival (Optional)
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                  <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
-                    <label htmlFor="self-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                      Visit Date
-                    </label>
-                    <input
-                      id="self-visit-date"
-                      type="date"
-                      className="admin-form-input"
-                      value={selfVisitDate}
-                      onChange={(e) => setSelfVisitDate(e.target.value)}
-                      disabled={isSelfAssigning}
-                      style={{ width: '100%', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div className="admin-form-group" style={{ flex: '1 1 120px' }}>
-                    <label htmlFor="self-visit-time" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                      Arrival Time
-                    </label>
-                    <input
-                      id="self-visit-time"
-                      type="time"
-                      className="admin-form-input"
-                      value={selfVisitTime}
-                      onChange={(e) => setSelfVisitTime(e.target.value)}
-                      disabled={isSelfAssigning || !selfVisitDate}
-                      style={{ width: '100%', boxSizing: 'border-box' }}
-                    />
-                  </div>
+                <div className="admin-form-group" style={{ marginBottom: '10px' }}>
+                  <label htmlFor="self-expected-arrival" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                    Expected Engineer Arrival <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                  </label>
+                  <select
+                    id="self-expected-arrival"
+                    className="admin-form-input"
+                    value={selfExpectedArrival}
+                    onChange={(e) => setSelfExpectedArrival(e.target.value)}
+                    disabled={isSelfAssigning}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  >
+                    <option value="">-- Select expected arrival (Optional) --</option>
+                    <option value="Within 1 hour">Within 1 hour</option>
+                    <option value="Within 2 hours">Within 2 hours</option>
+                    <option value="Within 4 hours">Within 4 hours</option>
+                    <option value="Within 6 hours">Within 6 hours</option>
+                    <option value="Within 12 hours">Within 12 hours</option>
+                    <option value="Within 24 hours">Within 24 hours</option>
+                    <option value="Tomorrow">Tomorrow</option>
+                    <option value="To be confirmed">To be confirmed</option>
+                  </select>
                 </div>
 
                 <div className="admin-form-group">

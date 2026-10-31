@@ -26,9 +26,9 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
   }
 
   const allNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Overview', roles: ['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical'] },
-    { id: 'orders', label: 'Orders & Sales', icon: '🛒', badge: `${orders?.length ?? 0} Orders`, roles: ['superadmin', 'admin', 'engineer', 'inventory_staff'] },
-    { id: 'enquiries', label: 'Enquiries', icon: '💬', badge: `${enquiries?.length ?? 0} Leads`, roles: ['superadmin', 'admin', 'engineer', 'technical'] },
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Overview', roles: ['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical', 'account'] },
+    { id: 'orders', label: 'Orders & Sales', icon: '🛒', badge: `${orders?.length ?? 0} Orders`, roles: ['superadmin', 'admin', 'engineer', 'inventory_staff', 'account'] },
+    { id: 'enquiries', label: 'Enquiries', icon: '💬', badge: `${enquiries?.length ?? 0} Leads`, roles: ['superadmin', 'admin', 'engineer', 'technical', 'account'] },
     { id: 'products', label: 'Products', icon: '📦', badge: `${metrics?.products?.total ?? 0} Items`, roles: ['superadmin', 'admin', 'engineer', 'inventory_staff', 'technical'] },
     { id: 'inventory', label: 'Inventory', icon: '⚡', badge: `${(metrics?.products?.lowStock ?? 0) > 0 ? `${metrics.products.lowStock} Low` : 'Stock'}`, roles: ['superadmin', 'inventory_staff'] },
     { id: 'categories', label: 'Categories', icon: '📁', badge: `${categories?.length ?? 0} Groups`, roles: ['superadmin', 'admin', 'engineer', 'technical'] },
@@ -117,6 +117,8 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
                   ? '👥 HR'
                   : adminUser?.role === 'technical'
                   ? '💻 Technical'
+                  : adminUser?.role === 'account'
+                  ? '📊 Account'
                   : adminUser?.role === 'inventory_staff'
                   ? '📦 Inventory Staff'
                   : 'Staff User'}

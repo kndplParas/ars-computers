@@ -259,7 +259,7 @@ export default function AdminStaffPage() {
   // Open Role Assignment Modal
   const handleOpenRoleModal = (member) => {
     setRoleModalTarget(member)
-    setNewSelectedRole(member.role === 'inventory_staff' ? 'inventory_staff' : member.role === 'hr' ? 'hr' : member.role === 'technical' ? 'technical' : 'engineer')
+    setNewSelectedRole(member.role === 'inventory_staff' ? 'inventory_staff' : member.role === 'hr' ? 'hr' : member.role === 'technical' ? 'technical' : member.role === 'account' ? 'account' : 'engineer')
   }
 
   // Submit Role Change
@@ -536,6 +536,8 @@ export default function AdminStaffPage() {
                 <option value="engineer">🛠️ Engineer</option>
                 <option value="hr">👥 HR (Human Resources)</option>
                 <option value="technical">💻 Technical Staff</option>
+                        <option value="account">📊 Account (Finance & Billing)</option>
+                <option value="account">📊 Account / Finance</option>
                 <option value="inventory_staff">📦 Inventory Staff</option>
               </select>
             </div>
@@ -1558,6 +1560,36 @@ export default function AdminStaffPage() {
                       </strong>
                       <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
                         Technical diagnostics, repairs, hardware/software support, service enquiries, and product catalog.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: newSelectedRole === 'account' ? '2px solid #059669' : '1px solid #cbd5e1',
+                      background: newSelectedRole === 'account' ? '#ecfdf5' : '#ffffff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="staffRole"
+                      value="account"
+                      checked={newSelectedRole === 'account'}
+                      onChange={() => setNewSelectedRole('account')}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <strong style={{ display: 'block', color: '#0f172a', fontSize: '0.92rem' }}>
+                        📊 Account (account)
+                      </strong>
+                      <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                        Finance & billing operations, customer orders, payment tracking, and ledger records.
                       </span>
                     </div>
                   </label>

@@ -430,7 +430,8 @@ assert(
 )
 
 assert(
-  dataProviderCode.includes("['admin', 'engineer', 'inventory_staff', 'hr', 'technical']") &&
+  (dataProviderCode.includes("['admin', 'engineer', 'inventory_staff', 'hr', 'technical']") ||
+   dataProviderCode.includes("['admin', 'engineer', 'inventory_staff', 'hr', 'technical', 'account']")) &&
   dataProviderCode.includes('updateStaffRole'),
   'AdminDataProvider.updateStaffRole restricts role updates strictly to permitted roles'
 )

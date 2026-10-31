@@ -1189,7 +1189,7 @@ export function AdminDataProvider({ children }) {
         throw new Error('Validation error: Aadhaar number must be exactly 12 numeric digits.')
       }
 
-      const PERMITTED_ROLES = ['admin', 'engineer', 'inventory_staff', 'hr', 'technical']
+      const PERMITTED_ROLES = ['admin', 'engineer', 'inventory_staff', 'hr', 'technical', 'account']
       if (!PERMITTED_ROLES.includes(role)) {
         throw new Error(`Invalid role assignment: "${role}". Permitted roles are "engineer", "hr", "technical", or "inventory_staff".`)
       }
@@ -1254,7 +1254,7 @@ export function AdminDataProvider({ children }) {
       if (staffId === adminUser?.id) {
         throw new Error('Safety violation: You cannot demote or alter your own superadministrator role.')
       }
-      const PERMITTED_ROLES = ['admin', 'engineer', 'inventory_staff', 'hr', 'technical']
+      const PERMITTED_ROLES = ['admin', 'engineer', 'inventory_staff', 'hr', 'technical', 'account']
       if (!PERMITTED_ROLES.includes(newRole)) {
         throw new Error(`Invalid role assignment: "${newRole}". Permitted roles are "engineer", "hr", "technical", or "inventory_staff".`)
       }
@@ -1460,8 +1460,8 @@ export function AdminDataProvider({ children }) {
   // --- Enquiry Employee Assignment (Phase 4) ---
   // 1. Employee Self-Assignment (Admin / Superadmin: Unassigned active enquiries only)
   const selfAssignEnquiry = useCallback(
-    async (enquiryId) => {
-      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin') {
+    async (enquiryId, expectedArrival = null, visitNote = null) => {
+      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin' && adminUser?.role !== 'engineer' && adminUser?.role !== 'technical') {
         throw new Error('Access denied: Active administrator or technician privileges required to self-assign enquiries.')
       }
 
@@ -1469,7 +1469,10 @@ export function AdminDataProvider({ children }) {
         if (!supabase) throw new Error('Supabase client is not available.')
 
         const { data, error } = await supabase.rpc('self_assign_enquiry', {
-          p_enquiry_id: enquiryId
+          p_enquiry_id: enquiryId,
+          p_expected_visit_at: null,
+          p_visit_note: visitNote || null,
+          p_expected_arrival: expectedArrival || null
         })
 
         if (error) throw error
@@ -1500,6 +1503,8 @@ export function AdminDataProvider({ children }) {
             assigned_by: adminUser?.id,
             assigned_by_name: staffName,
             assigned_by_employee_code: staffCode,
+            expected_arrival: expectedArrival || null,
+            assignment_visit_note: visitNote || null,
             updated_at: now
           }
         })
@@ -1511,7 +1516,7 @@ export function AdminDataProvider({ children }) {
 
   // 2. Head Assign / Reassign / Unassign (Superadmin Only)
   const assignEnquiryEmployee = useCallback(
-    async (enquiryId, employeeId, reason = null) => {
+    async (enquiryId, employeeId, reason = null, expectedArrival = null, visitNote = null) => {
       if (adminUser?.role !== 'superadmin') {
         throw new Error('Access denied: Superadministrator privileges required to assign, reassign, or unassign staff.')
       }
@@ -1522,7 +1527,10 @@ export function AdminDataProvider({ children }) {
         const { data, error } = await supabase.rpc('assign_enquiry_employee', {
           p_enquiry_id: enquiryId,
           p_employee_id: employeeId || null,
-          p_reason: reason || null
+          p_reason: reason || null,
+          p_expected_visit_at: null,
+          p_visit_note: visitNote || null,
+          p_expected_arrival: expectedArrival || null
         })
 
         if (error) throw error
@@ -1546,7 +1554,11 @@ export function AdminDataProvider({ children }) {
                   assigned_employee_name: null,
                   assigned_employee_code: null,
                   assigned_employee_phone: null,
+                  assigned_employee_aadhaar: null,
                   assigned_at: null,
+                  expected_visit_at: null,
+                  expected_arrival: null,
+                  assignment_visit_note: null,
                   assigned_by: adminUser?.id,
                   assigned_by_name: headName,
                   assigned_by_employee_code: headCode,
@@ -1568,10 +1580,13 @@ export function AdminDataProvider({ children }) {
                 assigned_employee_name: target?.full_name || target?.email || 'Staff Member',
                 assigned_employee_code: target?.employee_code || 'EMP',
                 assigned_employee_phone: target?.phone_number || null,
+                assigned_employee_aadhaar: target?.aadhaar_number || null,
                 assigned_at: now,
                 assigned_by: adminUser?.id,
                 assigned_by_name: headName,
                 assigned_by_employee_code: headCode,
+                expected_arrival: expectedArrival || null,
+                assignment_visit_note: visitNote || null,
                 updated_at: now
               }
             : e
@@ -2650,6 +2665,7 @@ export function AdminDataProvider({ children }) {
     const admins = engineers
     const hrStaff = staff.filter((s) => s.role === 'hr').length
     const technicalStaff = staff.filter((s) => s.role === 'technical').length
+    const accountsStaff = staff.filter((s) => s.role === 'account').length
     const inventoryStaff = staff.filter((s) => s.role === 'inventory_staff').length
 
     const totalServiceRequests = serviceRequests.length
@@ -2693,6 +2709,7 @@ export function AdminDataProvider({ children }) {
         engineers,
         hrStaff,
         technicalStaff,
+        accountsStaff,
         inventoryStaff
       },
       serviceRequests: {
@@ -2821,6 +2838,7 @@ export function AdminDataProvider({ children }) {
     isEngineer: adminUser?.role === 'engineer' || adminUser?.role === 'admin',
     isHr: adminUser?.role === 'hr',
     isTechnical: adminUser?.role === 'technical',
+    isAccount: adminUser?.role === 'account',
     isInventoryStaff: adminUser?.role === 'inventory_staff',
     canWriteCatalog: adminUser?.role === 'superadmin',
     canWriteCategories: adminUser?.role === 'superadmin',

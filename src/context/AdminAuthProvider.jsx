@@ -79,7 +79,7 @@ export function AdminAuthProvider({ children }) {
         return null
       }
 
-      const validRoles = ['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical']
+      const validRoles = ['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical', 'account']
       if (!validRoles.includes(profile.role)) {
         console.warn(`[AdminAuth] Access denied: User ${userId} has unauthorized role "${profile.role}".`)
         return null
@@ -250,7 +250,7 @@ export function AdminAuthProvider({ children }) {
    * Safe offline demo sign-in for testing admin functionality when backend is offline.
    */
   const loginOfflineDemo = (role = 'superadmin') => {
-    const validRoles = ['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical']
+    const validRoles = ['superadmin', 'admin', 'engineer', 'inventory_staff', 'hr', 'technical', 'account']
     const assignedRole = validRoles.includes(role) ? role : 'superadmin'
     const profile = {
       id: 'demo-staff-' + assignedRole,

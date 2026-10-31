@@ -49,3 +49,4 @@ test('Staff Profile Target ID Hotfix & Security Invariants', async (t) => {
     assert.match(providerCode, /if\s*\(s\.id === targetStaffId\)/, 'Demo fallback must match targetStaffId')
   })
 })
+
