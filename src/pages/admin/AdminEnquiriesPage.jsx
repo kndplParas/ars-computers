@@ -76,7 +76,7 @@ function getDaysRemaining(scheduledDeletionIso) {
 export default function AdminEnquiriesPage() {
   const { adminUser } = useAdminAuth()
   const isSuperadmin = adminUser?.role === 'superadmin'
-  const isEmployee = adminUser?.role === 'admin'
+  const isEmployee = ['admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)
 
   const {
     enquiries,

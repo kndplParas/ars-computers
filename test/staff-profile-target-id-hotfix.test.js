@@ -39,9 +39,9 @@ test('Staff Profile Target ID Hotfix & Security Invariants', async (t) => {
     assert.match(mig00002, /CREATE OR REPLACE FUNCTION public\.update_staff_profile\(\s*p_user_id UUID,/, 'Migration 00002 must define p_user_id UUID')
   })
 
-  await t.test('7. Superadmin and HR check preserved on updateStaffProfile', () => {
+  await t.test('7. Superadmin check strictly enforced on updateStaffProfile', () => {
     const providerCode = fs.readFileSync(path.join(projectRoot, 'src', 'context', 'AdminDataProvider.jsx'), 'utf8')
-    assert.match(providerCode, /adminUser\?\.role !== 'superadmin' && adminUser\?\.role !== 'hr'/, 'Only superadmin and hr allowed')
+    assert.match(providerCode, /adminUser\?\.role !== 'superadmin'/, 'Only superadmin allowed')
   })
 
   await t.test('8. Demo fallback updates record matching targetStaffId', () => {

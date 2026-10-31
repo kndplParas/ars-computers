@@ -1,4 +1,5 @@
 import { useState, useMemo, useId, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
@@ -39,6 +40,7 @@ function formatDateTime(isoString) {
 
 export default function AdminStaffPage() {
   const { adminUser } = useAdminAuth()
+
   const {
     staff,
     metrics,
@@ -305,6 +307,11 @@ export default function AdminStaffPage() {
   const roleFilterId = useId()
   const statusFilterId = useId()
 
+  // Defense-in-depth: Non-superadmin access strictly prohibited
+  if (adminUser && adminUser.role !== 'superadmin') {
+    return <Navigate to="/admin" replace />
+  }
+
   return (
     <AdminLayout activeTab="staff">
       {/* Toast Notification */}
@@ -536,7 +543,6 @@ export default function AdminStaffPage() {
                 <option value="engineer">🛠️ Engineer</option>
                 <option value="hr">👥 HR (Human Resources)</option>
                 <option value="technical">💻 Technical Staff</option>
-                        <option value="account">📊 Account (Finance & Billing)</option>
                 <option value="account">📊 Account / Finance</option>
                 <option value="inventory_staff">📦 Inventory Staff</option>
               </select>
@@ -1338,9 +1344,9 @@ export default function AdminStaffPage() {
                           style={{ marginTop: '3px' }}
                         />
                         <div>
-                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>👥 HR (Human Resources & Personnel)</strong>
+                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>👥 HR (Human Resources)</strong>
                           <div style={{ color: '#64748b', fontSize: '0.8rem' }}>
-                            Staff profiles, personnel directory, Aadhaar records, and administrative onboarding.
+                            Human Resources personnel. Operates with service and field operational permissions (orders, service enquiries, visits, catalog).
                           </div>
                         </div>
                       </label>
@@ -1529,7 +1535,7 @@ export default function AdminStaffPage() {
                         👥 HR (hr)
                       </strong>
                       <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                        Can manage staff profiles, employee directory, Aadhaar records, and onboarding.
+                        Human Resources personnel. Operates with service and field operational permissions (orders, service enquiries, visits, catalog).
                       </span>
                     </div>
                   </label>
@@ -2128,6 +2134,7 @@ export default function AdminStaffPage() {
                         )}
                         <option value="hr">👥 HR (Human Resources)</option>
                         <option value="technical">💻 Technical Staff</option>
+                        <option value="account">📊 Account (Finance & Billing)</option>
                         <option value="inventory_staff">📦 Inventory Staff</option>
                         {profileModalTarget.role === 'superadmin' && (
                           <option value="superadmin">🛡️ Superadmin</option>

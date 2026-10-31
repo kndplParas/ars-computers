@@ -10,6 +10,9 @@ import { INITIAL_DEMO_STAFF } from '../data/mockStaff'
 import { INITIAL_DEMO_SERVICE_REQUESTS } from '../data/mockServiceRequests'
 import { normalizeAadhaar, validateAadhaar } from '../utils/aadhaarFormatter'
 
+const ALL_STAFF_ROLES = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff']
+const OPERATIONAL_ROLES = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account']
+
 const STORAGE_KEYS = {
   PRODUCTS: 'ars_admin_demo_products_v1',
   CATEGORIES: 'ars_admin_demo_categories_v1',
@@ -246,7 +249,7 @@ export function AdminDataProvider({ children }) {
 
     // Strict confidentiality & authorization: Only superadmin and admin can view enquiries
     const role = adminUser?.role
-    if (role !== 'superadmin' && role !== 'admin') {
+    if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
       setLiveEnquiries([])
       setEnquiriesError(null)
       return
@@ -334,7 +337,7 @@ export function AdminDataProvider({ children }) {
     if (!isLiveDatabase) return
 
     const role = adminUser?.role
-    if (role !== 'superadmin' && role !== 'admin' && role !== 'inventory_staff') {
+    if (!ALL_STAFF_ROLES.includes(role)) {
       setLiveServiceRequests([])
       setServiceRequestsError(null)
       return
@@ -412,7 +415,7 @@ export function AdminDataProvider({ children }) {
       if (isLiveDatabase) {
         loadAdminCategories()
         loadAdminProducts({ page: 1, limit: 50 })
-        if (adminUser?.role === 'superadmin' || adminUser?.role === 'admin') {
+        if (['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
           loadAdminEnquiries()
         } else {
           setLiveEnquiries([])
@@ -422,7 +425,7 @@ export function AdminDataProvider({ children }) {
         } else {
           setLiveStaff([])
         }
-        if (adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'inventory_staff') {
+        if (ALL_STAFF_ROLES.includes(adminUser?.role)) {
           loadAdminServiceRequests()
           loadAdminOrders()
         } else {
@@ -742,8 +745,8 @@ export function AdminDataProvider({ children }) {
   // 1. Add Timestamped Follow-up Note (Admin & Superadmin)
   const addEnquiryNote = useCallback(
     async (enquiryId, content) => {
-      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin') {
-        throw new Error('Access denied: Administrator privileges required to add enquiry notes.')
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
+        throw new Error('Access denied: Authorized staff privileges required to add enquiry notes.')
       }
 
       if (isLiveDatabase) {
@@ -775,8 +778,8 @@ export function AdminDataProvider({ children }) {
   // 2. Update Operational Progress (Admin & Superadmin, subject to state rules)
   const updateEnquiryProgress = useCallback(
     async (enquiryId, nextStatus) => {
-      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin') {
-        throw new Error('Access denied: Administrator privileges required to update enquiry progress.')
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
+        throw new Error('Access denied: Authorized staff privileges required to update enquiry progress.')
       }
 
       if (isLiveDatabase) {
@@ -805,8 +808,8 @@ export function AdminDataProvider({ children }) {
   // 3. Request Rejection with Mandatory Reason (Admin & Superadmin)
   const requestEnquiryRejection = useCallback(
     async (enquiryId, reason) => {
-      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin') {
-        throw new Error('Access denied: Administrator privileges required to request rejection.')
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
+        throw new Error('Access denied: Authorized staff privileges required to request rejection.')
       }
 
       if (isLiveDatabase) {
@@ -960,8 +963,8 @@ export function AdminDataProvider({ children }) {
   const submitEnquiryCompletion = useCallback(
     async (enquiryId, completionSummary) => {
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
-        throw new Error('Access denied: Administrator privileges required to submit work completion.')
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
+        throw new Error('Access denied: Authorized staff privileges required to submit work completion.')
       }
 
       if (isLiveDatabase) {
@@ -1356,8 +1359,8 @@ export function AdminDataProvider({ children }) {
     }) => {
       const targetStaffId = staffId || id
 
-      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'hr') {
-        throw new Error('Unauthorized: Only superadministrators and HR can update staff profiles.')
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only superadministrators can update staff profiles.')
       }
 
       if (!targetStaffId) {
@@ -1461,7 +1464,7 @@ export function AdminDataProvider({ children }) {
   // 1. Employee Self-Assignment (Admin / Superadmin: Unassigned active enquiries only)
   const selfAssignEnquiry = useCallback(
     async (enquiryId, expectedArrival = null, visitNote = null, expectedVisitAt = null) => {
-      if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin' && adminUser?.role !== 'engineer' && adminUser?.role !== 'technical') {
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
         throw new Error('Access denied: Active administrator or technician privileges required to self-assign enquiries.')
       }
 
@@ -1618,7 +1621,7 @@ export function AdminDataProvider({ children }) {
       }
 
       return (demoStaff || []).filter(
-        (s) => s.is_active && (s.role === 'superadmin' || s.role === 'admin')
+        (s) => s.is_active && ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(s.role)
       )
     },
     [isLiveDatabase, demoStaff]
@@ -2015,8 +2018,8 @@ export function AdminDataProvider({ children }) {
   const createSalesOrder = useCallback(
     async ({ customer_name, contact_info, items, paid_amount = 0, payment_method = 'cash', employee_remarks = null }) => {
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
-        throw new Error('Access denied: Active administrator or store employee privileges required to create orders.')
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
+        throw new Error('Access denied: Active staff privileges required to create orders.')
       }
 
       if (isLiveDatabase) {
@@ -2082,8 +2085,8 @@ export function AdminDataProvider({ children }) {
   const startSalesOrder = useCallback(
     async (orderId) => {
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
-        throw new Error('Access denied: Administrator privileges required to process orders.')
+      if (!OPERATIONAL_ROLES.includes(role)) {
+        throw new Error('Access denied: Staff privileges required to process orders.')
       }
 
       if (isLiveDatabase) {
@@ -2108,8 +2111,8 @@ export function AdminDataProvider({ children }) {
   const submitOrderCompletion = useCallback(
     async (orderId, employeeRemarks) => {
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
-        throw new Error('Access denied: Administrator privileges required.')
+      if (!OPERATIONAL_ROLES.includes(role)) {
+        throw new Error('Access denied: Staff privileges required.')
       }
 
       if (isLiveDatabase) {
@@ -2232,8 +2235,8 @@ export function AdminDataProvider({ children }) {
   const recordOrderPayment = useCallback(
     async ({ orderId, amountReceived, paymentMethod = 'cash', transactionReference = null, remarks = null }) => {
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
-        throw new Error('Access denied: Active administrator or store employee privileges required to record payments.')
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
+        throw new Error('Access denied: Active staff privileges required to record payments.')
       }
 
       const numAmount = Number(amountReceived)
@@ -2345,7 +2348,7 @@ export function AdminDataProvider({ children }) {
     async (orderId, files) => {
       if (!files || files.length === 0) return []
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
         throw new Error('Access denied: Staff privileges required to upload order attachments.')
       }
 
@@ -2461,7 +2464,7 @@ export function AdminDataProvider({ children }) {
       const _docType = documentType || 'CUSTOMER_SIGNED_SERVICE_REPORT'
       const _desc = description || ''
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
         throw new Error('Access denied: Staff privileges required to upload service proofs.')
       }
       if (!file) throw new Error('No file provided.')
@@ -2569,7 +2572,7 @@ export function AdminDataProvider({ children }) {
   const voidEnquiryServiceProof = useCallback(
     async (proofId, voidReason) => {
       const role = adminUser?.role
-      if (role !== 'superadmin' && role !== 'admin') {
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
         throw new Error('Access denied: Staff privileges required to void service proofs.')
       }
       if (isLiveDatabase) {
@@ -2590,13 +2593,13 @@ export function AdminDataProvider({ children }) {
   const resetDemoData = useCallback(() => {
     if (isLiveDatabase) {
       loadAdminProducts({ page: 1, limit: 50 })
-      if (adminUser?.role === 'superadmin' || adminUser?.role === 'admin') {
+      if (['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
         loadAdminEnquiries()
       }
       if (adminUser?.role === 'superadmin') {
         loadAdminStaff()
       }
-      if (adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'inventory_staff') {
+      if (['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff'].includes(adminUser?.role)) {
         loadAdminServiceRequests()
         loadAdminOrders()
       }
@@ -2836,18 +2839,18 @@ export function AdminDataProvider({ children }) {
 
     // Role Permission Capabilities
     isSuperadmin: adminUser?.role === 'superadmin',
-    isAdminEmployee: adminUser?.role === 'admin' || adminUser?.role === 'engineer',
-    isEngineer: adminUser?.role === 'engineer' || adminUser?.role === 'admin',
+    isAdminEmployee: adminUser?.role === 'admin',
+    isEngineer: ['engineer', 'technical', 'hr', 'account'].includes(adminUser?.role),
     isHr: adminUser?.role === 'hr',
     isTechnical: adminUser?.role === 'technical',
     isAccount: adminUser?.role === 'account',
     isInventoryStaff: adminUser?.role === 'inventory_staff',
     canWriteCatalog: adminUser?.role === 'superadmin',
     canWriteCategories: adminUser?.role === 'superadmin',
-    canWriteEnquiries: adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'engineer' || adminUser?.role === 'technical',
+    canWriteEnquiries: adminUser?.role === 'superadmin',
     canWriteInventory: adminUser?.role === 'superadmin' || adminUser?.role === 'inventory_staff',
-    canManageStaff: adminUser?.role === 'superadmin' || adminUser?.role === 'hr',
-    canCreateOrders: adminUser?.role === 'superadmin' || adminUser?.role === 'admin' || adminUser?.role === 'engineer',
+    canManageStaff: adminUser?.role === 'superadmin',
+    canCreateOrders: ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role),
 
     // Global
     metrics,

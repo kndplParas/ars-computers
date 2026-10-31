@@ -50,7 +50,7 @@ function AdminDashboardPage() {
   } = useAdminData()
 
   const userRole = adminUser?.role || 'inventory_staff'
-  const isSuperadminOrAdmin = userRole === 'superadmin' || userRole === 'admin'
+  const isSuperadminOrAdmin = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(userRole)
 
   // Load operational dashboard datasets on mount
   useEffect(() => {
@@ -106,7 +106,7 @@ function AdminDashboardPage() {
               >
                 + Manage Products
               </button>
-            ) : userRole === 'admin' ? (
+            ) : ['admin', 'technical', 'engineer', 'hr', 'account'].includes(userRole) ? (
               <button
                 type="button"
                 className="btn-primary btn-sm"

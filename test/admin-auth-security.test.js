@@ -362,7 +362,7 @@ const layoutPath = path.join(projectRoot, 'src', 'components', 'admin', 'AdminLa
 const layoutCode = fs.readFileSync(layoutPath, 'utf8')
 
 assert(
-  layoutCode.includes("roles: ['superadmin', 'admin', 'engineer', 'technical']") &&
+  layoutCode.includes("roles: ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account']") &&
   layoutCode.includes('navItems') &&
   layoutCode.includes('item.roles.includes(userRole)'),
   'AdminLayout filters navigation items by user role, hiding categories and enquiries from inventory_staff'
@@ -402,15 +402,15 @@ const staffPageCode = staffPageExists ? fs.readFileSync(staffPagePath, 'utf8') :
 const staffRouteIdx = appCode.indexOf('path="/admin/staff"')
 const staffRouteSnippet = staffRouteIdx !== -1 ? appCode.slice(staffRouteIdx, staffRouteIdx + 200) : ''
 assert(
-  staffRouteSnippet.includes("allowedRoles={['superadmin', 'hr']}"),
-  "/admin/staff route is strictly restricted to allowedRoles={['superadmin', 'hr']}"
+  staffRouteSnippet.includes("allowedRoles={['superadmin']}"),
+  "/admin/staff route is strictly restricted to allowedRoles={['superadmin']}"
 )
 
 // Nav restriction
 assert(
   layoutCode.includes("id: 'staff'") &&
-  layoutCode.includes("roles: ['superadmin', 'hr']"),
-  'AdminLayout restricts staff navigation strictly to superadmin and hr roles'
+  layoutCode.includes("roles: ['superadmin']"),
+  'AdminLayout restricts staff navigation strictly to superadmin role'
 )
 
 // Data provider superadmin gating
