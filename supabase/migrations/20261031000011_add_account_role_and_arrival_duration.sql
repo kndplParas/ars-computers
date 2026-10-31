@@ -659,3 +659,4 @@ $$;
 
 REVOKE ALL ON FUNCTION public.self_assign_enquiry(UUID, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.self_assign_enquiry(UUID, TIMESTAMPTZ, TEXT, TEXT) TO authenticated;
+

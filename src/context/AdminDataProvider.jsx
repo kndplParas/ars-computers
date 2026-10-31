@@ -1460,7 +1460,7 @@ export function AdminDataProvider({ children }) {
   // --- Enquiry Employee Assignment (Phase 4) ---
   // 1. Employee Self-Assignment (Admin / Superadmin: Unassigned active enquiries only)
   const selfAssignEnquiry = useCallback(
-    async (enquiryId, expectedArrival = null, visitNote = null) => {
+    async (enquiryId, expectedArrival = null, visitNote = null, expectedVisitAt = null) => {
       if (adminUser?.role !== 'superadmin' && adminUser?.role !== 'admin' && adminUser?.role !== 'engineer' && adminUser?.role !== 'technical') {
         throw new Error('Access denied: Active administrator or technician privileges required to self-assign enquiries.')
       }
@@ -1470,7 +1470,7 @@ export function AdminDataProvider({ children }) {
 
         const { data, error } = await supabase.rpc('self_assign_enquiry', {
           p_enquiry_id: enquiryId,
-          p_expected_visit_at: null,
+          p_expected_visit_at: expectedVisitAt || null,
           p_visit_note: visitNote || null,
           p_expected_arrival: expectedArrival || null
         })
@@ -1503,6 +1503,7 @@ export function AdminDataProvider({ children }) {
             assigned_by: adminUser?.id,
             assigned_by_name: staffName,
             assigned_by_employee_code: staffCode,
+            expected_visit_at: expectedVisitAt || null,
             expected_arrival: expectedArrival || null,
             assignment_visit_note: visitNote || null,
             updated_at: now
@@ -1516,7 +1517,7 @@ export function AdminDataProvider({ children }) {
 
   // 2. Head Assign / Reassign / Unassign (Superadmin Only)
   const assignEnquiryEmployee = useCallback(
-    async (enquiryId, employeeId, reason = null, expectedArrival = null, visitNote = null) => {
+    async (enquiryId, employeeId, reason = null, expectedArrival = null, visitNote = null, expectedVisitAt = null) => {
       if (adminUser?.role !== 'superadmin') {
         throw new Error('Access denied: Superadministrator privileges required to assign, reassign, or unassign staff.')
       }
@@ -1528,7 +1529,7 @@ export function AdminDataProvider({ children }) {
           p_enquiry_id: enquiryId,
           p_employee_id: employeeId || null,
           p_reason: reason || null,
-          p_expected_visit_at: null,
+          p_expected_visit_at: expectedVisitAt || null,
           p_visit_note: visitNote || null,
           p_expected_arrival: expectedArrival || null
         })
@@ -1585,6 +1586,7 @@ export function AdminDataProvider({ children }) {
                 assigned_by: adminUser?.id,
                 assigned_by_name: headName,
                 assigned_by_employee_code: headCode,
+                expected_visit_at: expectedVisitAt || null,
                 expected_arrival: expectedArrival || null,
                 assignment_visit_note: visitNote || null,
                 updated_at: now

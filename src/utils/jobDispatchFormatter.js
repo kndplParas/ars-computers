@@ -97,7 +97,15 @@ export function formatJobDispatchText(enquiry) {
     if (enquiry.assigned_employee_phone) {
       lines.push(`*Phone:* ${enquiry.assigned_employee_phone}`)
     }
-    if (enquiry.expected_arrival) {
+    if (enquiry.expected_visit_at && enquiry.expected_arrival) {
+      const dateStr = new Date(enquiry.expected_visit_at).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      })
+      lines.push(`*Arrival Date:* ${dateStr}`)
+      lines.push(`*Expected Arrival:* ${enquiry.expected_arrival}`)
+    } else if (enquiry.expected_arrival) {
       lines.push(`*Expected Arrival:* ${enquiry.expected_arrival}`)
     } else if (enquiry.expected_visit_at) {
       const visitStr = new Date(enquiry.expected_visit_at).toLocaleString('en-IN', {

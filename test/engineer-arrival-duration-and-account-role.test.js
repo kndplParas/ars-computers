@@ -34,16 +34,16 @@ test('Expected Engineer Arrival Duration & Account Role Regression Suite', async
     'To be confirmed'
   ]
 
-  await t.test('1. Assign Enquiry Engineer modal removes exact date and time inputs', () => {
-    assert.doesNotMatch(
+  await t.test('1. Assign Enquiry Engineer modal provides optional Arrival Date and removes clock time input', () => {
+    assert.match(
       enquiriesPageCode,
       /id="assign-visit-date"/,
-      'Assign modal must not contain assign-visit-date input'
+      'Assign modal must provide assign-visit-date input'
     )
     assert.doesNotMatch(
       enquiriesPageCode,
       /id="assign-visit-time"/,
-      'Assign modal must not contain assign-visit-time input'
+      'Assign modal must not contain exact assign-visit-time clock input'
     )
   })
 
@@ -59,9 +59,9 @@ test('Expected Engineer Arrival Duration & Account Role Regression Suite', async
     }
   })
 
-  await t.test('3. Self-assign modal has Expected Engineer Arrival dropdown with all 8 options', () => {
+  await t.test('3. Self-assign modal has Arrival Date and Expected Engineer Arrival dropdown with all 8 options', () => {
     assert.match(enquiriesPageCode, /id="self-expected-arrival"/, 'Must have self-expected-arrival select element')
-    assert.doesNotMatch(enquiriesPageCode, /id="self-visit-date"/, 'Self-assign must not contain self-visit-date input')
+    assert.match(enquiriesPageCode, /id="self-visit-date"/, 'Self-assign must contain self-visit-date input')
     assert.doesNotMatch(enquiriesPageCode, /id="self-visit-time"/, 'Self-assign must not contain self-visit-time input')
 
     for (const opt of EXPECTED_OPTIONS) {
@@ -98,18 +98,20 @@ test('Expected Engineer Arrival Duration & Account Role Regression Suite', async
     )
   })
 
-  await t.test('7. jobDispatchFormatter includes expected arrival duration in plain text dispatch', () => {
+  await t.test('7. jobDispatchFormatter includes expected arrival duration and date in plain text dispatch', () => {
     const enquiryWithDuration = {
       enquiry_number: 'ENQ-2026-001',
       name: 'Ramesh Sharma',
       contact_info: '9876543210',
       assigned_employee_name: 'Divyanshu Prasad',
       assigned_employee_phone: '7900639360',
+      expected_visit_at: '2026-11-01T09:00:00.000Z',
       expected_arrival: 'Within 2 hours',
       assignment_visit_note: 'Bring thermal paste and multimeter'
     }
 
     const text = formatJobDispatchText(enquiryWithDuration)
+    assert.match(text, /\*Arrival Date:\* 1 Nov 2026/, 'Dispatch text must contain Arrival Date')
     assert.match(text, /\*Expected Arrival:\* Within 2 hours/, 'Dispatch text must contain Expected Arrival')
     assert.match(text, /\*Visit Note:\* Bring thermal paste and multimeter/, 'Dispatch text must contain Visit Note')
   })
@@ -207,3 +209,4 @@ test('Expected Engineer Arrival Duration & Account Role Regression Suite', async
     }
   })
 })
+
