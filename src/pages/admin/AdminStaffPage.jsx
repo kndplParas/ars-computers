@@ -654,7 +654,7 @@ export default function AdminStaffPage() {
                 <th>Email Address</th>
                 <th>Phone (WhatsApp)</th>
                 <th>Emp. Code</th>
-                <th>Aadhaar</th>
+                <th>Aadhaar (Optional)</th>
                 <th>Assigned Role</th>
                 <th>Account Status</th>
                 <th>Date Added</th>
@@ -813,7 +813,7 @@ export default function AdminStaffPage() {
                         )}
                       </td>
 
-                      {/* Aadhaar status column — only shows Added/Not Added, never the actual number */}
+                      {/* Aadhaar status column — explicitly marked optional */}
                       <td>
                         {member.aadhaar_number ? (
                           <span
@@ -828,8 +828,9 @@ export default function AdminStaffPage() {
                               fontSize: '0.78rem',
                               fontWeight: 600
                             }}
+                            title="Aadhaar ID on file"
                           >
-                            ✓ Added
+                            ✓ On File
                           </span>
                         ) : (
                           <span
@@ -839,12 +840,14 @@ export default function AdminStaffPage() {
                               gap: '4px',
                               padding: '2px 8px',
                               borderRadius: '10px',
-                              background: '#f1f5f9',
-                              color: '#94a3b8',
+                              background: '#f8fafc',
+                              border: '1px dashed #cbd5e1',
+                              color: '#64748b',
                               fontSize: '0.78rem'
                             }}
+                            title="Optional identification — not required"
                           >
-                            — Not Added
+                            Optional / None
                           </span>
                         )}
                       </td>
@@ -1265,14 +1268,14 @@ export default function AdminStaffPage() {
                       type="text"
                       inputMode="numeric"
                       className="admin-form-input"
-                      placeholder="e.g. 1234 5678 9012"
+                      placeholder="e.g. 1234 5678 9012 (Optional)"
                       value={inviteForm.aadhaarNumber}
                       onChange={(e) => setInviteForm({ ...inviteForm, aadhaarNumber: e.target.value })}
                       disabled={isRegistering}
                       maxLength={14}
                     />
                     <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '3px' }}>
-                      Spaces and hyphens accepted. Stored as 12 numeric digits. Restricted access — Head only.
+                      Optional identification. Leave blank if not available. Stored as 12 numeric digits if provided.
                     </small>
                   </div>
 
@@ -2043,7 +2046,7 @@ export default function AdminStaffPage() {
                       type={showAadhaarInModal ? 'text' : 'password'}
                       inputMode="numeric"
                       className="admin-form-input"
-                      placeholder={showAadhaarInModal ? 'e.g. 1234 5678 9012' : '••••••••••••'}
+                      placeholder={showAadhaarInModal ? 'e.g. 1234 5678 9012 (Optional)' : '••••••••••••'}
                       value={profileForm.aadhaarNumber}
                       onChange={(e) => setProfileForm({ ...profileForm, aadhaarNumber: e.target.value })}
                       disabled={isSubmittingProfile}
@@ -2051,7 +2054,7 @@ export default function AdminStaffPage() {
                       style={{ width: '100%', boxSizing: 'border-box', fontFamily: showAadhaarInModal ? 'inherit' : 'monospace' }}
                     />
                     <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '3px' }}>
-                      Spaces/hyphens accepted. Stored as 12 numeric digits. Clear to remove existing Aadhaar.
+                      Optional identification. Clear field to remove existing Aadhaar. Staff functions normally without Aadhaar.
                     </small>
                   </div>
                 </div>
