@@ -8,6 +8,7 @@ import { CATEGORIES as INITIAL_CATEGORIES } from '../data/categories'
 import { INITIAL_DEMO_ENQUIRIES } from '../data/mockEnquiries'
 import { INITIAL_DEMO_STAFF } from '../data/mockStaff'
 import { INITIAL_DEMO_SERVICE_REQUESTS } from '../data/mockServiceRequests'
+import { normalizeAadhaar, validateAadhaar } from '../utils/aadhaarFormatter'
 
 const STORAGE_KEYS = {
   PRODUCTS: 'ars_admin_demo_products_v1',
@@ -309,7 +310,7 @@ export function AdminDataProvider({ children }) {
 
       const { data, error } = await supabase
         .from('admin_users')
-        .select('id, email, full_name, role, is_active, employee_code, phone_number, created_at, updated_at')
+        .select('id, email, full_name, role, is_active, employee_code, phone_number, aadhaar_number, created_at, updated_at')
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -1180,7 +1181,13 @@ export function AdminDataProvider({ children }) {
         throw new Error('Staff full name must be between 2 and 100 characters.')
       }
 
+      const cleanCode = typeof employeeCode === 'string' && employeeCode.trim() !== '' ? employeeCode.trim() : null
       const cleanPhone = typeof phoneNumber === 'string' && phoneNumber.trim() !== '' ? phoneNumber.trim() : null
+      const cleanAadhaar = typeof aadhaarNumber === 'string' && aadhaarNumber.trim() !== '' ? normalizeAadhaar(aadhaarNumber) : null
+
+      if (cleanAadhaar && !validateAadhaar(cleanAadhaar)) {
+        throw new Error('Validation error: Aadhaar number must be exactly 12 numeric digits.')
+      }
 
       const PERMITTED_ROLES = ['admin', 'inventory_staff']
       if (!PERMITTED_ROLES.includes(role)) {
@@ -1197,14 +1204,14 @@ export function AdminDataProvider({ children }) {
           role,
           is_active: true
         }
-        if (cleanPhone) {
-          insertPayload.phone_number = cleanPhone
-        }
+        if (cleanCode) insertPayload.employee_code = cleanCode
+        if (cleanPhone) insertPayload.phone_number = cleanPhone
+        if (cleanAadhaar) insertPayload.aadhaar_number = cleanAadhaar
 
         const { data, error } = await supabase
           .from('admin_users')
           .insert(insertPayload)
-          .select('id, email, full_name, role, is_active, employee_code, phone_number, created_at, updated_at')
+          .select('id, email, full_name, role, is_active, employee_code, phone_number, aadhaar_number, created_at, updated_at')
           .single()
 
         if (error) {
@@ -1259,7 +1266,7 @@ export function AdminDataProvider({ children }) {
           .from('admin_users')
           .update({ role: newRole })
           .eq('id', staffId)
-          .select('id, email, full_name, role, is_active, employee_code, phone_number, created_at, updated_at')
+          .select('id, email, full_name, role, is_active, employee_code, phone_number, aadhaar_number, created_at, updated_at')
           .single()
 
         if (error) {
@@ -1333,6 +1340,85 @@ export function AdminDataProvider({ children }) {
       )
     },
     [isLiveDatabase, adminUser, liveStaff, demoStaff]
+  )
+
+  // --- Update Staff Profile (Superadmin Only, Head-Controlled Profile Editor) ---
+  const updateStaffProfile = useCallback(
+    async ({
+      staffId,
+      fullName,
+      employeeCode = null,
+      phoneNumber = null,
+      aadhaarNumber = null,
+      role = null,
+      isActive = null
+    }) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only superadministrators can update staff profiles.')
+      }
+
+      if (!staffId) {
+        throw new Error('Validation error: Target staff ID is required.')
+      }
+
+      if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.trim().length > 100) {
+        throw new Error('Staff full name must be between 2 and 100 characters.')
+      }
+
+      const cleanCode = typeof employeeCode === 'string' && employeeCode.trim() !== '' ? employeeCode.trim() : null
+      const cleanPhone = typeof phoneNumber === 'string' && phoneNumber.trim() !== '' ? phoneNumber.trim() : null
+      const cleanAadhaar = typeof aadhaarNumber === 'string' && aadhaarNumber.trim() !== '' ? normalizeAadhaar(aadhaarNumber) : null
+
+      if (cleanAadhaar && !validateAadhaar(cleanAadhaar)) {
+        throw new Error('Validation error: Aadhaar number must be exactly 12 numeric digits.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('update_staff_profile', {
+          p_target_user_id: staffId,
+          p_full_name: fullName.trim(),
+          p_employee_code: cleanCode,
+          p_phone_number: cleanPhone,
+          p_aadhaar_number: cleanAadhaar,
+          p_role: role || null,
+          p_is_active: typeof isActive === 'boolean' ? isActive : null
+        })
+
+        if (error) {
+          console.error('[AdminDataProvider] Failed to update staff profile via RPC:', error)
+          throw error
+        }
+
+        // Refresh cached staff table
+        if (loadAdminStaff) {
+          await loadAdminStaff()
+        }
+
+        return data
+      }
+
+      // Demo state fallback
+      const updated = demoStaff.map((s) => {
+        if (s.id === staffId) {
+          return {
+            ...s,
+            full_name: fullName.trim(),
+            employee_code: cleanCode,
+            phone_number: cleanPhone,
+            aadhaar_number: cleanAadhaar,
+            ...(role ? { role } : {}),
+            ...(typeof isActive === 'boolean' ? { is_active: isActive } : {}),
+            updated_at: new Date().toISOString()
+          }
+        }
+        return s
+      })
+      setDemoStaff(updated)
+      return { success: true, message: 'Profile updated in demo mode.' }
+    },
+    [isLiveDatabase, adminUser, loadAdminStaff, demoStaff]
   )
 
   // --- Update Staff Phone Number (Superadmin Only, for Engineer WhatsApp Dispatch) ---
@@ -2345,6 +2431,141 @@ export function AdminDataProvider({ children }) {
     [isLiveDatabase]
   )
 
+  // ============================================================
+  // SERVICE PROOF FUNCTIONS (Step 2)
+  // ============================================================
+
+  // Upload a service proof file and register metadata via RPC.
+  const uploadEnquiryServiceProof = useCallback(
+    async (enquiryId, file, description, documentType) => {
+      const _docType = documentType || 'CUSTOMER_SIGNED_SERVICE_REPORT'
+      const _desc = description || ''
+      const role = adminUser?.role
+      if (role !== 'superadmin' && role !== 'admin') {
+        throw new Error('Access denied: Staff privileges required to upload service proofs.')
+      }
+      if (!file) throw new Error('No file provided.')
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error('File exceeds 10 MB size limit.')
+      }
+      const ext = file.name.split('.').pop().toLowerCase()
+      const cleanExt = ext === 'jpeg' ? 'jpg' : ext
+      const allowedMime = ['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)
+      const allowedExt = ['jpg', 'png', 'pdf'].includes(cleanExt)
+      if (!allowedMime || !allowedExt) {
+        throw new Error('Only JPG, PNG, and PDF files are supported.')
+      }
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const randomId = crypto.randomUUID()
+        const storagePath = enquiryId + '/' + randomId + '.' + cleanExt
+        const mimeType = file.type || (cleanExt === 'pdf' ? 'application/pdf' : 'image/jpeg')
+        const { error: uploadError } = await supabase.storage
+          .from('enquiry-service-proofs')
+          .upload(storagePath, file, { cacheControl: '3600', upsert: false })
+        if (uploadError) {
+          throw new Error('Failed to upload file: ' + uploadError.message)
+        }
+        const { data: metaData, error: metaError } = await supabase.rpc(
+          'register_enquiry_service_proof',
+          {
+            p_enquiry_id: enquiryId,
+            p_storage_path: storagePath,
+            p_original_filename: file.name,
+            p_mime_type: mimeType,
+            p_file_size_bytes: file.size,
+            p_document_type: _docType,
+            p_description: _desc || null
+          }
+        )
+        if (metaError) {
+          try {
+            await supabase.storage.from('enquiry-service-proofs').remove([storagePath])
+          } catch {
+            // Best-effort cleanup
+          }
+          throw new Error('Failed to record proof metadata: ' + metaError.message)
+        }
+        return metaData
+      }
+      // Demo mode
+      return {
+        id: crypto.randomUUID(),
+        enquiry_id: enquiryId,
+        storage_path: enquiryId + '/' + crypto.randomUUID() + '.' + cleanExt,
+        original_filename: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        file_size_bytes: file.size,
+        document_type: _docType,
+        description: _desc || null,
+        uploaded_by: adminUser?.id,
+        uploaded_by_name: adminUser?.full_name || 'Store Employee',
+        uploaded_by_employee_code: adminUser?.employee_code || null,
+        uploaded_at: new Date().toISOString(),
+        is_voided: false,
+        created_at: new Date().toISOString()
+      }
+    },
+    [isLiveDatabase, adminUser]
+  )
+
+  // Load all non-voided service proofs for an enquiry
+  const loadEnquiryServiceProofs = useCallback(
+    async (enquiryId) => {
+      if (!enquiryId) return []
+      if (isLiveDatabase) {
+        if (!supabase) return []
+        const { data, error } = await supabase
+          .from('enquiry_service_proofs')
+          .select('*')
+          .eq('enquiry_id', enquiryId)
+          .eq('is_voided', false)
+          .order('uploaded_at', { ascending: true })
+        if (error) throw error
+        return data || []
+      }
+      return []
+    },
+    [isLiveDatabase]
+  )
+
+  // Generate a short-lived signed URL for downloading/previewing a proof
+  const getEnquiryServiceProofSignedUrl = useCallback(
+    async (storagePath, filename) => {
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.storage
+          .from('enquiry-service-proofs')
+          .createSignedUrl(storagePath, 600, { download: filename || false })
+        if (error) throw error
+        return data?.signedUrl
+      }
+      return null
+    },
+    [isLiveDatabase]
+  )
+
+  // Soft-void a service proof via RPC
+  const voidEnquiryServiceProof = useCallback(
+    async (proofId, voidReason) => {
+      const role = adminUser?.role
+      if (role !== 'superadmin' && role !== 'admin') {
+        throw new Error('Access denied: Staff privileges required to void service proofs.')
+      }
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('void_enquiry_service_proof', {
+          p_proof_id: proofId,
+          p_void_reason: voidReason
+        })
+        if (error) throw error
+        return data
+      }
+      return { success: true, proof_id: proofId, is_voided: true, message: 'Service proof voided (demo).' }
+    },
+    [isLiveDatabase, adminUser]
+  )
+
   // --- Reset All Demo State ---
   const resetDemoData = useCallback(() => {
     if (isLiveDatabase) {
@@ -2550,12 +2771,19 @@ export function AdminDataProvider({ children }) {
     unassignEnquiryEmployee,
     loadEligibleEnquiryAssignees,
 
+    // Service Proof (Step 2)
+    uploadEnquiryServiceProof,
+    loadEnquiryServiceProofs,
+    getEnquiryServiceProofSignedUrl,
+    voidEnquiryServiceProof,
+
     // Staff Mutators (Superadmin Only)
     setStaff: setDemoStaff,
     addStaffMember,
     updateStaffRole,
     toggleStaffActive,
     updateStaffPhone,
+    updateStaffProfile,
 
     // Service Request Mutators & Actions
     createServiceRequest,

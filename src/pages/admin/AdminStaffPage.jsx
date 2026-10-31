@@ -2,13 +2,15 @@ import { useState, useMemo, useId, useEffect } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
+import { normalizeAadhaar, validateAadhaar, formatAadhaarDisplay } from '../../utils/aadhaarFormatter'
 
 /**
  * ============================================================================
  * ARS Computers — Superadmin-Only Staff Management Console
  * ============================================================================
  * Provides secure personnel administration, role-based access control,
- * account suspension/reactivation, and zero-trust authentication auditing.
+ * account suspension/reactivation, Head-controlled employee profile editing
+ * (name, code, phone, Aadhaar), and zero-trust authentication auditing.
  * ============================================================================
  */
 
@@ -47,7 +49,8 @@ export default function AdminStaffPage() {
     updateStaffRole,
     toggleStaffActive,
     addStaffMember,
-    updateStaffPhone
+    updateStaffPhone,
+    updateStaffProfile
   } = useAdminData()
 
   useEffect(() => {
@@ -62,7 +65,9 @@ export default function AdminStaffPage() {
     email: '',
     fullName: '',
     role: 'admin',
-    phoneNumber: ''
+    phoneNumber: '',
+    employeeCode: '',
+    aadhaarNumber: ''
   })
   const [inviteError, setInviteError] = useState(null)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -82,6 +87,20 @@ export default function AdminStaffPage() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Edit Profile Modal State (Head-controlled full profile edit)
+  const [profileModalTarget, setProfileModalTarget] = useState(null)
+  const [profileForm, setProfileForm] = useState({
+    fullName: '',
+    employeeCode: '',
+    phoneNumber: '',
+    aadhaarNumber: '',
+    role: 'admin',
+    isActive: true
+  })
+  const [profileError, setProfileError] = useState(null)
+  const [isSubmittingProfile, setIsSubmittingProfile] = useState(false)
+  const [showAadhaarInModal, setShowAadhaarInModal] = useState(false)
+
   // Feedback Notifications
   const [notification, setNotification] = useState(null)
 
@@ -90,7 +109,58 @@ export default function AdminStaffPage() {
     setTimeout(() => setNotification(null), 5000)
   }
 
-  const handleOpenPhoneModal = (member) => {
+  // ── Edit Profile Modal ──────────────────────────────────────────────────────
+  const handleOpenProfileModal = (member) => {
+    setProfileModalTarget(member)
+    setProfileForm({
+      fullName: member.full_name || '',
+      employeeCode: member.employee_code || '',
+      phoneNumber: member.phone_number || '',
+      aadhaarNumber: member.aadhaar_number || '',
+      role: member.role || 'admin',
+      isActive: member.is_active !== false
+    })
+    setProfileError(null)
+    setShowAadhaarInModal(false)
+  }
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault()
+    if (!profileModalTarget) return
+    setProfileError(null)
+
+    // Client-side Aadhaar validation before calling RPC
+    const rawAadhaar = profileForm.aadhaarNumber.trim()
+    if (rawAadhaar !== '') {
+      const normalized = normalizeAadhaar(rawAadhaar)
+      if (!validateAadhaar(normalized)) {
+        setProfileError('Aadhaar number must be exactly 12 numeric digits.')
+        return
+      }
+    }
+
+    setIsSubmittingProfile(true)
+    try {
+      await updateStaffProfile({
+        id: profileModalTarget.id,
+        fullName: profileForm.fullName.trim(),
+        employeeCode: profileForm.employeeCode.trim() || null,
+        phoneNumber: profileForm.phoneNumber.trim() || null,
+        aadhaarNumber: rawAadhaar || null,
+        role: profileForm.role,
+        isActive: profileForm.isActive
+      })
+      showNotification(`Profile for "${profileForm.fullName.trim()}" updated successfully.`, 'success')
+      setProfileModalTarget(null)
+    } catch (err) {
+      setProfileError(err.message || 'Failed to update staff profile.')
+    } finally {
+      setIsSubmittingProfile(false)
+    }
+  }
+
+  // ── Phone Modal (legacy — phone is now also editable via Edit Profile modal) ─
+  const _handleOpenPhoneModal = (member) => {
     setPhoneModalTarget(member)
     setPhoneInput(member.phone_number || '')
     setPhoneError(null)
@@ -112,9 +182,20 @@ export default function AdminStaffPage() {
     }
   }
 
+  // ── Register Staff ──────────────────────────────────────────────────────────
   const handleRegisterStaff = async (e) => {
     e.preventDefault()
     setInviteError(null)
+
+    // Client-side Aadhaar validation for invite form
+    const rawInviteAadhaar = inviteForm.aadhaarNumber.trim()
+    if (rawInviteAadhaar !== '') {
+      const normalized = normalizeAadhaar(rawInviteAadhaar)
+      if (!validateAadhaar(normalized)) {
+        setInviteError('Aadhaar number must be exactly 12 numeric digits.')
+        return
+      }
+    }
 
     try {
       setIsRegistering(true)
@@ -123,11 +204,13 @@ export default function AdminStaffPage() {
         email: inviteForm.email,
         fullName: inviteForm.fullName,
         role: inviteForm.role,
-        phoneNumber: inviteForm.phoneNumber
+        phoneNumber: inviteForm.phoneNumber,
+        employeeCode: inviteForm.employeeCode || null,
+        aadhaarNumber: rawInviteAadhaar || null
       })
       showNotification(`Staff profile for "${inviteForm.fullName}" registered successfully.`, 'success')
       setIsInviteModalOpen(false)
-      setInviteForm({ authId: '', email: '', fullName: '', role: 'admin', phoneNumber: '' })
+      setInviteForm({ authId: '', email: '', fullName: '', role: 'admin', phoneNumber: '', employeeCode: '', aadhaarNumber: '' })
     } catch (err) {
       setInviteError(err.message || 'Failed to register staff profile.')
     } finally {
@@ -135,14 +218,15 @@ export default function AdminStaffPage() {
     }
   }
 
-  // Filtered Staff Dataset
+  // ── Filtered Staff Dataset ──────────────────────────────────────────────────
   const filteredStaff = useMemo(() => {
     return staff.filter((member) => {
       const q = searchQuery.trim().toLowerCase()
       const matchesSearch =
         !q ||
         (member.full_name && member.full_name.toLowerCase().includes(q)) ||
-        (member.email && member.email.toLowerCase().includes(q))
+        (member.email && member.email.toLowerCase().includes(q)) ||
+        (member.employee_code && member.employee_code.toLowerCase().includes(q))
 
       const matchesRole = roleFilter === 'all' || member.role === roleFilter
 
@@ -393,7 +477,7 @@ export default function AdminStaffPage() {
             <input
               type="text"
               className="admin-search-input"
-              placeholder="Search staff by name or email..."
+              placeholder="Search by name, email or employee code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Search staff members"
@@ -543,10 +627,12 @@ export default function AdminStaffPage() {
                 <th style={{ minWidth: '220px' }}>Staff Member</th>
                 <th>Email Address</th>
                 <th>Phone (WhatsApp)</th>
+                <th>Emp. Code</th>
+                <th>Aadhaar</th>
                 <th>Assigned Role</th>
                 <th>Account Status</th>
                 <th>Date Added</th>
-                <th className="text-right" style={{ minWidth: '180px' }}>
+                <th className="text-right" style={{ minWidth: '200px' }}>
                   Actions
                 </th>
               </tr>
@@ -554,7 +640,7 @@ export default function AdminStaffPage() {
             <tbody>
               {filteredStaff.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="admin-empty-cell">
+                  <td colSpan="9" className="admin-empty-cell">
                     <div className="empty-state-wrap">
                       <span className="empty-icon" aria-hidden="true">👥</span>
                       <h3>No staff records found</h3>
@@ -674,6 +760,53 @@ export default function AdminStaffPage() {
                         )}
                       </td>
 
+                      {/* Employee Code column */}
+                      <td>
+                        {member.employee_code ? (
+                          <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#0369a1', fontWeight: 600 }}>
+                            {member.employee_code}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#cbd5e1', fontSize: '0.82rem' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Aadhaar status column — only shows Added/Not Added, never the actual number */}
+                      <td>
+                        {member.aadhaar_number ? (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              background: '#dcfce7',
+                              color: '#15803d',
+                              fontSize: '0.78rem',
+                              fontWeight: 600
+                            }}
+                          >
+                            ✓ Added
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              background: '#f1f5f9',
+                              color: '#94a3b8',
+                              fontSize: '0.78rem'
+                            }}
+                          >
+                            — Not Added
+                          </span>
+                        )}
+                      </td>
+
                       <td>
                         <span
                           style={{
@@ -716,15 +849,15 @@ export default function AdminStaffPage() {
 
                       <td className="text-right">
                         <div className="table-actions-group">
-                          {/* Phone Modification Button */}
+                          {/* ✏️ Edit Full Profile — Superadmin only, uses update_staff_profile RPC */}
                           <button
                             type="button"
                             className="btn-action-icon edit"
-                            onClick={() => handleOpenPhoneModal(member)}
-                            title="Update staff phone number for WhatsApp dispatch"
-                            style={{ borderColor: '#0284c7', color: '#0369a1' }}
+                            onClick={() => handleOpenProfileModal(member)}
+                            title="Edit official employee profile (name, code, phone, Aadhaar, role, status)"
+                            style={{ borderColor: '#7c3aed', color: '#6d28d9' }}
                           >
-                            📱 Phone
+                            ✏️ Edit Profile
                           </button>
 
                           {/* Role Modification Button */}
@@ -1041,6 +1174,24 @@ export default function AdminStaffPage() {
 
                   <div>
                     <label
+                      htmlFor="invite-emp-code"
+                      style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
+                    >
+                      Employee Code <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                    </label>
+                    <input
+                      id="invite-emp-code"
+                      type="text"
+                      className="admin-form-input"
+                      placeholder="e.g. EMP-001"
+                      value={inviteForm.employeeCode}
+                      onChange={(e) => setInviteForm({ ...inviteForm, employeeCode: e.target.value })}
+                      disabled={isRegistering}
+                    />
+                  </div>
+
+                  <div>
+                    <label
                       htmlFor="invite-phone"
                       style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
                     >
@@ -1057,6 +1208,29 @@ export default function AdminStaffPage() {
                     />
                     <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '3px' }}>
                       Used for dispatching assigned enquiry service jobs to this engineer via WhatsApp.
+                    </small>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="invite-aadhaar"
+                      style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
+                    >
+                      Aadhaar Number <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional — 12 digits)</span>
+                    </label>
+                    <input
+                      id="invite-aadhaar"
+                      type="text"
+                      inputMode="numeric"
+                      className="admin-form-input"
+                      placeholder="e.g. 1234 5678 9012"
+                      value={inviteForm.aadhaarNumber}
+                      onChange={(e) => setInviteForm({ ...inviteForm, aadhaarNumber: e.target.value })}
+                      disabled={isRegistering}
+                      maxLength={14}
+                    />
+                    <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '3px' }}>
+                      Spaces and hyphens accepted. Stored as 12 numeric digits. Restricted access — Head only.
                     </small>
                   </div>
 
@@ -1483,6 +1657,351 @@ export default function AdminStaffPage() {
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Saving...' : 'Save Phone Number'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL 5: Edit Staff Profile (Head-Controlled — uses update_staff_profile RPC) */}
+      {/* Password fields are intentionally ABSENT. Auth credentials are separate. */}
+      {/* ==================================================================== */}
+      {profileModalTarget && (
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => !isSubmittingProfile && setProfileModalTarget(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="profile-modal-title"
+        >
+          <div
+            className="admin-modal-dialog"
+            style={{ maxWidth: '560px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="admin-modal-header">
+              <div>
+                <h2 id="profile-modal-title" className="admin-modal-title">
+                  Edit Staff Profile
+                </h2>
+                <span className="modal-subtitle-note">
+                  Head-controlled record for {profileModalTarget.full_name} — Auth credentials are separate
+                </span>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setProfileModalTarget(null)}
+                disabled={isSubmittingProfile}
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile}>
+              <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {profileError && (
+                  <div
+                    style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      color: '#991b1b',
+                      padding: '10px 14px',
+                      borderRadius: '6px',
+                      marginBottom: '14px',
+                      fontSize: '0.88rem'
+                    }}
+                    role="alert"
+                  >
+                    ⚠️ {profileError}
+                  </div>
+                )}
+
+                {/* ── EMPLOYEE IDENTITY ─────────────────────────────── */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#64748b',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      marginBottom: '10px',
+                      paddingBottom: '6px',
+                      borderBottom: '1px solid #e2e8f0'
+                    }}
+                  >
+                    👤 Employee Identity
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div className="admin-form-group">
+                      <label htmlFor="profile-full-name" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                        Full Name <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <input
+                        id="profile-full-name"
+                        type="text"
+                        className="admin-form-input"
+                        placeholder="e.g. Rajesh Kumar"
+                        value={profileForm.fullName}
+                        onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
+                        required
+                        disabled={isSubmittingProfile}
+                        style={{ width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div className="admin-form-group">
+                      <label htmlFor="profile-emp-code" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                        Employee Code <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <input
+                        id="profile-emp-code"
+                        type="text"
+                        className="admin-form-input"
+                        placeholder="e.g. EMP-001"
+                        value={profileForm.employeeCode}
+                        onChange={(e) => setProfileForm({ ...profileForm, employeeCode: e.target.value })}
+                        disabled={isSubmittingProfile}
+                        style={{ width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── CONTACT ───────────────────────────────────────── */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#64748b',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      marginBottom: '10px',
+                      paddingBottom: '6px',
+                      borderBottom: '1px solid #e2e8f0'
+                    }}
+                  >
+                    📱 Contact
+                  </div>
+                  <div className="admin-form-group">
+                    <label htmlFor="profile-phone" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                      Phone / WhatsApp Number <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                    </label>
+                    <input
+                      id="profile-phone"
+                      type="tel"
+                      className="admin-form-input"
+                      placeholder="e.g. +919876543210"
+                      value={profileForm.phoneNumber}
+                      onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })}
+                      disabled={isSubmittingProfile}
+                      style={{ width: '100%', boxSizing: 'border-box' }}
+                    />
+                    <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '3px' }}>
+                      Used for WhatsApp engineer dispatch. Clear to remove.
+                    </small>
+                  </div>
+                </div>
+
+                {/* ── IDENTIFICATION ────────────────────────────────── */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#64748b',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      marginBottom: '10px',
+                      paddingBottom: '6px',
+                      borderBottom: '1px solid #e2e8f0'
+                    }}
+                  >
+                    🪪 Identification
+                  </div>
+
+                  <div
+                    style={{
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      marginBottom: '10px',
+                      fontSize: '0.8rem',
+                      color: '#92400e'
+                    }}
+                  >
+                    🔒 Aadhaar number is restricted. Only visible during authorized Head profile editing. Never stored in logs or URLs.
+                  </div>
+
+                  <div className="admin-form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label htmlFor="profile-aadhaar" className="admin-form-label" style={{ fontWeight: 600, color: '#334155', margin: 0 }}>
+                        Aadhaar Number <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional — 12 digits)</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAadhaarInModal((v) => !v)}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#0284c7',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {showAadhaarInModal ? '🙈 Hide' : '👁 Show'}
+                      </button>
+                    </div>
+
+                    {/* Current value display (when value exists and not editing) */}
+                    {profileModalTarget.aadhaar_number && !showAadhaarInModal && (
+                      <div style={{ fontSize: '0.85rem', color: '#15803d', fontWeight: 600, marginBottom: '6px' }}>
+                        ✓ Aadhaar on file: {formatAadhaarDisplay(profileModalTarget.aadhaar_number)}
+                      </div>
+                    )}
+
+                    <input
+                      id="profile-aadhaar"
+                      type={showAadhaarInModal ? 'text' : 'password'}
+                      inputMode="numeric"
+                      className="admin-form-input"
+                      placeholder={showAadhaarInModal ? 'e.g. 1234 5678 9012' : '••••••••••••'}
+                      value={profileForm.aadhaarNumber}
+                      onChange={(e) => setProfileForm({ ...profileForm, aadhaarNumber: e.target.value })}
+                      disabled={isSubmittingProfile}
+                      maxLength={14}
+                      style={{ width: '100%', boxSizing: 'border-box', fontFamily: showAadhaarInModal ? 'inherit' : 'monospace' }}
+                    />
+                    <small style={{ color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: '3px' }}>
+                      Spaces/hyphens accepted. Stored as 12 numeric digits. Clear to remove existing Aadhaar.
+                    </small>
+                  </div>
+                </div>
+
+                {/* ── ACCESS ────────────────────────────────────────── */}
+                <div style={{ marginBottom: '4px' }}>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#64748b',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      marginBottom: '10px',
+                      paddingBottom: '6px',
+                      borderBottom: '1px solid #e2e8f0'
+                    }}
+                  >
+                    🔐 Access
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                    <div className="admin-form-group" style={{ flex: '1 1 200px' }}>
+                      <label htmlFor="profile-role" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                        Role
+                      </label>
+                      <select
+                        id="profile-role"
+                        className="admin-form-input"
+                        value={profileForm.role}
+                        onChange={(e) => setProfileForm({ ...profileForm, role: e.target.value })}
+                        disabled={isSubmittingProfile || profileModalTarget.role === 'superadmin'}
+                        style={{ width: '100%', boxSizing: 'border-box' }}
+                      >
+                        <option value="admin">💼 Store Admin</option>
+                        <option value="inventory_staff">📦 Inventory Staff</option>
+                        {profileModalTarget.role === 'superadmin' && (
+                          <option value="superadmin">🛡️ Superadmin</option>
+                        )}
+                      </select>
+                      {profileModalTarget.role === 'superadmin' && (
+                        <small style={{ color: '#92400e', fontSize: '0.78rem' }}>
+                          Superadmin role cannot be changed via profile editor.
+                        </small>
+                      )}
+                    </div>
+
+                    <div className="admin-form-group" style={{ flex: '1 1 150px' }}>
+                      <label className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                        Account Status
+                      </label>
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.88rem' }}>
+                          <input
+                            type="radio"
+                            name="profileStatus"
+                            value="active"
+                            checked={profileForm.isActive === true}
+                            onChange={() => setProfileForm({ ...profileForm, isActive: true })}
+                            disabled={isSubmittingProfile || profileModalTarget.id === adminUser?.id}
+                          />
+                          <span style={{ color: '#15803d', fontWeight: 600 }}>Active</span>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.88rem' }}>
+                          <input
+                            type="radio"
+                            name="profileStatus"
+                            value="inactive"
+                            checked={profileForm.isActive === false}
+                            onChange={() => setProfileForm({ ...profileForm, isActive: false })}
+                            disabled={isSubmittingProfile || profileModalTarget.id === adminUser?.id}
+                          />
+                          <span style={{ color: '#b91c1c', fontWeight: 600 }}>Suspended</span>
+                        </label>
+                      </div>
+                      {profileModalTarget.id === adminUser?.id && (
+                        <small style={{ color: '#92400e', fontSize: '0.78rem' }}>
+                          Cannot deactivate your own account.
+                        </small>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Security notice — no password fields */}
+                  <div
+                    style={{
+                      background: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      marginTop: '12px',
+                      fontSize: '0.8rem',
+                      color: '#0369a1',
+                      display: 'flex',
+                      gap: '6px',
+                      alignItems: 'flex-start'
+                    }}
+                  >
+                    <span>ℹ️</span>
+                    <span>
+                      <strong>Auth credentials are separate.</strong> Password changes must be performed via the Supabase Auth dashboard. This form only updates the employee profile record and never touches authentication credentials.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => setProfileModalTarget(null)}
+                  disabled={isSubmittingProfile}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={isSubmittingProfile || !profileForm.fullName.trim()}
+                >
+                  {isSubmittingProfile ? 'Saving Profile...' : '💾 Save Profile'}
                 </button>
               </div>
             </form>

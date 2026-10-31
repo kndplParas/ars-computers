@@ -4,6 +4,7 @@ import { ENQUIRY_STATUSES } from '../../data/mockEnquiries'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { parseServiceEnquiry } from '../../utils/serviceEnquiryHelper'
+import { formatAadhaarDisplay } from '../../utils/aadhaarFormatter'
 import { formatJobDispatchText, buildWhatsAppDispatchUrl } from '../../utils/jobDispatchFormatter'
 import {
   downloadMonthlyEnquiriesExcel,
@@ -11,7 +12,6 @@ import {
   getMonthlyReportFilename,
   MONTH_NAMES
 } from '../../utils/excelReportGenerator'
-
 const LiveEnquiryRegisterModal = lazy(() => import('../../components/admin/LiveEnquiryRegisterModal'))
 
 /**
@@ -100,7 +100,11 @@ export default function AdminEnquiriesPage() {
     selfAssignEnquiry,
     assignEnquiryEmployee,
     unassignEnquiryEmployee,
-    loadEligibleEnquiryAssignees
+    loadEligibleEnquiryAssignees,
+    uploadEnquiryServiceProof,
+    loadEnquiryServiceProofs,
+    getEnquiryServiceProofSignedUrl,
+    voidEnquiryServiceProof
   } = useAdminData()
 
   // Workflow Tabs: 'all_active', 'pending_completion', 'pending_rejection', 'quoted', 'rejected_closed', 'bin', 'archived'
@@ -127,6 +131,32 @@ export default function AdminEnquiriesPage() {
   const [assignmentError, setAssignmentError] = useState(null)
   const [isSelfAssigning, setIsSelfAssigning] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
+
+  // Step 2 Service Proof States
+  const [enquiryProofs, setEnquiryProofs] = useState([])
+  const [isLoadingProofs, setIsLoadingProofs] = useState(false)
+  const [isUploadProofModalOpen, setIsUploadProofModalOpen] = useState(false)
+  const [proofFile, setProofFile] = useState(null)
+  const [proofDescription, setProofDescription] = useState('')
+  const [isUploadingProof, setIsUploadingProof] = useState(false)
+  const [proofUploadError, setProofUploadError] = useState(null)
+  const [voidProofTarget, setVoidProofTarget] = useState(null)
+  const [voidReasonInput, setVoidReasonInput] = useState('')
+  const [isVoidingProof, setIsVoidingProof] = useState(false)
+  const [voidProofError, setVoidProofError] = useState(null)
+  const [previewProof, setPreviewProof] = useState(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+
+  // Head Assign Modal — expected visit date/time/note
+  const [assignVisitDate, setAssignVisitDate] = useState('')
+  const [assignVisitTime, setAssignVisitTime] = useState('')
+  const [assignVisitNote, setAssignVisitNote] = useState('')
+
+  // Self-Assign Confirmation Modal (with optional visit time)
+  const [isSelfAssignModalOpen, setIsSelfAssignModalOpen] = useState(false)
+  const [selfVisitDate, setSelfVisitDate] = useState('')
+  const [selfVisitTime, setSelfVisitTime] = useState('')
+  const [selfVisitNote, setSelfVisitNote] = useState('')
 
   // Phase 2 Activity Timeline & Rejection States
   const [enquiryActivities, setEnquiryActivities] = useState([])
@@ -163,7 +193,7 @@ export default function AdminEnquiriesPage() {
   // Live Enquiry Register State (Available to ALL active staff)
   const [isLiveRegisterOpen, setIsLiveRegisterOpen] = useState(false)
 
-  // Monthly Excel Report States (Available to ALL active staff)
+  // Monthly & Daily Excel Report States (Available to ALL active staff)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportMonthIndex, setExportMonthIndex] = useState(() => new Date().getMonth())
   const [exportYear, setExportYear] = useState(() => new Date().getFullYear())
@@ -193,7 +223,9 @@ export default function AdminEnquiriesPage() {
   const handleDownloadReport = async () => {
     setIsExporting(true)
     try {
-      const res = await downloadMonthlyEnquiriesExcel(enquiries, exportMonthIndex, exportYear)
+      const res = await downloadMonthlyEnquiriesExcel(enquiries, exportMonthIndex, exportYear, {
+        exportedBy: adminUser?.email
+      })
       showNotification(`Report generated: ${res.filename} (${res.count} records)`, 'success')
       setIsExportModalOpen(false)
     } catch (err) {
@@ -292,13 +324,50 @@ export default function AdminEnquiriesPage() {
     setDateFilter('all')
   }
 
+  // --- Engineer Job Dispatch Handlers ---
+  const handleWhatsAppDispatch = () => {
+    if (!selectedEnquiry) return
+    const url = buildWhatsAppDispatchUrl(selectedEnquiry)
+    if (url) {
+      window.open(url, '_blank')
+    }
+  }
+
+  const handleCopyDispatch = async () => {
+    if (!selectedEnquiry) return
+    try {
+      const text = formatJobDispatchText(selectedEnquiry)
+      await navigator.clipboard.writeText(text)
+      setCopyFeedback(true)
+      showNotification('Job dispatch copied to clipboard!', 'success')
+      setTimeout(() => setCopyFeedback(false), 2500)
+    } catch (err) {
+      showNotification('Could not copy to clipboard: ' + err.message, 'error')
+    }
+  }
+
   // --- Details Modal Handlers ---
+  const reloadProofs = async (enquiryId) => {
+    if (!loadEnquiryServiceProofs || !enquiryId) return
+    setIsLoadingProofs(true)
+    try {
+      const proofs = await loadEnquiryServiceProofs(enquiryId)
+      setEnquiryProofs(proofs || [])
+    } catch (err) {
+      console.error('Failed to load enquiry service proofs:', err)
+      setEnquiryProofs([])
+    } finally {
+      setIsLoadingProofs(false)
+    }
+  }
+
   const handleOpenDetails = async (enquiry) => {
     setSelectedEnquiry(enquiry)
     setEditingNotes(enquiry.admin_notes || '')
     setNewNoteText('')
     setReviewNotesInput('')
     setIsLoadingActivities(true)
+    reloadProofs(enquiry.id)
     try {
       if (fetchEnquiryActivities) {
         const acts = await fetchEnquiryActivities(enquiry.id)
@@ -319,8 +388,122 @@ export default function AdminEnquiriesPage() {
     setEditingNotes('')
     setNewNoteText('')
     setEnquiryActivities([])
+    setEnquiryProofs([])
     setIsRejectionModalOpen(false)
     setRejectionReasonInput('')
+    setIsUploadProofModalOpen(false)
+    setVoidProofTarget(null)
+    setPreviewProof(null)
+  }
+
+  // --- Step 2 Proof Action Handlers ---
+  const handlePreviewProof = async (proof) => {
+    if (!getEnquiryServiceProofSignedUrl) return
+    setIsLoadingPreview(true)
+    try {
+      const url = await getEnquiryServiceProofSignedUrl(proof.storage_path, false)
+      if (url) {
+        const isPdf = proof.mime_type === 'application/pdf' || (proof.original_filename && proof.original_filename.toLowerCase().endsWith('.pdf'))
+        setPreviewProof({ url, name: proof.original_filename, isPdf })
+      }
+    } catch (err) {
+      showNotification('Failed to generate preview URL: ' + err.message, 'error')
+    } finally {
+      setIsLoadingPreview(false)
+    }
+  }
+
+  const handleDownloadProof = async (proof) => {
+    if (!getEnquiryServiceProofSignedUrl) return
+    try {
+      const url = await getEnquiryServiceProofSignedUrl(proof.storage_path, proof.original_filename)
+      if (url) {
+        const link = document.createElement('a')
+        link.href = url
+        link.download = proof.original_filename || 'signed-service-report'
+        link.target = '_blank'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+    } catch (err) {
+      showNotification('Failed to generate download URL: ' + err.message, 'error')
+    }
+  }
+
+  const handleOpenUploadProofModal = () => {
+    setProofFile(null)
+    setProofDescription('')
+    setProofUploadError(null)
+    setIsUploadProofModalOpen(true)
+  }
+
+  const handleUploadProofSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    if (!proofFile) {
+      setProofUploadError('Please choose a file to upload.')
+      return
+    }
+    if (proofFile.size > 10 * 1024 * 1024) {
+      setProofUploadError('File size exceeds maximum 10 MB limit.')
+      return
+    }
+    const ext = proofFile.name.split('.').pop().toLowerCase()
+    const cleanExt = ext === 'jpeg' ? 'jpg' : ext
+    if (!['jpg', 'png', 'pdf'].includes(cleanExt)) {
+      setProofUploadError('Only JPG, PNG, and PDF files are allowed.')
+      return
+    }
+
+    setIsUploadingProof(true)
+    setProofUploadError(null)
+    try {
+      await uploadEnquiryServiceProof(
+        selectedEnquiry.id,
+        proofFile,
+        proofDescription,
+        'CUSTOMER_SIGNED_SERVICE_REPORT'
+      )
+      showNotification('Customer signed job sheet uploaded successfully.')
+      setIsUploadProofModalOpen(false)
+      setProofFile(null)
+      setProofDescription('')
+      await reloadProofs(selectedEnquiry.id)
+      await reloadActivities(selectedEnquiry.id)
+    } catch (err) {
+      setProofUploadError(err.message)
+    } finally {
+      setIsUploadingProof(false)
+    }
+  }
+
+  const handleOpenVoidModal = (proof) => {
+    setVoidProofTarget(proof)
+    setVoidReasonInput('')
+    setVoidProofError(null)
+  }
+
+  const handleVoidProofSubmit = async () => {
+    if (!voidProofTarget) return
+    const reason = voidReasonInput.trim()
+    if (!reason || reason.length < 5) {
+      setVoidProofError('Please enter a mandatory void reason of at least 5 characters.')
+      return
+    }
+    setIsVoidingProof(true)
+    setVoidProofError(null)
+    try {
+      await voidEnquiryServiceProof(voidProofTarget.id, reason)
+      showNotification('Service proof voided successfully.')
+      setVoidProofTarget(null)
+      setVoidReasonInput('')
+      await reloadProofs(selectedEnquiry.id)
+      await reloadActivities(selectedEnquiry.id)
+    } catch (err) {
+      setVoidProofError(err.message)
+    } finally {
+      setIsVoidingProof(false)
+    }
   }
 
   // Reload activities helper
@@ -335,11 +518,27 @@ export default function AdminEnquiriesPage() {
   }
 
   // --- Phase 4 Employee Assignment Handlers ---
-  const handleSelfAssign = async () => {
+  // Opens the self-assign confirmation modal (employee provides optional visit time)
+  const handleSelfAssign = () => {
+    if (!selectedEnquiry || !isEmployee) return
+    setSelfVisitDate('')
+    setSelfVisitTime('')
+    setSelfVisitNote('')
+    setIsSelfAssignModalOpen(true)
+  }
+
+  // Executes self-assignment with optional visit time; identity is derived server-side
+  const handleConfirmSelfAssign = async (e) => {
+    if (e) e.preventDefault()
     if (!selectedEnquiry || !isEmployee) return
     setIsSelfAssigning(true)
     try {
-      await selfAssignEnquiry(selectedEnquiry.id)
+      let expectedVisitAt = null
+      if (selfVisitDate) {
+        const timeStr = selfVisitTime || '09:00'
+        expectedVisitAt = new Date(`${selfVisitDate}T${timeStr}:00`).toISOString()
+      }
+      await selfAssignEnquiry(selectedEnquiry.id, expectedVisitAt, selfVisitNote.trim() || null)
       showNotification('Enquiry self-assigned to you successfully.', 'success')
       setSelectedEnquiry((prev) => ({
         ...prev,
@@ -350,8 +549,11 @@ export default function AdminEnquiriesPage() {
         assigned_at: new Date().toISOString(),
         assigned_by: adminUser?.id,
         assigned_by_name: adminUser?.fullName || adminUser?.email,
-        assigned_by_employee_code: adminUser?.employee_code || null
+        assigned_by_employee_code: adminUser?.employee_code || null,
+        expected_visit_at: expectedVisitAt,
+        assignment_visit_note: selfVisitNote.trim() || null
       }))
+      setIsSelfAssignModalOpen(false)
       await reloadActivities(selectedEnquiry.id)
     } catch (err) {
       showNotification(err.message || 'Failed to self-assign enquiry.', 'error')
@@ -381,7 +583,12 @@ export default function AdminEnquiriesPage() {
     setIsSubmittingAssignment(true)
     try {
       const targetId = selectedAssigneeId ? selectedAssigneeId : null
-      await assignEnquiryEmployee(selectedEnquiry.id, targetId, assignReason)
+      let expectedVisitAt = null
+      if (targetId && assignVisitDate) {
+        const timeStr = assignVisitTime || '09:00'
+        expectedVisitAt = new Date(`${assignVisitDate}T${timeStr}:00`).toISOString()
+      }
+      await assignEnquiryEmployee(selectedEnquiry.id, targetId, assignReason, expectedVisitAt, assignVisitNote.trim() || null)
       const targetStaff = assigneesList.find((s) => s.id === targetId)
 
       setSelectedEnquiry((prev) => ({
@@ -390,10 +597,13 @@ export default function AdminEnquiriesPage() {
         assigned_employee_name: targetStaff ? (targetStaff.full_name || targetStaff.email) : null,
         assigned_employee_code: targetStaff ? targetStaff.employee_code : null,
         assigned_employee_phone: targetStaff ? targetStaff.phone_number : null,
+        assigned_employee_aadhaar: targetStaff ? (targetStaff.aadhaar_number || null) : null,
         assigned_at: targetId ? new Date().toISOString() : null,
         assigned_by: adminUser?.id,
         assigned_by_name: adminUser?.fullName || adminUser?.email,
-        assigned_by_employee_code: adminUser?.employee_code || null
+        assigned_by_employee_code: adminUser?.employee_code || null,
+        expected_visit_at: targetId ? expectedVisitAt : null,
+        assignment_visit_note: targetId ? (assignVisitNote.trim() || null) : null
       }))
 
       showNotification(
@@ -411,7 +621,7 @@ export default function AdminEnquiriesPage() {
     }
   }
 
-  const handleWhatsAppDispatch = () => {
+  const handleEngineerWhatsAppDispatch = () => {
     if (!selectedEnquiry) return
     if (!selectedEnquiry.assigned_employee_phone) {
       showNotification(
@@ -428,14 +638,12 @@ export default function AdminEnquiriesPage() {
     }
   }
 
-  const handleCopyDispatch = async () => {
+  const handleEngineerCopyDispatch = async () => {
     if (!selectedEnquiry) return
     try {
       const text = formatJobDispatchText(selectedEnquiry)
       await navigator.clipboard.writeText(text)
-      setCopyFeedback(true)
-      showNotification('Job dispatch copied to clipboard.', 'success')
-      setTimeout(() => setCopyFeedback(false), 2500)
+      showNotification('Internal engineer job dispatch copied to clipboard.', 'success')
     } catch (err) {
       showNotification('Could not copy to clipboard: ' + err.message, 'error')
     }
@@ -1937,6 +2145,16 @@ export default function AdminEnquiriesPage() {
           !selectedEnquiry.is_in_bin &&
           !selectedEnquiry.completion_approved_at
 
+        const canUploadProof = Boolean(
+          selectedEnquiry &&
+          !selectedEnquiry.completion_approved_at &&
+          selectedEnquiry.status !== 'completed' &&
+          !selectedEnquiry.is_archived &&
+          !selectedEnquiry.is_in_bin &&
+          !['closed', 'converted', 'rejected'].includes(selectedEnquiry.status) &&
+          (isSuperadmin || (isEmployee && selectedEnquiry.assigned_employee_id === adminUser?.id))
+        )
+
         return (
           <div
             className="admin-modal-backdrop"
@@ -2146,6 +2364,50 @@ export default function AdminEnquiriesPage() {
                           <p style={{ margin: 0, fontSize: '0.88rem', color: '#1e293b', whiteSpace: 'pre-wrap' }}>
                             {selectedEnquiry.completion_summary}
                           </p>
+                        </div>
+
+                        {/* Customer Signed Proof Section in Completion Review */}
+                        <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: '6px', padding: '10px 12px', marginBottom: isSuperadmin ? '10px' : 0 }}>
+                          <strong style={{ color: '#5b21b6', fontSize: '0.85rem', display: 'block', marginBottom: '6px' }}>
+                            📑 CUSTOMER SIGNED PROOF ({enquiryProofs.length})
+                          </strong>
+                          {enquiryProofs.length === 0 ? (
+                            <div style={{ fontSize: '0.82rem', color: '#b91c1c', fontWeight: 600 }}>
+                              ⚠️ No signed service report uploaded!
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {enquiryProofs.map((p) => (
+                                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '6px 10px', borderRadius: '4px', border: '1px solid #ddd6fe', fontSize: '0.82rem', flexWrap: 'wrap', gap: '6px' }}>
+                                  <div>
+                                    <strong>{p.original_filename}</strong>
+                                    <span style={{ color: '#64748b', marginLeft: '6px' }}>
+                                      ({(p.file_size_bytes / 1024).toFixed(1)} KB) • Uploaded by {p.uploaded_by_name} {p.uploaded_by_employee_code ? '[' + p.uploaded_by_employee_code + ']' : ''}
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button
+                                      type="button"
+                                      className="btn-outline btn-sm"
+                                      onClick={() => handlePreviewProof(p)}
+                                      disabled={isLoadingPreview}
+                                      style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                                    >
+                                      👁️ Preview
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-outline btn-sm"
+                                      onClick={() => handleDownloadProof(p)}
+                                      style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                                    >
+                                      ⬇️ Download
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {isSuperadmin ? (
@@ -2559,6 +2821,39 @@ export default function AdminEnquiriesPage() {
                             </span>
                           )}
                         </div>
+
+                        {/* Aadhaar snapshot — only shown to superadmin */}
+                        {isSuperadmin && (
+                          <div>
+                            <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                              Aadhaar:
+                            </span>
+                            <span style={{ color: '#475569', fontSize: '0.84rem', fontFamily: 'monospace' }}>
+                              {selectedEnquiry.assigned_employee_aadhaar
+                                ? formatAadhaarDisplay(selectedEnquiry.assigned_employee_aadhaar)
+                                : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Not provided</span>}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Expected Visit */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Expected Visit:
+                          </span>
+                          {selectedEnquiry.expected_visit_at ? (
+                            <span style={{ color: '#0369a1', fontWeight: 600, fontSize: '0.88rem' }}>
+                              📅 {formatDateTime(selectedEnquiry.expected_visit_at)}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>Not scheduled</span>
+                          )}
+                          {selectedEnquiry.assignment_visit_note && (
+                            <span style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginTop: '2px' }}>
+                              Note: {selectedEnquiry.assignment_visit_note}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {selectedEnquiry.assigned_by_name && (
@@ -2593,7 +2888,10 @@ export default function AdminEnquiriesPage() {
                                       assigned_employee_name: null,
                                       assigned_employee_code: null,
                                       assigned_employee_phone: null,
-                                      assigned_at: null
+                                      assigned_employee_aadhaar: null,
+                                      assigned_at: null,
+                                      expected_visit_at: null,
+                                      assignment_visit_note: null
                                     }))
                                     reloadActivities(selectedEnquiry.id)
                                   })
@@ -2606,6 +2904,38 @@ export default function AdminEnquiriesPage() {
                           </button>
                         </div>
                       )}
+
+                      {/* Internal Technical Job Dispatch to Engineer */}
+                      <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
+                          Internal Job Dispatch:
+                        </span>
+                        <button
+                          type="button"
+                          id="engineer-whatsapp-dispatch-btn"
+                          className="btn-outline btn-sm"
+                          onClick={handleEngineerWhatsAppDispatch}
+                          title={
+                            selectedEnquiry.assigned_employee_phone
+                              ? `Send technical job details to ${selectedEnquiry.assigned_employee_name || 'Engineer'} via WhatsApp (${selectedEnquiry.assigned_employee_phone})`
+                              : 'Engineer has no phone configured'
+                          }
+                          disabled={!selectedEnquiry.assigned_employee_phone}
+                          style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          <span>📱</span> Send to Engineer
+                        </button>
+                        <button
+                          type="button"
+                          id="engineer-copy-dispatch-btn"
+                          className="btn-outline btn-sm"
+                          onClick={handleEngineerCopyDispatch}
+                          title="Copy internal engineer job dispatch to clipboard"
+                          style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          <span>📋</span> Copy Engineer Dispatch
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     /* UNASSIGNED BRANCH */
@@ -2646,6 +2976,143 @@ export default function AdminEnquiriesPage() {
                           Assignment cannot be changed in current status or archive state.
                         </span>
                       )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section: Service Completion Proof (Step 2) */}
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '14px 16px',
+                    marginBottom: '14px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'gap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.1rem' }}>📑</span>
+                      <div>
+                        <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>
+                          SERVICE COMPLETION PROOF
+                        </strong>
+                        <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>
+                          Customer signed job sheet / service report acknowledging completed work
+                        </span>
+                      </div>
+                    </div>
+
+                    {canUploadProof && (
+                      <button
+                        type="button"
+                        id="upload-signed-sheet-btn"
+                        className="btn-outline btn-sm"
+                        onClick={handleOpenUploadProofModal}
+                        style={{ fontSize: '0.8rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px', borderColor: '#3b82f6', color: '#2563eb' }}
+                      >
+                        <span>+</span> Upload Signed Job Sheet
+                      </button>
+                    )}
+                  </div>
+
+                  {isLoadingProofs ? (
+                    <div style={{ fontSize: '0.82rem', color: '#64748b', padding: '8px 0' }}>Loading service proofs...</div>
+                  ) : enquiryProofs.length === 0 ? (
+                    <div style={{ background: '#ffffff', border: '1px dashed #cbd5e1', borderRadius: '6px', padding: '12px 14px', textAlign: 'center', fontSize: '0.84rem', color: '#64748b' }}>
+                      No customer signed service reports uploaded yet.
+                      {canUploadProof && (
+                        <span style={{ display: 'block', marginTop: '4px', color: '#0369a1', fontSize: '0.78rem' }}>
+                          Upload the physical signed sheet (JPG, PNG, or PDF) to substantiate work completion.
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {enquiryProofs.map((p) => {
+                        const canVoid = !selectedEnquiry.completion_approved_at && selectedEnquiry.status !== 'completed' && (isSuperadmin || (isEmployee && p.uploaded_by === adminUser?.id && selectedEnquiry.status !== 'completion_requested'))
+                        return (
+                          <div
+                            key={p.id}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '6px',
+                              padding: '10px 12px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '6px' }}>
+                              <div>
+                                <strong style={{ fontSize: '0.88rem', color: '#0f172a' }}>
+                                  {p.document_type === 'CUSTOMER_SIGNED_SERVICE_REPORT' ? 'Customer Signed Job Sheet' : p.document_type}
+                                </strong>
+
+                                <span style={{ fontSize: '0.8rem', color: '#475569', marginLeft: '6px' }}>
+                                  ({p.original_filename} • {(p.file_size_bytes / 1024).toFixed(1)} KB)
+                                </span>
+                                {p.description && (
+                                  <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#64748b', fontStyle: 'italic' }}>
+                                    Note: {p.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  className="btn-outline btn-sm"
+                                  onClick={() => handlePreviewProof(p)}
+                                  disabled={isLoadingPreview}
+                                  style={{ fontSize: '0.78rem', padding: '3px 8px' }}
+                                >
+                                  👁️ Preview
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-outline btn-sm"
+                                  onClick={() => handleDownloadProof(p)}
+                                  style={{ fontSize: '0.78rem', padding: '3px 8px' }}
+                                >
+                                  ⬇️ Download
+                                </button>
+                                {isSuperadmin && (
+                                  <button
+                                    type="button"
+                                    className="btn-outline btn-sm"
+                                    onClick={() => handleToggleProofShareability(p)}
+                                    style={{
+                                      fontSize: '0.78rem',
+                                      padding: '3px 8px',
+                                      borderColor: p.is_customer_shareable ? '#cbd5e1' : '#86efac',
+                                      color: p.is_customer_shareable ? '#475569' : '#16a34a'
+                                    }}
+                                  >
+                                    {p.is_customer_shareable ? '🔒 Mark Internal' : '📢 Mark Shareable'}
+                                  </button>
+                                )}
+                                {canVoid && (
+                                  <button
+                                    type="button"
+                                    className="btn-outline btn-sm"
+                                    onClick={() => handleOpenVoidModal(p)}
+                                    style={{ fontSize: '0.78rem', padding: '3px 8px', borderColor: '#fca5a5', color: '#dc2626' }}
+                                  >
+                                    🗑️ Void
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '4px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+                              <span>
+                                Uploaded by: <strong>{p.uploaded_by_name}</strong> {p.uploaded_by_employee_code ? '[' + p.uploaded_by_employee_code + ']' : ''}
+                              </span>
+                              <span>{formatDateTime(p.uploaded_at)}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -3203,6 +3670,218 @@ export default function AdminEnquiriesPage() {
         </div>
       )}
 
+      {/* Step 2: Upload Signed Job Sheet Modal */}
+      {isUploadProofModalOpen && selectedEnquiry && (
+        <div className="admin-modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="admin-modal-dialog" style={{ maxWidth: '480px' }}>
+            <div className="admin-modal-header">
+              <h3 className="admin-modal-title">Upload Signed Job Sheet</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setIsUploadProofModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="admin-modal-body" style={{ padding: '16px' }}>
+              <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#64748b' }}>
+                Upload the customer-signed physical service sheet or job report for <strong>{selectedEnquiry.enquiry_number || selectedEnquiry.name}</strong>.
+              </p>
+
+              {proofUploadError && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px 12px', color: '#991b1b', fontSize: '0.82rem', marginBottom: '12px' }}>
+                  {proofUploadError}
+                </div>
+              )}
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                  Document Type:
+                </label>
+                <input
+                  type="text"
+                  className="admin-input"
+                  value="Customer Signed Job Sheet"
+                  disabled
+                  style={{ background: '#f1f5f9', cursor: 'not-allowed', width: '100%' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label htmlFor="proof-file-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                  File (JPG, JPEG, PNG, or PDF, max 10 MB):
+                </label>
+                <input
+                  id="proof-file-input"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                  onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                  style={{ fontSize: '0.85rem', width: '100%' }}
+                />
+                {proofFile && (
+                  <span style={{ display: 'block', fontSize: '0.78rem', color: '#16a34a', marginTop: '4px' }}>
+                    Selected: {proofFile.name} ({(proofFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                )}
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label htmlFor="proof-desc-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                  Optional Note:
+                </label>
+                <textarea
+                  id="proof-desc-input"
+                  className="modal-textarea"
+                  rows="2"
+                  placeholder="E.g., Customer signed after diagnostics & hardware repair..."
+                  value={proofDescription}
+                  onChange={(e) => setProofDescription(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setIsUploadProofModalOpen(false)}
+                disabled={isUploadingProof}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-upload-proof-btn"
+                className="btn-primary"
+                onClick={handleUploadProofSubmit}
+                disabled={isUploadingProof || !proofFile}
+              >
+                {isUploadingProof ? 'Uploading...' : 'Upload Proof'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Void Proof Modal */}
+      {voidProofTarget && (
+        <div className="admin-modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="admin-modal-dialog" style={{ maxWidth: '440px' }}>
+            <div className="admin-modal-header">
+              <h3 className="admin-modal-title" style={{ color: '#b91c1c' }}>Void Service Proof</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setVoidProofTarget(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="admin-modal-body" style={{ padding: '16px' }}>
+              <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: '#475569' }}>
+                You are about to void <strong>{voidProofTarget.original_filename}</strong>. This soft-deletes the document from valid completion evidence while preserving an audit record.
+              </p>
+
+              {voidProofError && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px 12px', color: '#991b1b', fontSize: '0.82rem', marginBottom: '10px' }}>
+                  {voidProofError}
+                </div>
+              )}
+
+              <label htmlFor="void-reason-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                Mandatory Void Reason (min 5 chars):
+              </label>
+              <textarea
+                id="void-reason-input"
+                className="modal-textarea"
+                rows="3"
+                placeholder="E.g., Incorrect job sheet uploaded for this customer..."
+                value={voidReasonInput}
+                onChange={(e) => setVoidReasonInput(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setVoidProofTarget(null)}
+                disabled={isVoidingProof}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-void-proof-btn"
+                className="btn-primary"
+                onClick={handleVoidProofSubmit}
+                disabled={isVoidingProof || voidReasonInput.trim().length < 5}
+                style={{ background: '#dc2626', borderColor: '#b91c1c' }}
+              >
+                {isVoidingProof ? 'Voiding...' : 'Confirm Void'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Proof Preview Modal */}
+      {previewProof && (
+        <div className="admin-modal-backdrop" style={{ zIndex: 1200 }} onClick={() => setPreviewProof(null)}>
+          <div
+            className="admin-modal-dialog"
+            style={{ maxWidth: '750px', width: '92%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="admin-modal-header">
+              <h3 className="admin-modal-title" style={{ fontSize: '0.95rem' }}>{previewProof.name}</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setPreviewProof(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="admin-modal-body" style={{ flex: 1, overflow: 'auto', textAlign: 'center', padding: '16px' }}>
+              {previewProof.isPdf ? (
+                <iframe
+                  src={previewProof.url}
+                  title={previewProof.name}
+                  style={{ width: '100%', height: '60vh', border: 'none' }}
+                />
+              ) : (
+                <img
+                  src={previewProof.url}
+                  alt={previewProof.name}
+                  style={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain', borderRadius: '4px' }}
+                />
+              )}
+            </div>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
+              <a
+                href={previewProof.url}
+                download={previewProof.name}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+              >
+                ⬇️ Download File
+              </a>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setPreviewProof(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 8. Employee Work-Completion Submission Modal */}
       {isCompletionModalOpen && selectedEnquiry && isEmployee && (
         <div
@@ -3426,7 +4105,7 @@ export default function AdminEnquiriesPage() {
           >
             <div className="admin-modal-header">
               <h2 id="export-monthly-report-modal-title" className="admin-modal-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>📊</span> Monthly Enquiries Excel Report
+                <span>📊</span> Enquiries Excel Reporting Console
               </h2>
               <button
                 type="button"
@@ -3440,73 +4119,145 @@ export default function AdminEnquiriesPage() {
             </div>
 
             <div className="admin-modal-body" style={{ padding: '18px 20px' }}>
-              <div
-                style={{
-                  background: '#f0fdf4',
-                  border: '1px solid #bbf7d0',
-                  borderRadius: '6px',
-                  padding: '12px 14px',
-                  marginBottom: '16px'
-                }}
-              >
-                <strong style={{ display: 'block', fontSize: '0.84rem', color: '#166534', marginBottom: '3px' }}>
-                  Compliance Reporting Month Rule:
-                </strong>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: '#15803d', lineHeight: 1.4 }}>
-                  Monthly audit reports are strictly grounded in <code>completion_approved_at</code> (the date and time when the Head Person approved the completion). An enquiry received in an earlier month belongs strictly to the month of final Head approval.
-                </p>
+              {/* Report Type Selector */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  className={exportReportType === 'monthly' ? 'btn-primary' : 'btn-outline'}
+                  onClick={() => setExportReportType('monthly')}
+                  style={{ flex: 1, padding: '8px 12px', fontSize: '0.84rem', fontWeight: 600 }}
+                >
+                  📊 Monthly Audit Report
+                </button>
+                <button
+                  type="button"
+                  className={exportReportType === 'daily' ? 'btn-primary' : 'btn-outline'}
+                  onClick={() => setExportReportType('daily')}
+                  style={{ flex: 1, padding: '8px 12px', fontSize: '0.84rem', fontWeight: 600 }}
+                >
+                  📅 Daily Operations Report
+                </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                <div>
-                  <label htmlFor="export-month-select" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                    Reporting Month:
-                  </label>
-                  <select
-                    id="export-month-select"
-                    className="admin-select"
-                    value={exportMonthIndex}
-                    onChange={(e) => setExportMonthIndex(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              {exportReportType === 'monthly' ? (
+                <>
+                  <div
+                    style={{
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '6px',
+                      padding: '12px 14px',
+                      marginBottom: '16px'
+                    }}
                   >
-                    {MONTH_NAMES.map((name, idx) => (
-                      <option key={name} value={idx}>{name}</option>
-                    ))}
-                  </select>
-                </div>
+                    <strong style={{ display: 'block', fontSize: '0.84rem', color: '#166534', marginBottom: '3px' }}>
+                      Compliance Reporting Month Rule:
+                    </strong>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#15803d', lineHeight: 1.4 }}>
+                      Monthly audit reports are strictly grounded in <code>completion_approved_at</code> (the date and time when the Head Person approved the completion). An enquiry received in an earlier month belongs strictly to the month of final Head approval.
+                    </p>
+                  </div>
 
-                <div>
-                  <label htmlFor="export-year-select" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                    Reporting Year:
-                  </label>
-                  <select
-                    id="export-year-select"
-                    className="admin-select"
-                    value={exportYear}
-                    onChange={(e) => setExportYear(parseInt(e.target.value, 10))}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                    <div>
+                      <label htmlFor="export-month-select" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                        Reporting Month:
+                      </label>
+                      <select
+                        id="export-month-select"
+                        className="admin-select"
+                        value={exportMonthIndex}
+                        onChange={(e) => setExportMonthIndex(parseInt(e.target.value, 10))}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                      >
+                        {MONTH_NAMES.map((name, idx) => (
+                          <option key={name} value={idx}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="export-year-select" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                        Reporting Year:
+                      </label>
+                      <select
+                        id="export-year-select"
+                        className="admin-select"
+                        value={exportYear}
+                        onChange={(e) => setExportYear(parseInt(e.target.value, 10))}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                      >
+                        {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px 14px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Standard Filename:</span>
+                      <code style={{ fontSize: '0.84rem', color: '#0f172a', fontWeight: 700 }}>
+                        {getMonthlyReportFilename(exportMonthIndex, exportYear)}
+                      </code>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                      <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Eligible Approved Enquiries:</span>
+                      <span style={{ fontSize: '0.88rem', color: eligibleExportCount > 0 ? '#166534' : '#64748b', fontWeight: 700 }}>
+                        {eligibleExportCount} record{eligibleExportCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      background: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '6px',
+                      padding: '12px 14px',
+                      marginBottom: '16px'
+                    }}
                   >
-                    {[2024, 2025, 2026, 2027, 2028].map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                    <strong style={{ display: 'block', fontSize: '0.84rem', color: '#0369a1', marginBottom: '3px' }}>
+                      Daily Operations Report:
+                    </strong>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#0284c7', lineHeight: 1.4 }}>
+                      Exports all enquiries received on the selected calendar date (IST) with full 20 operational columns, assigned engineers, expected visits, and current status.
+                    </p>
+                  </div>
 
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px 14px', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Standard Filename:</span>
-                  <code style={{ fontSize: '0.84rem', color: '#0f172a', fontWeight: 700 }}>
-                    {getMonthlyReportFilename(exportMonthIndex, exportYear)}
-                  </code>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-                  <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Eligible Approved Enquiries:</span>
-                  <span style={{ fontSize: '0.88rem', color: eligibleExportCount > 0 ? '#166534' : '#64748b', fontWeight: 700 }}>
-                    {eligibleExportCount} record{eligibleExportCount === 1 ? '' : 's'}
-                  </span>
-                </div>
-              </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <label htmlFor="export-daily-date" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                      Select Calendar Date (IST):
+                    </label>
+                    <input
+                      type="date"
+                      id="export-daily-date"
+                      className="admin-input"
+                      value={exportDailyDate}
+                      onChange={(e) => setExportDailyDate(e.target.value)}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px 14px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Target Filename:</span>
+                      <code style={{ fontSize: '0.84rem', color: '#0f172a', fontWeight: 700 }}>
+                        {getDailyEnquiryReportFilename(exportDailyDate)}
+                      </code>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                      <span style={{ fontSize: '0.84rem', color: '#475569', fontWeight: 600 }}>Enquiries for Date:</span>
+                      <span style={{ fontSize: '0.88rem', color: eligibleDailyExportCount > 0 ? '#0369a1' : '#64748b', fontWeight: 700 }}>
+                        {eligibleDailyExportCount} record{eligibleDailyExportCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4 }}>
                 💡 Excel download is available to all active authorized staff. The generated workbook includes 18 standard audit and accountability columns.
@@ -3665,6 +4416,61 @@ export default function AdminEnquiriesPage() {
                   </select>
                 </div>
 
+                {/* Expected Visit Date & Time */}
+                {selectedAssigneeId && (
+                  <div style={{ marginTop: '12px' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #e2e8f0' }}>
+                      📅 Expected Engineer Visit
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
+                        <label htmlFor="assign-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                          Visit Date <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                        </label>
+                        <input
+                          id="assign-visit-date"
+                          type="date"
+                          className="admin-form-input"
+                          value={assignVisitDate}
+                          onChange={(e) => setAssignVisitDate(e.target.value)}
+                          disabled={isSubmittingAssignment}
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div className="admin-form-group" style={{ flex: '1 1 130px' }}>
+                        <label htmlFor="assign-visit-time" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                          Arrival Time <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                        </label>
+                        <input
+                          id="assign-visit-time"
+                          type="time"
+                          className="admin-form-input"
+                          value={assignVisitTime}
+                          onChange={(e) => setAssignVisitTime(e.target.value)}
+                          disabled={isSubmittingAssignment || !assignVisitDate}
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    </div>
+                    <div className="admin-form-group" style={{ marginTop: '8px' }}>
+                      <label htmlFor="assign-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                        Visit Note <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <textarea
+                        id="assign-visit-note"
+                        className="admin-form-input"
+                        placeholder="e.g. Customer requested afternoon slot, bring thermal paste..."
+                        value={assignVisitNote}
+                        onChange={(e) => setAssignVisitNote(e.target.value)}
+                        disabled={isSubmittingAssignment}
+                        maxLength={300}
+                        rows={2}
+                        style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="admin-form-group" style={{ marginTop: '12px' }}>
                   <label htmlFor="assign-reason-input" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
                     Assignment / Reassignment Reason <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>:
@@ -3738,6 +4544,126 @@ export default function AdminEnquiriesPage() {
           />
         </Suspense>
       )}
-    </AdminLayout>
+
+      {/* 12. Employee Self-Assign Confirmation Modal (visit time optional) */}
+      {isSelfAssignModalOpen && isEmployee && selectedEnquiry && (
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => !isSelfAssigning && setIsSelfAssignModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="self-assign-modal-title"
+        >
+          <div
+            className="admin-modal-dialog confirm-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px' }}
+          >
+            <div className="admin-modal-header">
+              <div>
+                <h2 id="self-assign-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                  Take This Enquiry
+                </h2>
+                <span className="modal-subtitle-note">
+                  Enquiry {selectedEnquiry.enquiry_number || selectedEnquiry.id}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setIsSelfAssignModalOpen(false)}
+                disabled={isSelfAssigning}
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmSelfAssign}>
+              <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
+                <p style={{ margin: '0 0 14px 0', fontSize: '0.88rem', color: '#475569', lineHeight: 1.5 }}>
+                  You are about to take responsibility for this enquiry. Your identity will be recorded server-side from your authenticated session.
+                </p>
+
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #e2e8f0' }}>
+                  📅 Expected Arrival (Optional)
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
+                    <label htmlFor="self-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                      Visit Date
+                    </label>
+                    <input
+                      id="self-visit-date"
+                      type="date"
+                      className="admin-form-input"
+                      value={selfVisitDate}
+                      onChange={(e) => setSelfVisitDate(e.target.value)}
+                      disabled={isSelfAssigning}
+                      style={{ width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div className="admin-form-group" style={{ flex: '1 1 120px' }}>
+                    <label htmlFor="self-visit-time" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                      Arrival Time
+                    </label>
+                    <input
+                      id="self-visit-time"
+                      type="time"
+                      className="admin-form-input"
+                      value={selfVisitTime}
+                      onChange={(e) => setSelfVisitTime(e.target.value)}
+                      disabled={isSelfAssigning || !selfVisitDate}
+                      style={{ width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-form-group">
+                  <label htmlFor="self-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                    Visit Note <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                  </label>
+                  <textarea
+                    id="self-visit-note"
+                    className="admin-form-input"
+                    placeholder="e.g. Will bring replacement HDD, scheduled for AM..."
+                    value={selfVisitNote}
+                    onChange={(e) => setSelfVisitNote(e.target.value)}
+                    disabled={isSelfAssigning}
+                    maxLength={300}
+                    rows={2}
+                    style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                  />
+                </div>
+
+                <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '6px', padding: '8px 12px', marginTop: '10px', fontSize: '0.79rem', color: '#0369a1' }}>
+                  ℹ️ Your name, employee code, phone, and Aadhaar are captured server-side. You cannot modify your own identity.
+                </div>
+              </div>
+
+              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => setIsSelfAssignModalOpen(false)}
+                  disabled={isSelfAssigning}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={isSelfAssigning}
+                >
+                  {isSelfAssigning ? 'Assigning...' : '✋ Confirm Self-Assignment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      </AdminLayout>
   )
 }
