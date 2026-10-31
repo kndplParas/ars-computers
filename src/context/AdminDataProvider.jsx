@@ -278,7 +278,14 @@ export function AdminDataProvider({ children }) {
           customer_name: row.name,
           category_label: row.category_interest || 'General Hardware',
           is_archived: Boolean(row.is_archived),
-          is_in_bin: Boolean(row.is_in_bin)
+          is_in_bin: Boolean(row.is_in_bin),
+          is_removed: Boolean(row.is_removed),
+          removal_category: row.removal_category || null,
+          removal_reason: row.removal_reason || null,
+          removed_at: row.removed_at || null,
+          removed_by: row.removed_by || null,
+          removed_by_name: row.removed_by_name || null,
+          removed_by_email: row.removed_by_email || null
         }))
         setLiveEnquiries(mapped)
         setEnquiriesError(null)
@@ -1122,6 +1129,140 @@ export function AdminDataProvider({ children }) {
         })
       )
       return { success: true, message: 'Purged in demo mode' }
+    },
+    [isLiveDatabase, adminUser, loadAdminEnquiries]
+  )
+
+  // Head-Only: Soft-remove fake/spam current-month enquiry (Superadmin Only)
+  const removeCurrentMonthEnquiry = useCallback(
+    async (enquiryId, category, reason) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Access denied: Only Superadministrator can remove fake or spam enquiries.')
+      }
+
+      if (!enquiryId) {
+        throw new Error('Validation error: Target enquiry ID is required.')
+      }
+
+      const cleanCategory = String(category || '').trim().toLowerCase()
+      const cleanReason = String(reason || '').trim()
+
+      const allowedCategories = ['spam', 'fake_enquiry', 'duplicate', 'invalid_contact', 'test_enquiry', 'other']
+      if (!allowedCategories.includes(cleanCategory)) {
+        throw new Error('Validation error: Removal category must be one of: Spam, Fake enquiry, Duplicate enquiry, Invalid contact details, Test enquiry, or Other.')
+      }
+
+      if (cleanReason.length < 3) {
+        throw new Error('Validation error: Mandatory removal reason is required (minimum 3 characters).')
+      }
+
+      if (cleanCategory === 'other' && (cleanReason.length < 5 || ['other', 'others', 'n/a', 'none'].includes(cleanReason.toLowerCase()))) {
+        throw new Error('Validation error: Detailed explanation required for "Other" category (minimum 5 characters).')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('remove_current_month_enquiry', {
+          p_enquiry_id: enquiryId,
+          p_category: cleanCategory,
+          p_reason: cleanReason
+        })
+        if (error) throw error
+        await loadAdminEnquiries()
+        return data
+      }
+
+      // Demo Mode Mutation
+      const now = new Date()
+      const target = demoEnquiries.find((e) => e.id === enquiryId)
+      if (!target) {
+        throw new Error('Not found: Enquiry does not exist.')
+      }
+
+      if (target.completion_approved_at || target.status === 'completed') {
+        throw new Error('Permanent record protection: Completed and approved enquiries cannot be removed.')
+      }
+
+      const enqDate = new Date(target.created_at)
+      if (enqDate > now) {
+        throw new Error('Validation error: Future-dated enquiries cannot be processed.')
+      }
+      if (enqDate.getFullYear() !== now.getFullYear() || enqDate.getMonth() !== now.getMonth()) {
+        throw new Error('Historical lock violation: Only enquiries created in the current calendar month can be removed.')
+      }
+
+      const isoNow = now.toISOString()
+      setDemoEnquiries((prev) =>
+        prev.map((e) =>
+          e.id === enquiryId
+            ? {
+                ...e,
+                is_removed: true,
+                removed_at: isoNow,
+                removed_by: adminUser?.id,
+                removed_by_name: adminUser?.name || adminUser?.full_name || 'Head Person',
+                removed_by_email: adminUser?.email,
+                removal_category: cleanCategory,
+                removal_reason: cleanReason,
+                removed_previous_status: e.status
+              }
+            : e
+        )
+      )
+
+      return {
+        success: true,
+        enquiry_id: enquiryId,
+        is_removed: true,
+        removal_category: cleanCategory,
+        removal_reason: cleanReason,
+        removed_at: isoNow,
+        message: 'Enquiry soft-removed successfully.'
+      }
+    },
+    [isLiveDatabase, adminUser, demoEnquiries, loadAdminEnquiries]
+  )
+
+  // Head-Only: Restore soft-removed enquiry (Superadmin Only)
+  const restoreRemovedEnquiry = useCallback(
+    async (enquiryId, reason = null) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Access denied: Only Superadministrator can restore removed enquiries.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('restore_removed_enquiry', {
+          p_enquiry_id: enquiryId,
+          p_reason: reason
+        })
+        if (error) throw error
+        await loadAdminEnquiries()
+        return data
+      }
+
+      const now = new Date().toISOString()
+      setDemoEnquiries((prev) =>
+        prev.map((e) =>
+          e.id === enquiryId
+            ? {
+                ...e,
+                is_removed: false,
+                status: e.removed_previous_status || 'new',
+                removed_at: null,
+                removed_by: null,
+                removed_by_name: null,
+                removed_by_email: null,
+                removal_category: null,
+                removal_reason: null,
+                removed_previous_status: null,
+                updated_at: now
+              }
+            : e
+        )
+      )
+
+      return { success: true, enquiry_id: enquiryId, is_removed: false }
     },
     [isLiveDatabase, adminUser, loadAdminEnquiries]
   )
@@ -2653,7 +2794,7 @@ export function AdminDataProvider({ children }) {
     const totalCategories = categories.length
     const activeCategories = categories.filter((c) => c.is_active !== false).length
 
-    const activeEnquiries = enquiries.filter((e) => !e.is_archived)
+    const activeEnquiries = enquiries.filter((e) => !e.is_archived && !e.is_removed)
     const totalEnquiries = activeEnquiries.length
     const newEnquiries = activeEnquiries.filter((e) => e.status === 'new').length
     const inProgressEnquiries = activeEnquiries.filter((e) => e.status === 'in_progress').length
@@ -2703,7 +2844,8 @@ export function AdminDataProvider({ children }) {
         quoted: quotedEnquiries,
         closed: closedEnquiries,
         pendingRejection: pendingRejectionEnquiries,
-        archived: archivedEnquiries
+        archived: archivedEnquiries,
+        removedCount: enquiries.filter((e) => e.is_removed).length
       },
       staff: {
         total: totalStaff,
@@ -2794,6 +2936,8 @@ export function AdminDataProvider({ children }) {
     purgeExpiredBinEnquiries,
     archiveEnquiry,
     restoreEnquiry,
+    removeCurrentMonthEnquiry,
+    restoreRemovedEnquiry,
     fetchEnquiryActivities,
 
     // Enquiry Employee Assignment (Phase 4)

@@ -72,6 +72,9 @@ export function filterEnquiriesByReportingMonth(enquiries, targetMonthIndex, tar
   if (!Array.isArray(enquiries)) return []
 
   return enquiries.filter((item) => {
+    // Exclude soft-removed records
+    if (item.is_removed) return false;
+
     // Strictly requires completion_approved_at
     if (!item.completion_approved_at) return false
 
