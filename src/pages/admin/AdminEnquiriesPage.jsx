@@ -7,6 +7,15 @@ import { parseServiceEnquiry } from '../../utils/serviceEnquiryHelper'
 import { formatAadhaarDisplay } from '../../utils/aadhaarFormatter'
 import { formatJobDispatchText, buildWhatsAppDispatchUrl } from '../../utils/jobDispatchFormatter'
 import {
+  formatEnquiryCustomerDispatch,
+  buildCustomerWhatsAppUrl,
+  buildCustomerEmailSubject,
+  resolveCustomerPhone,
+  resolveCustomerEmail,
+  normalizeIndianPhoneForWhatsApp
+} from '../../utils/customerDispatchFormatter'
+import CustomerEmailModal from '../../components/admin/CustomerEmailModal'
+import {
   downloadMonthlyEnquiriesExcel,
   filterEnquiriesByReportingMonth,
   getMonthlyReportFilename,
@@ -126,6 +135,7 @@ export default function AdminEnquiriesPage() {
 
   // Modals & Panels State
   const [selectedEnquiry, setSelectedEnquiry] = useState(null)
+  const [isCustomerEmailModalOpen, setIsCustomerEmailModalOpen] = useState(false)
   const [statusConfirmTarget, setStatusConfirmTarget] = useState(null) // { enquiry, nextStatus }
   const [editingNotes, setEditingNotes] = useState('')
   const [notification, setNotification] = useState(null)
@@ -350,27 +360,40 @@ export default function AdminEnquiriesPage() {
     setDateFilter('all')
   }
 
-  // --- Engineer Job Dispatch Handlers ---
-  const handleWhatsAppDispatch = () => {
+  // --- Customer Communication Handlers ---
+  const handleCustomerWhatsApp = () => {
     if (!selectedEnquiry) return
-    const url = buildWhatsAppDispatchUrl(selectedEnquiry)
+    const rawPhone = resolveCustomerPhone(selectedEnquiry)
+    const normalized = normalizeIndianPhoneForWhatsApp(rawPhone)
+    if (!normalized) {
+      showNotification('No valid customer WhatsApp number registered.', 'error')
+      return
+    }
+    const url = buildCustomerWhatsAppUrl(selectedEnquiry)
     if (url) {
       window.open(url, '_blank')
     }
   }
 
-  const handleCopyDispatch = async () => {
+  const handleCustomerCopy = async () => {
     if (!selectedEnquiry) return
     try {
-      const text = formatJobDispatchText(selectedEnquiry)
+      const text = formatEnquiryCustomerDispatch(selectedEnquiry)
       await navigator.clipboard.writeText(text)
       setCopyFeedback(true)
-      showNotification('Job dispatch copied to clipboard!', 'success')
+      showNotification('Service visit details copied', 'success')
       setTimeout(() => setCopyFeedback(false), 2500)
     } catch (err) {
       showNotification('Could not copy to clipboard: ' + err.message, 'error')
     }
   }
+
+  const handleCustomerEmail = () => {
+    if (!selectedEnquiry) return
+    setIsCustomerEmailModalOpen(true)
+  }
+
+  // --- Engineer Job Dispatch Handlers ---
 
   const handleEmailDispatch = () => {
     if (!selectedEnquiry) return
@@ -3602,125 +3625,154 @@ export default function AdminEnquiriesPage() {
                 )}
               </div>
 
-              {/* Modal Footer */}
-              <div className="admin-modal-footer" style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
-                  {/* Circular WhatsApp Dispatch Button */}
-                  <button
-                    type="button"
-                    id="whatsapp-dispatch-btn"
-                    onClick={handleWhatsAppDispatch}
-                    title={
-                      selectedEnquiry.assigned_employee_phone
-                        ? `Send Job Dispatch to ${selectedEnquiry.assigned_employee_name || 'Engineer'} via WhatsApp (${selectedEnquiry.assigned_employee_phone})`
-                        : selectedEnquiry.assigned_employee_name
-                        ? `Engineer ${selectedEnquiry.assigned_employee_name} has no phone configured`
-                        : 'Assign an engineer first to send WhatsApp dispatch'
-                    }
-                    style={{
-                      width: '44px',
-                      height: '44px',
-                      minWidth: '44px',
-                      minHeight: '44px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: selectedEnquiry.assigned_employee_phone ? '#25D366' : '#94a3b8',
-                      color: '#ffffff',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: selectedEnquiry.assigned_employee_phone ? 'pointer' : 'not-allowed',
-                      boxShadow: selectedEnquiry.assigned_employee_phone ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
-                      padding: 0,
-                      transition: 'all 0.15s ease'
-                    }}
-                    aria-label="Send WhatsApp Dispatch"
-                  >
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z"/>
-                    </svg>
-                  </button>
+              {/* Modal Footer: Customer Communication Actions & Close */}
+              {(() => {
+                const rawCustPhone = resolveCustomerPhone(selectedEnquiry)
+                const normCustPhone = normalizeIndianPhoneForWhatsApp(rawCustPhone)
+                const isCustWhatsAppValid = Boolean(normCustPhone)
+                const custPhoneDisplay = rawCustPhone || 'None'
 
-                  {/* Circular Copy Dispatch Button */}
-                  <button
-                    type="button"
-                    id="copy-dispatch-btn"
-                    onClick={handleCopyDispatch}
-                    title={copyFeedback ? 'Copied to clipboard!' : 'Copy Job Dispatch to Clipboard'}
-                    style={{
-                      width: '44px',
-                      height: '44px',
-                      minWidth: '44px',
-                      minHeight: '44px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: copyFeedback ? '#16a34a' : '#0284c7',
-                      color: '#ffffff',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
-                      padding: 0,
-                      transition: 'all 0.15s ease'
-                    }}
-                    aria-label="Copy Job Dispatch"
-                  >
-                    {copyFeedback ? (
-                      <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>✓</span>
-                    ) : (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                      </svg>
-                    )}
-                  </button>
+                const resolvedCustEmail = resolveCustomerEmail(selectedEnquiry)
+                const isCustEmailValid = Boolean(resolvedCustEmail)
+                const custEmailDisplay = resolvedCustEmail || 'None'
 
-                  {/* Circular Email Dispatch Button */}
-                  <button
-                    type="button"
-                    id="email-dispatch-btn"
-                    onClick={handleEmailDispatch}
-                    title={
-                      selectedEnquiry.assigned_employee_email
-                        ? `Email Job Dispatch to ${selectedEnquiry.assigned_employee_name || 'Engineer'} (${selectedEnquiry.assigned_employee_email})`
-                        : 'Email Job Dispatch'
-                    }
+                return (
+                  <div
+                    className="admin-modal-footer customer-dispatch-footer"
                     style={{
-                      width: '44px',
-                      height: '44px',
-                      minWidth: '44px',
-                      minHeight: '44px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: '#4f46e5',
-                      color: '#ffffff',
-                      display: 'inline-flex',
+                      padding: '14px 20px',
+                      borderTop: '1px solid #e2e8f0',
+                      display: 'flex',
+                      justifyContent: 'space-between',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 4px rgba(79, 70, 229, 0.3)',
-                      padding: 0,
-                      transition: 'all 0.15s ease'
+                      gap: '12px',
+                      flexWrap: 'wrap'
                     }}
-                    aria-label="Email Job Dispatch"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                      <polyline points="22,6 12,13 2,6"></polyline>
-                    </svg>
-                  </button>
-                </div>
+                    {/* Customer Communication Action Group */}
+                    <div
+                      className="customer-communication-actions"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+                    >
+                      {/* 1. Circular Customer WhatsApp Button */}
+                      <button
+                        type="button"
+                        id="customer-whatsapp-btn"
+                        onClick={handleCustomerWhatsApp}
+                        disabled={!isCustWhatsAppValid}
+                        title={
+                          isCustWhatsAppValid
+                            ? `Send to customer on WhatsApp (${custPhoneDisplay})`
+                            : 'No valid customer WhatsApp number registered'
+                        }
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          minWidth: '44px',
+                          minHeight: '44px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: isCustWhatsAppValid ? '#25D366' : '#94a3b8',
+                          color: '#ffffff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed',
+                          boxShadow: isCustWhatsAppValid ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
+                          padding: 0,
+                          transition: 'all 0.15s ease'
+                        }}
+                        aria-label="Send to customer on WhatsApp"
+                      >
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z"/>
+                        </svg>
+                      </button>
 
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={handleCloseDetails}
-                  style={{ minHeight: '44px', minWidth: '88px', padding: '8px 20px', fontSize: '14px' }}
-                >
-                  Close
-                </button>
-              </div>
+                      {/* 2. Circular Customer Copy / Notepad Button */}
+                      <button
+                        type="button"
+                        id="customer-copy-btn"
+                        onClick={handleCustomerCopy}
+                        title={copyFeedback ? 'Service visit details copied!' : 'Copy customer service details'}
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          minWidth: '44px',
+                          minHeight: '44px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: copyFeedback ? '#16a34a' : '#0284c7',
+                          color: '#ffffff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
+                          padding: 0,
+                          transition: 'all 0.15s ease'
+                        }}
+                        aria-label="Copy customer service details"
+                      >
+                        {copyFeedback ? (
+                          <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>✓</span>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                        )}
+                      </button>
+
+                      {/* 3. Circular Customer Email Button */}
+                      <button
+                        type="button"
+                        id="customer-email-btn"
+                        onClick={handleCustomerEmail}
+                        disabled={!isCustEmailValid}
+                        title={
+                          isCustEmailValid
+                            ? `Email customer service details (${custEmailDisplay})`
+                            : 'No customer email registered'
+                        }
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          minWidth: '44px',
+                          minHeight: '44px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: isCustEmailValid ? '#ea4335' : '#94a3b8',
+                          color: '#ffffff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: isCustEmailValid ? 'pointer' : 'not-allowed',
+                          boxShadow: isCustEmailValid ? '0 2px 4px rgba(234, 67, 53, 0.3)' : 'none',
+                          padding: 0,
+                          transition: 'all 0.15s ease'
+                        }}
+                        aria-label="Email customer service details"
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                          <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Close Button */}
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={handleCloseDetails}
+                      style={{ minHeight: '44px', minWidth: '88px', padding: '8px 20px', fontSize: '14px' }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )
@@ -5078,6 +5130,18 @@ export default function AdminEnquiriesPage() {
         </div>
       )}
 
-      </AdminLayout>
+      {isCustomerEmailModalOpen && selectedEnquiry && (
+        <CustomerEmailModal
+          isOpen={isCustomerEmailModalOpen}
+          onClose={() => setIsCustomerEmailModalOpen(false)}
+          title="Customer Email Preview — Service Enquiry"
+          recipientEmail={resolveCustomerEmail(selectedEnquiry)}
+          subject={buildCustomerEmailSubject(selectedEnquiry)}
+          bodyText={formatEnquiryCustomerDispatch(selectedEnquiry)}
+          shareableAttachments={enquiryProofs.filter((p) => !p.is_voided && p.is_customer_shareable)}
+          totalAttachmentCount={enquiryProofs.filter((p) => !p.is_voided).length}
+        />
+      )}
+    </AdminLayout>
   )
 }
