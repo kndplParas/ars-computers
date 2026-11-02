@@ -315,31 +315,13 @@ DROP FUNCTION IF EXISTS public.create_sales_order(
   p_notes TEXT
 );
 
--- Ensure active 9-parameter version has correct permissions
-REVOKE ALL ON FUNCTION public.create_sales_order(
-  TEXT, TEXT, JSONB, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT
-) FROM PUBLIC, anon;
-
-GRANT EXECUTE ON FUNCTION public.create_sales_order(
-  TEXT, TEXT, JSONB, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT
-) TO authenticated, service_role;
-
--- 2. DROP deprecated legacy register_order_attachment overload (5 params)
-DROP FUNCTION IF EXISTS public.register_order_attachment(
-  p_order_id UUID,
-  p_storage_path TEXT,
-  p_original_filename TEXT,
-  p_mime_type TEXT,
-  p_file_size BIGINT
-);
-
--- Re-assert permissions on active 6-parameter register_order_attachment
+-- Ensure active 5-parameter register_order_attachment has correct permissions
 REVOKE ALL ON FUNCTION public.register_order_attachment(
-  UUID, TEXT, TEXT, TEXT, BIGINT, TEXT
+  UUID, TEXT, TEXT, TEXT, BIGINT
 ) FROM PUBLIC, anon;
 
 GRANT EXECUTE ON FUNCTION public.register_order_attachment(
-  UUID, TEXT, TEXT, TEXT, BIGINT, TEXT
+  UUID, TEXT, TEXT, TEXT, BIGINT
 ) TO authenticated, service_role;
 
 -- 3. Re-implement record_order_payment with correct schema bindings & role permissions
