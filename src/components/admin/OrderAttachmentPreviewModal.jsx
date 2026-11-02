@@ -2,17 +2,20 @@ import { useState, useEffect, useCallback } from 'react'
 
 /**
  * ============================================================================
- * ARS Computers — Order Attachment Lightbox & Preview Modal
+ * ARS Computers — Order Attachment Lightbox & Document Preview Modal
  * ============================================================================
- * Clean, modern inline lightbox for viewing order documents and photos safely.
+ * Self-contained, responsive inline lightbox for previewing photos and PDFs
+ * without depending on external utility classes.
  *
  * Invariants:
- * - NO automatic download triggered upon opening.
- * - Prominent Close (X) button and Escape key support (safe closure, no deletion).
- * - Next / Previous navigation when multiple files exist.
- * - Zoom in / Zoom out / Reset controls for images.
- * - Embedded PDF viewer for PDF documents.
- * - Optional explicit "Download File" button for when user explicitly requests download.
+ * - NO automatic download triggered upon opening (inline viewing only).
+ * - Photos open in high-clarity in-app viewer with zoom in/out/reset controls.
+ * - PDFs open in embedded reader with readable pages, fullscreen option,
+ *   and graceful fallback if browser plugin is disabled.
+ * - Prominent Close (✕) button and Escape key support.
+ * - Left/Right arrows and thumbnail strip for multi-file navigation.
+ * - Clear error states with manual open / download fallback buttons.
+ * - Does not expose internal credentials or service-role keys.
  * ============================================================================
  */
 export default function OrderAttachmentPreviewModal({
@@ -20,15 +23,19 @@ export default function OrderAttachmentPreviewModal({
   onClose,
   attachments = [],
   initialIndex = 0,
-  getOrderAttachmentUrl
+  getOrderAttachmentPreviewUrl,
+  getOrderAttachmentDownloadUrl,
+  getOrderAttachmentUrl // Backwards-compatibility alias
 }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
   const [zoomLevel, setZoomLevel] = useState(1)
-  const [currentUrl, setCurrentUrl] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [downloadUrl, setDownloadUrl] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState(null)
+  const [isDownloading, setIsDownloading] = useState(false)
 
-  // Keep index synced with initialIndex on open
+  // Sync index when modal opens or initialIndex changes
   useEffect(() => {
     let ignore = false
     Promise.resolve().then(() => {
@@ -36,6 +43,7 @@ export default function OrderAttachmentPreviewModal({
       if (isOpen) {
         setCurrentIndex(initialIndex >= 0 && initialIndex < attachments.length ? initialIndex : 0)
         setZoomLevel(1)
+        setLoadError(null)
       }
     })
     return () => {
@@ -45,32 +53,59 @@ export default function OrderAttachmentPreviewModal({
 
   const currentAttachment = attachments[currentIndex] || null
 
-  // Resolve signed URL for inline viewing
+  // Resolve preview and download URLs whenever current attachment changes
   useEffect(() => {
     let isCancelled = false
     if (!isOpen || !currentAttachment) {
       Promise.resolve().then(() => {
-        if (!isCancelled) setCurrentUrl(null)
+        if (!isCancelled) {
+          setPreviewUrl(null)
+          setDownloadUrl(null)
+        }
       })
       return
     }
 
-    const fetchUrl = async () => {
+    const resolveUrls = async () => {
       setIsLoading(true)
       setLoadError(null)
       try {
-        if (typeof getOrderAttachmentUrl === 'function') {
-          const url = await getOrderAttachmentUrl(currentAttachment.storage_path, currentAttachment.original_filename)
+        const previewResolver = getOrderAttachmentPreviewUrl || getOrderAttachmentUrl
+        if (typeof previewResolver !== 'function') {
+          throw new Error('Document preview service is currently unavailable.')
+        }
+
+        const pUrl = await previewResolver(
+          currentAttachment.storage_path,
+          currentAttachment.original_filename
+        )
+
+        if (!pUrl) {
+          throw new Error('Unable to resolve a secure preview link for this file.')
+        }
+
+        if (!isCancelled) {
+          setPreviewUrl(pUrl)
+        }
+
+        // Pre-resolve download URL if available
+        if (typeof getOrderAttachmentDownloadUrl === 'function') {
+          const dUrl = await getOrderAttachmentDownloadUrl(
+            currentAttachment.storage_path,
+            currentAttachment.original_filename
+          )
           if (!isCancelled) {
-            setCurrentUrl(url)
+            setDownloadUrl(dUrl || pUrl)
           }
         } else {
-          throw new Error('Attachment URL resolver not available.')
+          if (!isCancelled) {
+            setDownloadUrl(pUrl)
+          }
         }
       } catch (err) {
         if (!isCancelled) {
-          console.error('[OrderAttachmentPreviewModal] Failed to resolve URL:', err)
-          setLoadError(err.message || 'Unable to load attachment preview.')
+          console.error('[OrderAttachmentPreviewModal] Error loading attachment:', err)
+          setLoadError(err.message || 'Unable to load file preview.')
         }
       } finally {
         if (!isCancelled) {
@@ -79,45 +114,60 @@ export default function OrderAttachmentPreviewModal({
       }
     }
 
-    fetchUrl()
+    resolveUrls()
 
     return () => {
       isCancelled = true
     }
-  }, [isOpen, currentAttachment, getOrderAttachmentUrl])
+  }, [isOpen, currentAttachment, getOrderAttachmentPreviewUrl, getOrderAttachmentDownloadUrl, getOrderAttachmentUrl])
 
   // Navigation handlers
   const handlePrev = useCallback(() => {
     if (attachments.length <= 1) return
     setZoomLevel(1)
+    setLoadError(null)
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : attachments.length - 1))
   }, [attachments.length])
 
   const handleNext = useCallback(() => {
     if (attachments.length <= 1) return
     setZoomLevel(1)
+    setLoadError(null)
     setCurrentIndex((prev) => (prev < attachments.length - 1 ? prev + 1 : 0))
   }, [attachments.length])
 
-  // Zoom handlers
+  // Zoom controls for images
   const handleZoomIn = () => setZoomLevel((z) => Math.min(3, Math.round((z + 0.25) * 100) / 100))
   const handleZoomOut = () => setZoomLevel((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))
   const handleResetZoom = () => setZoomLevel(1)
 
-  // Explicit download handler
-  const handleExplicitDownload = () => {
-    if (!currentUrl) return
-    const a = document.createElement('a')
-    a.href = currentUrl
-    a.download = currentAttachment?.original_filename || 'download'
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+  // Direct download trigger
+  const handleDownload = async () => {
+    const targetUrl = downloadUrl || previewUrl
+    if (!targetUrl || isDownloading) return
+    setIsDownloading(true)
+    try {
+      const a = document.createElement('a')
+      a.href = targetUrl
+      a.download = currentAttachment?.original_filename || 'order-attachment'
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } finally {
+      setTimeout(() => setIsDownloading(false), 800)
+    }
   }
 
-  // Keyboard navigation
+  // Open in new tab
+  const handleOpenInNewTab = () => {
+    const targetUrl = previewUrl || downloadUrl
+    if (!targetUrl) return
+    window.open(targetUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  // Keyboard navigation & accessibility
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e) => {
@@ -135,52 +185,143 @@ export default function OrderAttachmentPreviewModal({
 
   if (!isOpen || !currentAttachment) return null
 
+  const filename = currentAttachment.original_filename || 'Attachment'
+  const ext = (filename.split('.').pop() || '').toLowerCase()
   const isPdf =
     currentAttachment.mime_type === 'application/pdf' ||
-    (currentAttachment.original_filename && currentAttachment.original_filename.toLowerCase().endsWith('.pdf'))
+    ext === 'pdf' ||
+    Boolean(currentAttachment.original_filename?.toLowerCase().endsWith('.pdf'))
+
+  const formattedSize = currentAttachment.file_size || currentAttachment.file_size_bytes
+    ? `${((currentAttachment.file_size || currentAttachment.file_size_bytes) / 1024).toFixed(1)} KB`
+    : null
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-slate-950/90 backdrop-blur-sm transition-opacity"
       role="dialog"
       aria-modal="true"
-      aria-label="Attachment Preview"
+      aria-label="Order Attachment Preview"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1200,
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: 'rgba(15, 23, 42, 0.96)',
+        backdropFilter: 'blur(6px)',
+        color: '#f8fafc',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        userSelect: 'none'
+      }}
     >
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-6 py-4 bg-slate-900/90 border-b border-slate-800 text-white">
-        <div className="flex items-center space-x-3">
-          <span className="text-sm font-semibold truncate max-w-md">
-            {currentAttachment.original_filename || 'Attachment'}
+      {/* Top Action Bar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 20px',
+          backgroundColor: '#0f172a',
+          borderBottom: '1px solid #1e293b',
+          gap: '12px',
+          flexWrap: 'wrap',
+          flexShrink: 0
+        }}
+      >
+        {/* Document Info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+          <span
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: isPdf ? '#7f1d1d' : '#0369a1',
+              color: '#ffffff',
+              letterSpacing: '0.04em'
+            }}
+          >
+            {isPdf ? 'PDF' : ext.toUpperCase() || 'IMAGE'}
           </span>
-          <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-            {currentIndex + 1} of {attachments.length}
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#f8fafc',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: '380px'
+            }}
+            title={filename}
+          >
+            {filename}
           </span>
-          {currentAttachment.file_size_bytes && (
-            <span className="text-xs text-slate-400">
-              ({(currentAttachment.file_size_bytes / 1024).toFixed(1)} KB)
+          {attachments.length > 1 && (
+            <span
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                backgroundColor: '#1e293b',
+                color: '#94a3b8',
+                border: '1px solid #334155'
+              }}
+            >
+              {currentIndex + 1} of {attachments.length}
+            </span>
+          )}
+          {formattedSize && (
+            <span style={{ fontSize: '12px', color: '#64748b' }}>
+              ({formattedSize})
             </span>
           )}
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center space-x-3">
-          {/* Zoom Controls for Images */}
-          {!isPdf && (
-            <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 space-x-1 mr-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {/* Zoom Controls for Photos */}
+          {!isPdf && previewUrl && !loadError && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor: '#1e293b',
+                borderRadius: '6px',
+                border: '1px solid #334155',
+                padding: '2px'
+              }}
+            >
               <button
                 type="button"
                 onClick={handleZoomOut}
                 disabled={zoomLevel <= 0.5}
-                className="px-2.5 py-1 text-xs text-slate-300 hover:text-white hover:bg-slate-700 rounded disabled:opacity-40"
                 title="Zoom Out (-)"
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: zoomLevel <= 0.5 ? '#475569' : '#f8fafc',
+                  background: 'none',
+                  border: 'none',
+                  cursor: zoomLevel <= 0.5 ? 'not-allowed' : 'pointer'
+                }}
               >
                 −
               </button>
               <button
                 type="button"
                 onClick={handleResetZoom}
-                className="px-2 py-1 text-xs text-slate-300 hover:text-white rounded"
-                title="Reset Zoom"
+                title="Reset to 100%"
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#94a3b8',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
               >
                 {Math.round(zoomLevel * 100)}%
               </button>
@@ -188,124 +329,384 @@ export default function OrderAttachmentPreviewModal({
                 type="button"
                 onClick={handleZoomIn}
                 disabled={zoomLevel >= 3}
-                className="px-2.5 py-1 text-xs text-slate-300 hover:text-white hover:bg-slate-700 rounded disabled:opacity-40"
                 title="Zoom In (+)"
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: zoomLevel >= 3 ? '#475569' : '#f8fafc',
+                  background: 'none',
+                  border: 'none',
+                  cursor: zoomLevel >= 3 ? 'not-allowed' : 'pointer'
+                }}
               >
                 +
               </button>
             </div>
           )}
 
-          {/* Explicit Download Action */}
+          {/* Open in New Window Button */}
           <button
             type="button"
-            onClick={handleExplicitDownload}
-            disabled={!currentUrl}
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-            title="Download file to device"
+            onClick={handleOpenInNewTab}
+            disabled={!previewUrl && !downloadUrl}
+            title="Open attachment in full browser window"
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 500,
+              backgroundColor: '#1e293b',
+              color: '#cbd5e1',
+              border: '1px solid #334155',
+              borderRadius: '6px',
+              cursor: (!previewUrl && !downloadUrl) ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>Download</span>
+            <span>↗</span>
+            <span>Open in Tab</span>
           </button>
 
-          {/* Close (X) Button */}
+          {/* Explicit Download Button */}
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={(!previewUrl && !downloadUrl) || isDownloading}
+            title="Download original file to your device"
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 600,
+              backgroundColor: '#2563eb',
+              color: '#ffffff',
+              border: '1px solid #3b82f6',
+              borderRadius: '6px',
+              cursor: ((!previewUrl && !downloadUrl) || isDownloading) ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>📥</span>
+            <span>{isDownloading ? 'Saving...' : 'Download'}</span>
+          </button>
+
+          {/* Close Button */}
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-rose-600 rounded-lg transition-colors"
             title="Close Preview (Esc)"
+            style={{
+              padding: '6px 12px',
+              fontSize: '14px',
+              fontWeight: 700,
+              backgroundColor: '#334155',
+              color: '#ffffff',
+              border: '1px solid #475569',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ✕
           </button>
         </div>
       </div>
 
-      {/* Main Preview Area */}
-      <div className="relative flex-1 flex items-center justify-center overflow-auto p-4 select-none">
-        {/* Previous Button */}
+      {/* Main Preview Viewing Area */}
+      <div
+        style={{
+          position: 'relative',
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'auto',
+          padding: '16px'
+        }}
+      >
+        {/* Previous Navigation Arrow */}
         {attachments.length > 1 && (
           <button
             type="button"
             onClick={handlePrev}
-            className="absolute left-6 z-10 p-3 text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 rounded-full shadow-lg transition-all"
-            title="Previous (Left Arrow)"
+            title="Previous Document (Left Arrow)"
+            style={{
+              position: 'absolute',
+              left: '20px',
+              zIndex: 10,
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(15, 23, 42, 0.85)',
+              border: '1px solid #334155',
+              color: '#ffffff',
+              fontSize: '22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
+            }}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
+            ‹
           </button>
         )}
 
-        {/* Content Body */}
-        <div className="flex items-center justify-center w-full h-full">
+        {/* Content Viewer Body */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            height: '100%',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Loading Indicator */}
           {isLoading && (
-            <div className="flex flex-col items-center space-y-3 text-slate-400">
-              <svg className="w-8 h-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              <span className="text-sm">Loading preview...</span>
-            </div>
-          )}
-
-          {loadError && !isLoading && (
-            <div className="text-center p-6 bg-slate-900 border border-slate-800 rounded-xl max-w-md">
-              <svg className="w-10 h-10 text-rose-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <p className="text-sm text-slate-300 mb-4">{loadError}</p>
-              <button
-                type="button"
-                onClick={handleExplicitDownload}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg"
-              >
-                Try Direct Download
-              </button>
-            </div>
-          )}
-
-          {!isLoading && !loadError && currentUrl && (
-            isPdf ? (
-              <iframe
-                src={`${currentUrl}#toolbar=0&navpanes=0`}
-                title={currentAttachment.original_filename}
-                className="w-full h-full max-w-5xl rounded-lg border border-slate-800 bg-white shadow-2xl"
+            <div style={{ textAlign: 'center', color: '#94a3b8' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  border: '3px solid #334155',
+                  borderTopColor: '#3b82f6',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                  margin: '0 auto 12px'
+                }}
               />
+              <div style={{ fontSize: '13px', fontWeight: 500 }}>Loading secure document preview...</div>
+            </div>
+          )}
+
+          {/* Error Message with Fallback Actions */}
+          {loadError && !isLoading && (
+            <div
+              style={{
+                backgroundColor: '#1e293b',
+                border: '1px solid #ef4444',
+                borderRadius: '10px',
+                padding: '24px 28px',
+                maxWidth: '460px',
+                textAlign: 'center',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+              }}
+            >
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</div>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#f8fafc', fontWeight: 600 }}>
+                Unable to Display Document Preview
+              </h4>
+              <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#cbd5e1', lineHeight: 1.5 }}>
+                {loadError}
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={handleOpenInNewTab}
+                  disabled={!previewUrl && !downloadUrl}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    backgroundColor: '#1e3a8a',
+                    color: '#ffffff',
+                    border: '1px solid #3b82f6',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Try Opening in New Window ↗
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={!previewUrl && !downloadUrl}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    backgroundColor: '#2563eb',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Download File Directly
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Successful Render */}
+          {!isLoading && !loadError && previewUrl && (
+            isPdf ? (
+              /* PDF In-App Viewer */
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  maxWidth: '1180px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  backgroundColor: '#ffffff',
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                  border: '1px solid #334155'
+                }}
+              >
+                {/* PDF Header Subbar */}
+                <div
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: '#1e293b',
+                    borderBottom: '1px solid #334155',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '12px',
+                    color: '#94a3b8'
+                  }}
+                >
+                  <span>📄 PDF Document ({filename})</span>
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#60a5fa', textDecoration: 'none', fontWeight: 500 }}
+                  >
+                    Open in Full Window ↗
+                  </a>
+                </div>
+
+                {/* PDF Embedded Object */}
+                <object
+                  data={`${previewUrl}#toolbar=1&navpanes=0`}
+                  type="application/pdf"
+                  style={{ width: '100%', flex: 1, minHeight: '68vh', border: 'none' }}
+                >
+                  <iframe
+                    src={`${previewUrl}#toolbar=1&navpanes=0`}
+                    title={filename}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                  />
+                  <div
+                    style={{
+                      padding: '32px 20px',
+                      textAlign: 'center',
+                      backgroundColor: '#0f172a',
+                      color: '#f8fafc'
+                    }}
+                  >
+                    <p style={{ margin: '0 0 14px 0', fontSize: '14px' }}>
+                      Your browser does not support inline PDF rendering.
+                    </p>
+                    <a
+                      href={previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-block',
+                        padding: '8px 16px',
+                        backgroundColor: '#2563eb',
+                        color: '#ffffff',
+                        borderRadius: '6px',
+                        textDecoration: 'none',
+                        fontSize: '13px',
+                        fontWeight: 600
+                      }}
+                    >
+                      Open PDF Document
+                    </a>
+                  </div>
+                </object>
+              </div>
             ) : (
-              <div className="overflow-auto max-w-full max-h-full flex items-center justify-center p-2">
+              /* Photo / Image In-App Viewer */
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'auto',
+                  padding: '8px'
+                }}
+              >
                 <img
-                  src={currentUrl}
-                  alt={currentAttachment.original_filename || 'Attachment preview'}
-                  style={{ transform: `scale(${zoomLevel})`, transition: 'transform 0.15s ease-out' }}
-                  className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl select-none"
+                  src={previewUrl}
+                  alt={filename}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '78vh',
+                    objectFit: 'contain',
+                    borderRadius: '6px',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                    transform: `scale(${zoomLevel})`,
+                    transition: 'transform 0.15s ease-out'
+                  }}
+                  onError={() => {
+                    setLoadError('Failed to display image. The image link may have expired or is corrupted.')
+                  }}
                 />
               </div>
             )
           )}
         </div>
 
-        {/* Next Button */}
+        {/* Next Navigation Arrow */}
         {attachments.length > 1 && (
           <button
             type="button"
             onClick={handleNext}
-            className="absolute right-6 z-10 p-3 text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 rounded-full shadow-lg transition-all"
-            title="Next (Right Arrow)"
+            title="Next Document (Right Arrow)"
+            style={{
+              position: 'absolute',
+              right: '20px',
+              zIndex: 10,
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(15, 23, 42, 0.85)',
+              border: '1px solid #334155',
+              color: '#ffffff',
+              fontSize: '22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
+            }}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
+            ›
           </button>
         )}
       </div>
 
-      {/* Thumbnail Strip (Bottom) */}
+      {/* Thumbnail Bar (Multi-file Navigation Strip) */}
       {attachments.length > 1 && (
-        <div className="px-6 py-3 bg-slate-900/95 border-t border-slate-800 flex items-center justify-center space-x-3 overflow-x-auto">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '10px 16px',
+            backgroundColor: '#0f172a',
+            borderTop: '1px solid #1e293b',
+            overflowX: 'auto',
+            flexShrink: 0
+          }}
+        >
           {attachments.map((att, idx) => {
             const isSelected = idx === currentIndex
             const isAttPdf =
@@ -317,18 +718,32 @@ export default function OrderAttachmentPreviewModal({
                 type="button"
                 onClick={() => {
                   setZoomLevel(1)
+                  setLoadError(null)
                   setCurrentIndex(idx)
                 }}
-                className={`relative flex items-center justify-center w-14 h-14 rounded-lg border-2 overflow-hidden transition-all ${
-                  isSelected ? 'border-blue-500 ring-2 ring-blue-500/50 bg-slate-800' : 'border-slate-700 opacity-60 hover:opacity-100 bg-slate-850'
-                }`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: isSelected ? '2px solid #3b82f6' : '1px solid #334155',
+                  backgroundColor: isSelected ? '#1e293b' : 'transparent',
+                  color: isSelected ? '#f8fafc' : '#94a3b8',
+                  fontSize: '11px',
+                  fontWeight: isSelected ? 600 : 400,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '180px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
                 title={att.original_filename}
               >
-                {isAttPdf ? (
-                  <span className="text-[10px] font-bold text-rose-400">PDF</span>
-                ) : (
-                  <span className="text-[10px] font-bold text-blue-400">IMG</span>
-                )}
+                <span>{isAttPdf ? '📄' : '🖼️'}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {att.original_filename || `Attachment ${idx + 1}`}
+                </span>
               </button>
             )
           })}

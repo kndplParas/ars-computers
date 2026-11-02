@@ -271,12 +271,25 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto"
+      className="admin-modal-backdrop"
+      style={{ zIndex: 1150 }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-order-title"
+      onClick={onClose}
     >
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden my-8">
+      <div
+        className="admin-modal-dialog"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '920px',
+          width: 'min(920px, calc(100vw - 24px))',
+          maxHeight: 'min(92vh, calc(100dvh - 24px))',
+          backgroundColor: '#0f172a',
+          color: '#f8fafc',
+          border: '1px solid #1e293b'
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-850 border-b border-slate-800">
           <div>

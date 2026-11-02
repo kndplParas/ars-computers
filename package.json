@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "test:security": "node test/admin-auth-security.test.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:deploy": "npm run lint && npm run test:security && npm run build && npx wrangler deploy --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

@@ -875,6 +875,61 @@ assert(
   'Migration 10: purge_expired_bin_enquiries strictly excludes approved enquiries from deletion'
 )
 
+// 18. Inspect Cloudflare Worker & Static Assets Deployment Architecture
+console.log('\n[Suite 18] Verifying Cloudflare Worker & Static Assets Architecture:')
+const wranglerConfigPath = path.join(projectRoot, 'wrangler.jsonc')
+assert(fs.existsSync(wranglerConfigPath), 'wrangler.jsonc configuration file exists')
+
+if (fs.existsSync(wranglerConfigPath)) {
+  const wranglerRaw = fs.readFileSync(wranglerConfigPath, 'utf8')
+  const wranglerParsed = JSON.parse(wranglerRaw.replace(/\/\/.*$/gm, ''))
+  assert(wranglerParsed.name === 'ars-computers', 'wrangler.jsonc name matches ars-computers')
+  assert(wranglerParsed.main === 'src/server/worker.js', 'wrangler.jsonc main points to src/server/worker.js')
+  assert(wranglerParsed.assets?.directory === './dist', 'wrangler.jsonc assets directory is ./dist')
+  assert(wranglerParsed.assets?.binding === 'ASSETS', 'wrangler.jsonc assets binding is ASSETS')
+  assert(
+    Array.isArray(wranglerParsed.assets?.run_worker_first) &&
+    wranglerParsed.assets.run_worker_first.includes('/api/*'),
+    'wrangler.jsonc routes /api/* through worker first'
+  )
+  assert(
+    wranglerParsed.assets?.not_found_handling === 'single-page-application',
+    'wrangler.jsonc enables native single-page-application not-found handling'
+  )
+  assert(
+    wranglerParsed.assets?.html_handling === 'auto-trailing-slash',
+    'wrangler.jsonc enables auto-trailing-slash HTML handling'
+  )
+}
+
+const workerPath = path.join(projectRoot, 'src', 'server', 'worker.js')
+assert(fs.existsSync(workerPath), 'src/server/worker.js exists')
+if (fs.existsSync(workerPath)) {
+  const workerCode = fs.readFileSync(workerPath, 'utf8')
+  assert(workerCode.includes('/api/share/attachment/'), 'worker.js handles /api/share/attachment/ route')
+  assert(workerCode.includes('handleCustomerAttachmentDownload'), 'worker.js delegates to handleCustomerAttachmentDownload')
+  assert(workerCode.includes("request.method === 'HEAD'"), 'worker.js handles HEAD requests per RFC 7231')
+  assert(workerCode.includes('env.ASSETS.fetch(request)'), 'worker.js delegates non-API routes to env.ASSETS')
+  assert(!workerCode.includes('eyJh') && !workerCode.includes('service_role'), 'worker.js does not contain hardcoded service role credentials')
+}
+
+const publicRedirectsPath = path.join(projectRoot, 'public', '_redirects')
+if (fs.existsSync(publicRedirectsPath)) {
+  const publicRedirects = fs.readFileSync(publicRedirectsPath, 'utf8')
+  assert(
+    !publicRedirects.includes('/* /index.html 200'),
+    'public/_redirects does not contain conflicting /* /index.html 200 loop rule'
+  )
+  const activeRules = publicRedirects
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'))
+  assert(
+    !activeRules.some((rule) => rule.startsWith('/*') && rule.includes('/index.html')),
+    'public/_redirects contains no recursive wildcard SPA rewrites'
+  )
+}
+
 console.log('====================================================================')
 console.log(`Summary: ${passedTests} passed, ${failedTests} failed.`)
 console.log('====================================================================')

@@ -13,13 +13,13 @@ import {
 import { MONTH_NAMES, formatDateTimeParts } from '../../utils/excelReportGenerator.js'
 import {
   formatOrderCustomerDispatch,
-  formatOrderSummaryCompact,
   buildCustomerOrderWhatsAppUrl,
   resolveCustomerPhone,
   resolveCustomerEmail,
   normalizeIndianPhoneForWhatsApp
 } from '../../utils/customerDispatchFormatter.js'
 import CustomerEmailModal from '../../components/admin/CustomerEmailModal.jsx'
+import BusinessAnalyticsOverlay from '../../components/admin/BusinessAnalyticsOverlay.jsx'
 import OrderAttachmentPreviewModal from '../../components/admin/OrderAttachmentPreviewModal.jsx'
 
 const CreateOrderModal = lazy(() => import('../../components/admin/CreateOrderModal.jsx'))
@@ -57,6 +57,7 @@ export default function AdminOrdersPage() {
     cancelSalesOrder,
     recordOrderPayment,
     getOrderAttachmentDownloadUrl,
+    getOrderAttachmentPreviewUrl,
     approveOrderAttachmentShareability,
     requestOrderAttachmentShareability,
     reviewOrderAttachmentShareRequest,
@@ -100,10 +101,9 @@ export default function AdminOrdersPage() {
     error: null,
     isSubmitting: false
   })
-  const [copyDetailsFeedback, setCopyDetailsFeedback] = useState({})
-  const [copyMessageFeedback, setCopyMessageFeedback] = useState({})
   const [isLiveRegisterOpen, setIsLiveRegisterOpen] = useState(false)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
+  const [isBusinessAnalyticsOpen, setIsBusinessAnalyticsOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isCustomerEmailModalOpen, setIsCustomerEmailModalOpen] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
@@ -294,38 +294,6 @@ export default function AdminOrdersPage() {
       attachments: attList,
       initialIndex: idx >= 0 ? idx : 0
     })
-  }
-
-  // Row-level Copy Dispatch Message
-  const handleCopyOrderMessage = async (order, e) => {
-    if (e) e.stopPropagation()
-    try {
-      const text = formatOrderCustomerDispatch(order)
-      await navigator.clipboard.writeText(text)
-      setCopyMessageFeedback((prev) => ({ ...prev, [order.id]: true }))
-      showToast(`Customer dispatch message for ${order.order_number} copied!`, 'success')
-      setTimeout(() => {
-        setCopyMessageFeedback((prev) => ({ ...prev, [order.id]: false }))
-      }, 2000)
-    } catch {
-      showToast('Failed to copy to clipboard.', 'error')
-    }
-  }
-
-  // Row-level Copy Quick Summary Details
-  const handleCopyOrderDetailsCompact = async (order, e) => {
-    if (e) e.stopPropagation()
-    try {
-      const text = formatOrderSummaryCompact(order)
-      await navigator.clipboard.writeText(text)
-      setCopyDetailsFeedback((prev) => ({ ...prev, [order.id]: true }))
-      showToast(`Summary for ${order.order_number} copied!`, 'success')
-      setTimeout(() => {
-        setCopyDetailsFeedback((prev) => ({ ...prev, [order.id]: false }))
-      }, 2000)
-    } catch {
-      showToast('Failed to copy to clipboard.', 'error')
-    }
   }
 
   // Deletion & Bin Workflow Handlers
@@ -791,6 +759,19 @@ export default function AdminOrdersPage() {
             >
               📊 Monthly Sales Report
             </button>
+
+            {['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role) && (
+              <button
+                type="button"
+                className="btn-outline btn-sm admin-business-btn"
+                onClick={() => setIsBusinessAnalyticsOpen(true)}
+                title="Open Monthly Business Analytics and Performance Review"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <span>📈</span>
+                <span>Business</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1297,95 +1278,43 @@ export default function AdminOrdersPage() {
                             {o.status}
                           </span>
                         </td>
-                        <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                            {/* WhatsApp */}
-                            <button
-                              type="button"
-                              className="btn-outline btn-sm"
-                              style={{ padding: '4px 6px', color: '#16a34a', borderColor: '#86efac' }}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleCustomerWhatsApp(o)
-                              }}
-                              title="WhatsApp Customer"
-                            >
-                              💬
-                            </button>
-
-                            {/* Copy Message */}
-                            <button
-                              type="button"
-                              className="btn-outline btn-sm"
-                              style={{ padding: '4px 6px' }}
-                              onClick={(e) => handleCopyOrderMessage(o, e)}
-                              title={copyMessageFeedback[o.id] ? 'Copied!' : 'Copy Dispatch Message'}
-                            >
-                              {copyMessageFeedback[o.id] ? '✓' : '📋'}
-                            </button>
-
-                            {/* Copy Details */}
-                            <button
-                              type="button"
-                              className="btn-outline btn-sm"
-                              style={{ padding: '4px 6px' }}
-                              onClick={(e) => handleCopyOrderDetailsCompact(o, e)}
-                              title={copyDetailsFeedback[o.id] ? 'Copied!' : 'Copy Quick Summary'}
-                            >
-                              {copyDetailsFeedback[o.id] ? '✓' : '📄'}
-                            </button>
-
-                            {/* Edit (if active or superadmin) */}
-                            {(!['cancelled'].includes(o.status) && (o.status !== 'completed' || isSuperadmin)) && !o.is_in_bin && !o.is_removed && (
-                              <button
-                                type="button"
-                                className="btn-outline btn-sm"
-                                style={{ padding: '4px 8px', color: '#0284c7', borderColor: '#7dd3fc' }}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setEditingOrder(o)
-                                }}
-                                title="Edit Order Details"
-                              >
-                                ✏️ Edit
-                              </button>
-                            )}
-
-                            {/* Bin / Remove / Restore */}
+                        <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                             {o.is_in_bin || o.is_removed ? (
                               isSuperadmin && (
                                 <button
                                   type="button"
                                   className="btn-outline btn-sm"
-                                  style={{ padding: '4px 8px', color: '#16a34a', borderColor: '#86efac' }}
+                                  style={{ padding: '4px 8px', color: '#16a34a', borderColor: '#86efac', fontSize: '12px', fontWeight: 600 }}
                                   onClick={(e) => handleRestoreFromBin(o, e)}
                                   title="Restore Order from Bin"
                                 >
                                   ♻️ Restore
                                 </button>
                               )
-                            ) : (
-                              <button
-                                type="button"
-                                className="btn-outline btn-sm"
-                                style={{ padding: '4px 8px', color: '#e11d48', borderColor: '#fda4af' }}
-                                onClick={(e) => handleOpenDeletionModal(o, e)}
-                                title={isSuperadmin ? 'Remove to Bin' : 'Request Removal'}
-                              >
-                                🗑️
-                              </button>
-                            )}
-
-                            {/* View Details */}
+                            ) : null}
                             <button
                               type="button"
-                              className="btn-outline btn-sm"
+                              className="btn-outline btn-sm view-details-btn"
+                              style={{
+                                padding: '5px 12px',
+                                color: '#0284c7',
+                                borderColor: '#bae6fd',
+                                background: '#f0f9ff',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setSelectedOrder(o)
                               }}
+                              title={`Inspect full details and actions for ${o.order_number || o.id}`}
                             >
-                              Details
+                              <span>👁️</span>
+                              <span>View Details</span>
                             </button>
                           </div>
                         </td>
@@ -1475,82 +1404,46 @@ export default function AdminOrdersPage() {
                       </span>
                     </div>
 
-                    {/* Mobile Quick Action Buttons Strip */}
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className="btn-outline btn-sm"
-                        style={{ flex: 1, color: '#16a34a', borderColor: '#86efac' }}
-                        onClick={() => handleCustomerWhatsApp(o)}
-                        title="WhatsApp"
-                      >
-                        💬 WA
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-outline btn-sm"
-                        style={{ flex: 1 }}
-                        onClick={(e) => handleCopyOrderMessage(o, e)}
-                        title="Copy Dispatch"
-                      >
-                        {copyMessageFeedback[o.id] ? '✓' : '📋 Msg'}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-outline btn-sm"
-                        style={{ flex: 1 }}
-                        onClick={(e) => handleCopyOrderDetailsCompact(o, e)}
-                        title="Copy Summary"
-                      >
-                        {copyDetailsFeedback[o.id] ? '✓' : '📄 Details'}
-                      </button>
-                      {(!['cancelled'].includes(o.status) && (o.status !== 'completed' || isSuperadmin)) && !o.is_in_bin && !o.is_removed && (
-                        <button
-                          type="button"
-                          className="btn-outline btn-sm"
-                          style={{ flex: 1, color: '#0284c7', borderColor: '#7dd3fc' }}
-                          onClick={() => setEditingOrder(o)}
-                          title="Edit"
-                        >
-                          ✏️ Edit
-                        </button>
-                      )}
+                    {/* Mobile Clean View Details Action */}
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                       {o.is_in_bin || o.is_removed ? (
                         isSuperadmin && (
                           <button
                             type="button"
                             className="btn-outline btn-sm"
-                            style={{ flex: 1, color: '#16a34a', borderColor: '#86efac' }}
+                            style={{ padding: '5px 10px', color: '#16a34a', borderColor: '#86efac', fontSize: '12px', fontWeight: 600 }}
                             onClick={(e) => handleRestoreFromBin(o, e)}
-                            title="Restore"
+                            title="Restore Order from Bin"
                           >
                             ♻️ Restore
                           </button>
                         )
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn-outline btn-sm"
-                          style={{ color: '#e11d48', borderColor: '#fda4af' }}
-                          onClick={(e) => handleOpenDeletionModal(o, e)}
-                          title="Remove"
-                        >
-                          🗑️
-                        </button>
-                      )}
+                      ) : null}
+                      <button
+                        type="button"
+                        className="btn-outline btn-sm view-details-btn"
+                        style={{
+                          width: '100%',
+                          minHeight: '38px',
+                          color: '#0284c7',
+                          borderColor: '#bae6fd',
+                          background: '#f0f9ff',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedOrder(o)
+                        }}
+                      >
+                        <span>👁️</span>
+                        <span>View Details</span>
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      className="btn-outline"
-                      style={{ width: '100%', minHeight: '38px', marginTop: '6px', fontSize: '13px', fontWeight: 600 }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedOrder(o)
-                      }}
-                    >
-                      View Order Details &amp; Actions
-                    </button>
                   </div>
                 )
               })
@@ -1575,7 +1468,7 @@ export default function AdminOrdersPage() {
             aria-labelledby="order-details-title"
           >
             <div
-              className="admin-modal-dialog"
+              className="admin-modal-dialog order-details-dialog enquiry-details-dialog"
               onClick={(e) => e.stopPropagation()}
               style={{
                 maxWidth: '820px',
@@ -1586,24 +1479,58 @@ export default function AdminOrdersPage() {
               }}
             >
               {/* Header */}
-              <div className="admin-modal-header">
+              <div className="admin-modal-header" style={{ position: 'sticky', top: 0, background: '#ffffff', zIndex: 10, borderBottom: '1px solid #e2e8f0', padding: '16px 20px' }}>
                 <div>
-                  <h2 id="order-details-title" className="admin-modal-title">
-                    Order {selectedOrder.order_number || selectedOrder.id}
-                  </h2>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      marginTop: '4px',
-                      padding: '2px 8px',
-                      borderRadius: '999px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: selectedOrder.status === 'completed' ? '#dcfce7' : '#e0f2fe',
-                      color: selectedOrder.status === 'completed' ? '#166534' : '#0369a1'
-                    }}
-                  >
-                    STATUS: {selectedOrder.status.toUpperCase()}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <h2 id="order-details-title" className="admin-modal-title" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>
+                      Order {displayOrder.order_number || displayOrder.id}
+                    </h2>
+                    <span
+                      className="enquiry-status-chip modal-status-badge"
+                      style={{
+                        padding: '2px 10px',
+                        borderRadius: '999px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: displayOrder.status === 'completed' ? '#dcfce7' : displayOrder.status === 'cancelled' ? '#f1f5f9' : '#e0f2fe',
+                        color: displayOrder.status === 'completed' ? '#166534' : displayOrder.status === 'cancelled' ? '#64748b' : '#0369a1',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          background: displayOrder.status === 'completed' ? '#16a34a' : displayOrder.status === 'cancelled' ? '#64748b' : '#0284c7'
+                        }}
+                      ></span>
+                      STATUS: {displayOrder.status.toUpperCase()}
+                    </span>
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: displayOrder.payment_status === 'paid' ? '#dcfce7' : displayOrder.payment_status === 'partial' ? '#fef3c7' : '#fee2e2',
+                        color: displayOrder.payment_status === 'paid' ? '#166534' : displayOrder.payment_status === 'partial' ? '#92400e' : '#991b1b'
+                      }}
+                    >
+                      PAYMENT: {(displayOrder.payment_status || 'pending').toUpperCase()}
+                    </span>
+                    {(displayOrder.is_in_bin || displayOrder.is_removed) && (
+                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 600 }}>
+                        🗑️ In Bin
+                      </span>
+                    )}
+                  </div>
+                  <span className="modal-subtitle-note" style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    Created on {formatDateTimeParts(displayOrder.created_at).date} {formatDateTimeParts(displayOrder.created_at).time}
+                    {displayOrder.created_by_name && ` by ${displayOrder.created_by_name}`}
+                    {` | UUID: ${displayOrder.id}`}
                   </span>
                 </div>
                 <button
@@ -1617,7 +1544,283 @@ export default function AdminOrdersPage() {
               </div>
 
               {/* Scrollable Body */}
-              <div className="admin-modal-body" style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '16px 20px' }}>
+              <div className="admin-modal-body enquiry-modal-body" style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '16px 20px' }}>
+                {/* Section: Primary Order Actions Toolbar (Matching Enquiries Detail View) */}
+                <div
+                  className="order-actions-toolbar"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    flexWrap: 'wrap',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    marginBottom: '16px'
+                  }}
+                >
+                  {/* Left: Management Actions (Edit, Delete/Restore) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* Edit Order */}
+                    {(!['cancelled'].includes(displayOrder.status) && (displayOrder.status !== 'completed' || isSuperadmin)) && !displayOrder.is_in_bin && !displayOrder.is_removed && (
+                      <button
+                        type="button"
+                        id="order-details-edit-btn"
+                        className="btn-outline btn-sm edit-order-action-btn"
+                        style={{
+                          padding: '6px 14px',
+                          fontWeight: 600,
+                          color: '#0284c7',
+                          borderColor: '#7dd3fc',
+                          background: '#ffffff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '0.84rem'
+                        }}
+                        onClick={() => setEditingOrder(displayOrder)}
+                        title="Edit order items, customer information, pricing, or remarks"
+                      >
+                        <span>✏️</span>
+                        <span>Edit Order</span>
+                      </button>
+                    )}
+
+                    {/* Delete Order (Opens Confirmation Modal) */}
+                    {displayOrder.is_in_bin || displayOrder.is_removed ? (
+                      isSuperadmin && (
+                        <button
+                          type="button"
+                          id="order-details-restore-btn"
+                          className="btn-outline btn-sm restore-order-action-btn"
+                          style={{
+                            padding: '6px 14px',
+                            fontWeight: 600,
+                            color: '#16a34a',
+                            borderColor: '#86efac',
+                            background: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.84rem'
+                          }}
+                          onClick={(e) => handleRestoreFromBin(displayOrder, e)}
+                          title="Restore Order from Bin to active status"
+                        >
+                          <span>♻️</span>
+                          <span>Restore Order</span>
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        id="order-details-delete-btn"
+                        className="btn-outline btn-sm delete-order-action-btn"
+                        style={{
+                          padding: '6px 14px',
+                          fontWeight: 600,
+                          color: '#dc2626',
+                          borderColor: '#fca5a5',
+                          background: '#fef2f2',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '0.84rem'
+                        }}
+                        onClick={(e) => handleOpenDeletionModal(displayOrder, e)}
+                        title={isSuperadmin ? 'Remove Order to Bin with mandatory confirmation' : 'Request Order Deletion with mandatory confirmation'}
+                      >
+                        <span>🗑️</span>
+                        <span>Delete Order</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Right: WhatsApp Copy, Send WhatsApp, and Payment Recording */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* WhatsApp Copy (Prominent One-Click Copy) */}
+                    <button
+                      type="button"
+                      id="order-details-whatsapp-copy-btn"
+                      className="btn-outline btn-sm whatsapp-copy-action-btn"
+                      onClick={() => handleCustomerCopy(displayOrder)}
+                      title="Copy complete, WhatsApp-ready order summary with customer, item, and payment breakdown"
+                      style={{
+                        padding: '6px 14px',
+                        fontWeight: 600,
+                        color: copyFeedback ? '#ffffff' : '#15803d',
+                        borderColor: copyFeedback ? '#16a34a' : '#86efac',
+                        background: copyFeedback ? '#16a34a' : '#f0fdf4',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.84rem',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <span>{copyFeedback ? '✓' : '📋'}</span>
+                      <span>{copyFeedback ? 'WhatsApp Order Copied!' : 'WhatsApp Copy'}</span>
+                    </button>
+
+                    {/* Direct Customer WhatsApp Dispatch */}
+                    <button
+                      type="button"
+                      className="btn-outline btn-sm"
+                      onClick={() => handleCustomerWhatsApp(displayOrder)}
+                      disabled={!isCustWhatsAppValid}
+                      title={
+                        isCustWhatsAppValid
+                          ? `Open WhatsApp to dispatch order to ${custPhone}`
+                          : 'No valid customer WhatsApp number registered'
+                      }
+                      style={{
+                        padding: '6px 12px',
+                        fontWeight: 600,
+                        color: isCustWhatsAppValid ? '#16a34a' : '#94a3b8',
+                        borderColor: isCustWhatsAppValid ? '#86efac' : '#cbd5e1',
+                        background: '#ffffff',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.84rem',
+                        cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed'
+                      }}
+                    >
+                      <span>💬</span>
+                      <span>WhatsApp Customer</span>
+                    </button>
+
+                    {/* Update / Record Payment Action */}
+                    {currentBal > 0 && displayOrder.status !== 'cancelled' && !isInventoryStaff && (
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        onClick={() => handleOpenPaymentModal(displayOrder)}
+                        style={{
+                          padding: '6px 14px',
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '0.84rem'
+                        }}
+                      >
+                        <span>💳</span>
+                        <span>Record Payment</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Contextual Status Alerts (Matching Enquiries Detail Layout) */}
+                {/* Soft-Removed / Bin Notice */}
+                {(displayOrder.is_in_bin || displayOrder.is_removed) && (
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '8px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
+                        🚫 Soft-Removed Record in Bin ({displayOrder.removal_category ? displayOrder.removal_category.replace('_', ' ').toUpperCase() : 'CANCELLED / REMOVED'})
+                      </span>
+                      {isSuperadmin && (
+                        <button
+                          type="button"
+                          className="btn-outline btn-sm"
+                          onClick={(e) => handleRestoreFromBin(displayOrder, e)}
+                          style={{ borderColor: '#0d9488', color: '#0d9488', fontSize: '0.8rem', padding: '3px 8px', background: '#ffffff' }}
+                        >
+                          🔄 Restore to Active
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ color: '#b91c1c', fontSize: '0.82rem', marginTop: '4px' }}>
+                      Removed by <strong>{displayOrder.removed_by_name || 'Admin'}</strong> on {formatDateTimeParts(displayOrder.removed_at).date}
+                    </div>
+                    <div style={{ color: '#7f1d1d', fontSize: '0.85rem', marginTop: '6px' }}>
+                      <strong>Mandatory Reason:</strong> {displayOrder.removal_reason || '—'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Permanent Archive Accountability Audit Card (Completed Orders) */}
+                {(displayOrder.completion_approved_at || displayOrder.status === 'completed') && (
+                  <div
+                    style={{
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                      padding: '14px 16px',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                      <span style={{ fontWeight: 700, color: '#166534', fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🔒</span> Permanent Accountability &amp; Audit Trail
+                      </span>
+                      <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                        Completed &amp; Head-Approved
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '0.84rem' }}>
+                      <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Completed By (Staff):
+                        </span>
+                        <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
+                          {displayOrder.completed_by_name || 'Staff Member'}
+                        </strong>
+                        {displayOrder.completed_by_employee_code && (
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                            Code: {displayOrder.completed_by_employee_code}
+                          </span>
+                        )}
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                          Submitted: {formatDateTimeParts(displayOrder.completion_requested_at).date} {formatDateTimeParts(displayOrder.completion_requested_at).time}
+                        </span>
+                      </div>
+
+                      <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Approved By (Head Person):
+                        </span>
+                        <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
+                          {displayOrder.approved_by_name || 'Store Head Person'}
+                        </strong>
+                        {displayOrder.approved_by_employee_code && (
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                            Code: {displayOrder.approved_by_employee_code}
+                          </span>
+                        )}
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                          Approved: {formatDateTimeParts(displayOrder.completion_approved_at).date} {formatDateTimeParts(displayOrder.completion_approved_at).time}
+                        </span>
+                      </div>
+                    </div>
+
+                    {displayOrder.employee_remarks && (
+                      <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                          Employee Completion Remarks:
+                        </span>
+                        <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                          {displayOrder.employee_remarks}
+                        </p>
+                      </div>
+                    )}
+
+                    {displayOrder.head_remarks && (
+                      <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                          Head-Person Approval Remarks:
+                        </span>
+                        <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                          {displayOrder.head_remarks}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* Customer Info */}
                 <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '6px' }}>
                   <div style={{ fontWeight: 600, marginBottom: '6px' }}>Customer Information</div>
@@ -2449,6 +2652,13 @@ export default function AdminOrdersPage() {
                     Target filename: <code>ARS_Sales_{MONTH_NAMES[exportMonthIndex]}_{exportYear}.xlsx</code>
                   </div>
                 </div>
+
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px 14px', borderRadius: '6px', fontSize: '12px', color: '#166534', marginTop: '12px', lineHeight: 1.5 }}>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <span>🛡️</span> Database Integrity &amp; Safe Record Management
+                  </strong>
+                  Exported Excel workbooks are certified point-in-time analytical snapshots. Deleting or modifying rows inside the downloaded spreadsheet will never alter or delete live database records. To remove or cancel an order, use the authenticated Admin Portal with mandatory audit reasons and Head approval.
+                </div>
               </div>
 
               <div className="admin-modal-footer">
@@ -2745,7 +2955,8 @@ export default function AdminOrdersPage() {
           onClose={() => setAttachmentLightbox({ isOpen: false, attachments: [], initialIndex: 0 })}
           attachments={attachmentLightbox.attachments}
           initialIndex={attachmentLightbox.initialIndex}
-          getOrderAttachmentUrl={getOrderAttachmentDownloadUrl}
+          getOrderAttachmentPreviewUrl={getOrderAttachmentPreviewUrl}
+          getOrderAttachmentDownloadUrl={getOrderAttachmentDownloadUrl}
         />
       )}
 
@@ -2884,6 +3095,12 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       )}
+
+      {/* Monthly Business Analytics Full-Screen Overlay */}
+      <BusinessAnalyticsOverlay
+        isOpen={isBusinessAnalyticsOpen}
+        onClose={() => setIsBusinessAnalyticsOpen(false)}
+      />
     </AdminLayout>
   )
 }

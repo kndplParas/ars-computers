@@ -209,7 +209,7 @@ export async function generateMonthlySalesExcelBuffer(allOrders, targetMonthInde
  * Styling helper: applies ARS Computers Navy Header formatting
  */
 function styleHeaderRow(row) {
-  row.height = 28
+  row.height = 30
   row.eachCell((cell) => {
     cell.fill = {
       type: 'pattern',
@@ -240,7 +240,7 @@ function styleHeaderRow(row) {
  * Styling helper: applies zebra striping and borders to data row
  */
 function styleDataRow(row, isEven, alignConfig = {}) {
-  row.height = 22
+  row.height = 24
   row.eachCell((cell, colNumber) => {
     cell.font = { name: 'Calibri', size: 10 }
     if (isEven) {
@@ -312,16 +312,16 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
   })
 
   ordersSheet.columns = [
-    { header: 'Order #', key: 'order_number', width: 16 },
-    { header: 'Order Date', key: 'order_date', width: 14 },
-    { header: 'Customer Name', key: 'customer_name', width: 22 },
+    { header: 'Order #', key: 'order_number', width: 18 },
+    { header: 'Order Date', key: 'order_date', width: 15 },
+    { header: 'Customer Name', key: 'customer_name', width: 26 },
     { header: 'Customer Phone', key: 'customer_phone', width: 18 },
-    { header: 'Items Summary', key: 'items_summary', width: 34 },
+    { header: 'Items Summary', key: 'items_summary', width: 42 },
     { header: 'Total Qty', key: 'total_qty', width: 12 },
-    { header: 'Total Amount (₹)', key: 'total_amount', width: 18 },
-    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 18 },
-    { header: 'Balance (₹)', key: 'balance_amount', width: 16 },
-    { header: 'Assigned Engineer', key: 'assigned_engineer', width: 22 },
+    { header: 'Total Amount (₹)', key: 'total_amount', width: 20 },
+    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 20 },
+    { header: 'Balance (₹)', key: 'balance_amount', width: 18 },
+    { header: 'Assigned Engineer', key: 'assigned_engineer', width: 24 },
     { header: 'Expected Delivery', key: 'expected_delivery', width: 18 },
     { header: 'Status', key: 'status', width: 16 }
   ]
@@ -413,6 +413,17 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
     formatCurrencyCell(totalRow.getCell(7), totalOrdersSum)
     formatCurrencyCell(totalRow.getCell(8), totalPaidSum)
     formatCurrencyCell(totalRow.getCell(9), Math.max(0, totalOrdersSum - totalPaidSum))
+
+    // Blank spacing row + Compliance Notice Row
+    ordersSheet.addRow({})
+    const noticeRow = ordersSheet.addRow({
+      order_number: 'NOTICE: This workbook is an authentic point-in-time analytical export from the ARS Computers database. Editing, altering, or deleting rows in this spreadsheet does NOT modify or delete live database records. To cancel or delete orders, use the authenticated Admin Portal with mandatory audit reasons.'
+    })
+    ordersSheet.mergeCells(`A${noticeRow.number}:L${noticeRow.number}`)
+    const noticeCell = ordersSheet.getCell(`A${noticeRow.number}`)
+    noticeCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF64748B' } }
+    noticeCell.alignment = { vertical: 'middle', horizontal: 'left' }
+    noticeRow.height = 20
   }
 
   // ==========================================================================
@@ -425,18 +436,18 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
 
   salesSheet.columns = [
     { header: 'Sales Ref', key: 'order_ref', width: 18 },
-    { header: 'Order Date', key: 'order_date', width: 14 },
+    { header: 'Order Date', key: 'order_date', width: 15 },
     { header: 'Approval Date', key: 'approval_date', width: 16 },
-    { header: 'Customer Name', key: 'customer_name', width: 22 },
+    { header: 'Customer Name', key: 'customer_name', width: 26 },
     { header: 'Contact Info', key: 'contact_info', width: 24 },
-    { header: 'Products Sold', key: 'products_sold', width: 34 },
-    { header: 'Qty', key: 'qty', width: 10 },
-    { header: 'Total Value (₹)', key: 'total_amount', width: 18 },
-    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 18 },
-    { header: 'Balance (₹)', key: 'balance_amount', width: 16 },
-    { header: 'Payment Method', key: 'payment_method', width: 16 },
-    { header: 'Completed By', key: 'completed_by', width: 20 },
-    { header: 'Approved By', key: 'approved_by', width: 20 }
+    { header: 'Products Sold', key: 'products_sold', width: 42 },
+    { header: 'Qty', key: 'qty', width: 12 },
+    { header: 'Total Value (₹)', key: 'total_amount', width: 20 },
+    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 20 },
+    { header: 'Balance (₹)', key: 'balance_amount', width: 18 },
+    { header: 'Payment Method', key: 'payment_method', width: 18 },
+    { header: 'Completed By', key: 'completed_by', width: 22 },
+    { header: 'Approved By', key: 'approved_by', width: 22 }
   ]
 
   styleHeaderRow(salesSheet.getRow(1))
@@ -526,6 +537,17 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
     formatCurrencyCell(totalRow.getCell(8), totalSalesRevenue)
     formatCurrencyCell(totalRow.getCell(9), totalSalesPaid)
     formatCurrencyCell(totalRow.getCell(10), Math.max(0, totalSalesRevenue - totalSalesPaid))
+
+    // Blank spacing row + Compliance Notice Row
+    salesSheet.addRow({})
+    const salesNoticeRow = salesSheet.addRow({
+      order_ref: 'NOTICE: This workbook is an authentic point-in-time analytical export from the ARS Computers database. Editing, altering, or deleting rows in this spreadsheet does NOT modify or delete live database records. To cancel or delete orders, use the authenticated Admin Portal with mandatory audit reasons.'
+    })
+    salesSheet.mergeCells(`A${salesNoticeRow.number}:M${salesNoticeRow.number}`)
+    const salesNoticeCell = salesSheet.getCell(`A${salesNoticeRow.number}`)
+    salesNoticeCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF64748B' } }
+    salesNoticeCell.alignment = { vertical: 'middle', horizontal: 'left' }
+    salesNoticeRow.height = 20
   }
 
   // ==========================================================================
@@ -627,6 +649,32 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
 
     const amtCell = summarySheet.getCell(`D${rowNum}`)
     formatCurrencyCell(amtCell, data.amount)
+  })
+
+  // Section 3: Data Integrity & Safe Deletion Architecture Notice
+  const policyStartRow = 22
+  summarySheet.getCell(`B${policyStartRow}`).value = 'RECORD MANAGEMENT & DATA INTEGRITY POLICY'
+  summarySheet.getCell(`B${policyStartRow}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+  summarySheet.getCell(`B${policyStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }
+  summarySheet.getCell(`C${policyStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }
+  summarySheet.getCell(`D${policyStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }
+  summarySheet.mergeCells(`B${policyStartRow}:D${policyStartRow}`)
+
+  const policyNotes = [
+    '• Point-in-Time Export: This workbook reflects static ledger records as of the generation timestamp.',
+    '• Non-Destructive Offline Edits: Deleting or editing spreadsheet rows cannot alter or delete live database records.',
+    '• Authenticated Deletions Only: All order cancellations or removals must occur inside the secure Admin Portal.',
+    '• Head Approval Workflow: Staff deletion requests require mandatory written reasons and Head Superadmin review.',
+    '• Bin Retention & Audit Logs: Superadmins move records to the 7-Day Bin; permanent audit logs are immutably preserved.'
+  ]
+
+  policyNotes.forEach((note, idx) => {
+    const rNum = policyStartRow + 1 + idx
+    summarySheet.mergeCells(`B${rNum}:D${rNum}`)
+    const cell = summarySheet.getCell(`B${rNum}`)
+    cell.value = note
+    cell.font = { name: 'Calibri', size: 9.5, italic: idx > 0, color: { argb: idx === 1 ? 'FFB91C1C' : 'FF334155' } }
+    cell.alignment = { vertical: 'middle', horizontal: 'left' }
   })
 
   // Export buffer & download

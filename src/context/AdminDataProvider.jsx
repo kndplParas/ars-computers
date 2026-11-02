@@ -2932,16 +2932,74 @@ export function AdminDataProvider({ children }) {
   // 8. Generate Secure Temporary Signed URL for Order Attachment
   const getOrderAttachmentDownloadUrl = useCallback(
     async (storagePath, filename) => {
+      if (!storagePath) return null
+      if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('data:') || storagePath.startsWith('blob:')) {
+        return storagePath
+      }
       if (isLiveDatabase) {
         if (!supabase) throw new Error('Supabase client is not available.')
         const { data, error } = await supabase.storage
           .from('order-attachments')
-          .createSignedUrl(storagePath, 60, {
+          .createSignedUrl(storagePath, 300, {
             download: filename || true
           })
         if (error) throw error
         return data?.signedUrl
       }
+      return null
+    },
+    [isLiveDatabase]
+  )
+
+  // Generate Secure Temporary Inline Signed URL for Order Attachment Preview (NO download disposition)
+  const getOrderAttachmentPreviewUrl = useCallback(
+    async (storagePath) => {
+      if (!storagePath) return null
+      if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('data:') || storagePath.startsWith('blob:')) {
+        return storagePath
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        // Notice: NO download option, so Supabase serves Content-Disposition: inline!
+        // 3600 seconds (1 hour) validity
+        const { data, error } = await supabase.storage
+          .from('order-attachments')
+          .createSignedUrl(storagePath, 3600)
+        if (error) throw error
+        return data?.signedUrl
+      }
+
+      // Demo / offline fallback: return SVG or PDF placeholder
+      const ext = storagePath.split('.').pop()?.toLowerCase()
+      if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+          <rect width="800" height="600" fill="#0f172a"/>
+          <rect x="20" y="20" width="760" height="560" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="6,6"/>
+          <circle cx="400" cy="240" r="70" fill="#1e293b" stroke="#3b82f6" stroke-width="3"/>
+          <path d="M380 240l15 15 30-30" fill="none" stroke="#60a5fa" stroke-width="4" stroke-linecap="round"/>
+          <text x="400" y="360" font-family="sans-serif" font-size="22" font-weight="bold" fill="#f8fafc" text-anchor="middle">ARS Computers Order Attachment</text>
+          <text x="400" y="395" font-family="sans-serif" font-size="14" fill="#94a3b8" text-anchor="middle">Preview Reference: ${storagePath}</text>
+          <text x="400" y="430" font-family="sans-serif" font-size="13" fill="#10b981" text-anchor="middle">Verified Authentic Demo Preview</text>
+        </svg>`
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+      }
+
+      if (ext === 'pdf') {
+        const pdfSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+          <rect width="800" height="1000" fill="#f8fafc"/>
+          <rect x="40" y="40" width="720" height="920" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+          <rect x="80" y="80" width="640" height="60" fill="#1e3a8a"/>
+          <text x="100" y="118" font-family="sans-serif" font-size="20" font-weight="bold" fill="#ffffff">ARS COMPUTERS — ORDER DOCUMENT SPECIFICATION</text>
+          <text x="100" y="180" font-family="sans-serif" font-size="14" font-weight="bold" fill="#0f172a">Document Reference: ${storagePath}</text>
+          <text x="100" y="210" font-family="sans-serif" font-size="13" fill="#64748b">Status: Authenticated Order Attachment (Demo Mode)</text>
+          <line x1="80" y1="240" x2="720" y2="240" stroke="#e2e8f0" stroke-width="2"/>
+          <text x="100" y="280" font-family="sans-serif" font-size="13" fill="#334155">This is a verified in-app PDF preview demonstration document.</text>
+          <text x="100" y="310" font-family="sans-serif" font-size="13" fill="#334155">In production with Supabase live storage, this embeds the actual customer/order PDF.</text>
+        </svg>`
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(pdfSvg)}`
+      }
+
       return null
     },
     [isLiveDatabase]
@@ -3543,6 +3601,7 @@ export function AdminDataProvider({ children }) {
     recordOrderPayment,
     uploadOrderAttachments,
     getOrderAttachmentDownloadUrl,
+    getOrderAttachmentPreviewUrl,
     approveOrderAttachmentShareability,
     requestOrderAttachmentShareability,
     reviewOrderAttachmentShareRequest,

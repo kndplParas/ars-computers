@@ -320,16 +320,24 @@ test('Business Monthly Analytics Suite', async (t) => {
     const layoutPath = path.resolve('src/components/admin/AdminLayout.jsx')
     const layoutCode = fs.readFileSync(layoutPath, 'utf8')
 
-    // 1. Topbar Business button must strictly exclude inventory_staff
-    assert.match(
+    // 1. Business button removed from main layout navbar, placed strictly inside Orders & Sales
+    assert.doesNotMatch(
       layoutCode,
-      /\['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'\]\.includes\(userRole\)/,
-      'AdminLayout must only display Business button for the 6 authorized roles'
+      /admin-business-btn/,
+      'Business button must NOT be present in AdminLayout topbar'
     )
     assert.doesNotMatch(
       layoutCode,
       /allNavItems[\s\S]*?'business'/,
       'Business must NOT be added to sidebar allNavItems'
+    )
+
+    const ordersPath = path.resolve('src/pages/admin/AdminOrdersPage.jsx')
+    const ordersCode = fs.readFileSync(ordersPath, 'utf8')
+    assert.match(
+      ordersCode,
+      /\['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'\]\.includes\(adminUser\?\.role\)/,
+      'AdminOrdersPage must display Business button for the 6 authorized roles'
     )
 
     // 2. BusinessAnalyticsOverlay component code check
