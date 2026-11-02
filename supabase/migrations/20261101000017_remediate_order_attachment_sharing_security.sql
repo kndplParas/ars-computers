@@ -891,8 +891,4 @@ $$;
 REVOKE ALL ON FUNCTION public.cleanup_expired_order_attachment_access_logs() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.cleanup_expired_order_attachment_access_logs() TO service_role, authenticated;
 
--- Record in schema migrations
-INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261101000017', 'remediate_order_attachment_sharing_security')
-ON CONFLICT (version) DO NOTHING;
 
