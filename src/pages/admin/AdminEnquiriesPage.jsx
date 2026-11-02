@@ -78,6 +78,13 @@ function isCurrentCalendarMonth(isoDateString) {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
 }
 
+function isEnquiryEligibleForRemoval(enquiry) {
+  if (!enquiry) return false
+  if (enquiry.is_removed) return false
+  if (enquiry.completion_approved_at || enquiry.status === 'completed') return false
+  return isCurrentCalendarMonth(enquiry.created_at)
+}
+
 function getDaysRemaining(scheduledDeletionIso) {
   if (!scheduledDeletionIso) return null
   const deadline = new Date(scheduledDeletionIso).getTime()
@@ -121,11 +128,17 @@ export default function AdminEnquiriesPage() {
     uploadEnquiryServiceProof,
     loadEnquiryServiceProofs,
     getEnquiryServiceProofSignedUrl,
-    voidEnquiryServiceProof
+    voidEnquiryServiceProof,
+    removeCurrentMonthEnquiry,
+    restoreRemovedEnquiry
   } = useAdminData()
 
   // Workflow Tabs: 'all_active', 'pending_completion', 'pending_rejection', 'quoted', 'rejected_closed', 'bin', 'archived'
   const [activeWorkflowTab, setActiveWorkflowTab] = useState('all_active')
+  const handleWorkflowTabChange = (tab) => {
+    setActiveWorkflowTab(tab)
+    setSelectedEnquiryIds(new Set())
+  }
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState('')
@@ -192,8 +205,14 @@ export default function AdminEnquiriesPage() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
   const [reviewConfirmTarget, setReviewConfirmTarget] = useState(null) // { enquiry, decision }
 
-  // Step 7: Head-Only Removal States
-  const [removalTarget, setRemovalTarget] = useState(null)
+  // Step 7: Head-Only Removal States & Multi-Selection
+  const [selectedEnquiryIds, setSelectedEnquiryIds] = useState(() => new Set())
+  const [removalTargets, setRemovalTargets] = useState([])
+  const removalTarget = removalTargets[0] || null
+  const setRemovalTarget = (target) => {
+    if (!target) setRemovalTargets([])
+    else setRemovalTargets([target])
+  }
   const [removalCategory, setRemovalCategory] = useState('spam')
   const [removalReason, setRemovalReason] = useState('')
   const [isRemoving, setIsRemoving] = useState(false)
@@ -349,6 +368,11 @@ export default function AdminEnquiriesPage() {
       return matchesSearch && matchesStatus && matchesCategory && matchesDate
     })
   }, [enquiries, effectiveWorkflowTab, searchQuery, statusFilter, categoryFilter, dateFilter])
+
+  const eligibleEnquiriesInView = useMemo(
+    () => filteredEnquiries.filter((enq) => isEnquiryEligibleForRemoval(enq)),
+    [filteredEnquiries]
+  )
 
   const hasActiveFilters =
     searchQuery.trim() !== '' || statusFilter !== 'all' || categoryFilter !== 'all' || dateFilter !== 'all'
@@ -577,33 +601,61 @@ export default function AdminEnquiriesPage() {
   // --- Step 7 Head-Only Soft-Removal Handlers ---
   const handleConfirmRemoval = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
-    if (!removalTarget) return
+    if (!removalTargets || removalTargets.length === 0) return
     const cleanReason = removalReason.trim()
     if (!cleanReason || cleanReason.length < 3) {
       setRemovalError('Mandatory removal reason is required (minimum 3 characters).')
       return
     }
+    if (removalCategory === 'other' && cleanReason.length < 5) {
+      setRemovalError('Detailed explanation (minimum 5 characters) is required when category is "Other".')
+      return
+    }
     try {
       setIsRemoving(true)
       setRemovalError('')
-      await removeCurrentMonthEnquiry(removalTarget.id, removalCategory, cleanReason)
-      const targetId = removalTarget.id
-      setRemovalTarget(null)
-      setRemovalReason('')
-      if (selectedEnquiry && selectedEnquiry.id === targetId) {
-        setSelectedEnquiry((prev) => (prev ? {
-          ...prev,
-          is_removed: true,
-          removal_category: removalCategory,
-          removal_reason: cleanReason,
-          removed_at: new Date().toISOString()
-        } : null))
+      const removedIds = new Set()
+      const errors = []
+
+      for (const target of removalTargets) {
+        try {
+          await removeCurrentMonthEnquiry(target.id, removalCategory, cleanReason)
+          removedIds.add(target.id)
+        } catch (err) {
+          errors.push(`${target.enquiry_number || target.id}: ${err.message || 'Failed'}`)
+        }
       }
-      setToast({
-        show: true,
-        type: 'success',
-        message: 'Enquiry soft-removed successfully from active queues and reports.'
-      })
+
+      if (removedIds.size > 0) {
+        setSelectedEnquiryIds((prev) => {
+          const next = new Set(prev)
+          removedIds.forEach((id) => next.delete(id))
+          return next
+        })
+        if (selectedEnquiry && removedIds.has(selectedEnquiry.id)) {
+          setSelectedEnquiry((prev) => (prev ? {
+            ...prev,
+            is_removed: true,
+            removal_category: removalCategory,
+            removal_reason: cleanReason,
+            removed_at: new Date().toISOString()
+          } : null))
+        }
+      }
+
+      if (errors.length > 0) {
+        setRemovalError(`Some removals could not be completed:\n${errors.join('\n')}`)
+      } else {
+        const count = removalTargets.length
+        setRemovalTargets([])
+        setRemovalReason('')
+        showNotification(
+          count === 1
+            ? 'Enquiry soft-removed successfully from active queues and reports.'
+            : `${count} enquiries soft-removed successfully from active queues and reports.`,
+          'success'
+        )
+      }
     } catch (err) {
       setRemovalError(err.message || 'Failed to soft-remove enquiry.')
     } finally {
@@ -625,17 +677,9 @@ export default function AdminEnquiriesPage() {
           removed_at: null
         } : null))
       }
-      setToast({
-        show: true,
-        type: 'success',
-        message: 'Enquiry restored back to active queue successfully.'
-      })
+      showNotification('Enquiry restored back to active queue successfully.', 'success')
     } catch (err) {
-      setToast({
-        show: true,
-        type: 'error',
-        message: err.message || 'Failed to restore enquiry.'
-      })
+      showNotification(err.message || 'Failed to restore enquiry.', 'error')
     } finally {
       setIsRestoringRemoved(false)
     }
@@ -1388,7 +1432,7 @@ export default function AdminEnquiriesPage() {
             type="button"
             role="tab"
             aria-selected={activeWorkflowTab === 'all_active'}
-            onClick={() => setActiveWorkflowTab('all_active')}
+            onClick={() => handleWorkflowTabChange('all_active')}
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
@@ -1410,7 +1454,7 @@ export default function AdminEnquiriesPage() {
             role="tab"
             id="tab-pending-completion"
             aria-selected={activeWorkflowTab === 'pending_completion'}
-            onClick={() => setActiveWorkflowTab('pending_completion')}
+            onClick={() => handleWorkflowTabChange('pending_completion')}
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
@@ -1449,7 +1493,7 @@ export default function AdminEnquiriesPage() {
             role="tab"
             id="tab-pending-rejection"
             aria-selected={activeWorkflowTab === 'pending_rejection'}
-            onClick={() => setActiveWorkflowTab('pending_rejection')}
+            onClick={() => handleWorkflowTabChange('pending_rejection')}
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
@@ -1487,7 +1531,7 @@ export default function AdminEnquiriesPage() {
             type="button"
             role="tab"
             aria-selected={activeWorkflowTab === 'quoted'}
-            onClick={() => setActiveWorkflowTab('quoted')}
+            onClick={() => handleWorkflowTabChange('quoted')}
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
@@ -1508,7 +1552,7 @@ export default function AdminEnquiriesPage() {
             type="button"
             role="tab"
             aria-selected={activeWorkflowTab === 'rejected_closed'}
-            onClick={() => setActiveWorkflowTab('rejected_closed')}
+            onClick={() => handleWorkflowTabChange('rejected_closed')}
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
@@ -1531,7 +1575,7 @@ export default function AdminEnquiriesPage() {
               role="tab"
               id="tab-bin"
               aria-selected={activeWorkflowTab === 'bin'}
-              onClick={() => setActiveWorkflowTab('bin')}
+              onClick={() => handleWorkflowTabChange('bin')}
               style={{
                 padding: '8px 16px',
                 borderRadius: '8px',
@@ -1570,7 +1614,7 @@ export default function AdminEnquiriesPage() {
             type="button"
             role="tab"
             aria-selected={activeWorkflowTab === 'archived'}
-            onClick={() => setActiveWorkflowTab('archived')}
+            onClick={() => handleWorkflowTabChange('archived')}
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
@@ -1593,7 +1637,7 @@ export default function AdminEnquiriesPage() {
               role="tab"
               id="tab-removed"
               aria-selected={activeWorkflowTab === 'removed'}
-              onClick={() => setActiveWorkflowTab('removed')}
+              onClick={() => handleWorkflowTabChange('removed')}
               style={{
                 padding: '8px 16px',
                 borderRadius: '8px',
@@ -1836,11 +1880,101 @@ export default function AdminEnquiriesPage() {
           </div>
         </div>
 
+        {/* Bulk Removal Toolbar (Head Superadmin Only) */}
+        {isSuperadmin && activeWorkflowTab !== 'removed' && selectedEnquiryIds.size > 0 && (
+          <div
+            className="bulk-removal-toolbar"
+            style={{
+              background: '#fff1f2',
+              border: '1px solid #fecdd3',
+              borderRadius: '8px',
+              padding: '10px 16px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.1rem' }}>☑️</span>
+              <span style={{ fontWeight: 600, color: '#9f1239', fontSize: '0.92rem' }}>
+                Selected: <strong>{selectedEnquiryIds.size}</strong> {selectedEnquiryIds.size === 1 ? 'enquiry' : 'enquiries'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn-outline btn-sm clear-selection-btn"
+                onClick={() => setSelectedEnquiryIds(new Set())}
+                style={{ borderColor: '#fda4af', color: '#9f1239', background: '#ffffff' }}
+              >
+                Clear Selection
+              </button>
+              <button
+                type="button"
+                id="bulk-remove-selected-btn"
+                className="btn-danger btn-sm"
+                onClick={() => {
+                  const eligibleSelected = enquiries.filter(
+                    (e) => selectedEnquiryIds.has(e.id) && isEnquiryEligibleForRemoval(e)
+                  )
+                  if (eligibleSelected.length === 0) return
+                  setRemovalTargets(eligibleSelected)
+                  setRemovalCategory('spam')
+                  setRemovalReason('')
+                  setRemovalError('')
+                }}
+                style={{ background: '#dc2626', borderColor: '#b91c1c', color: '#ffffff', fontWeight: 600 }}
+              >
+                🚫 Remove Selected ({selectedEnquiryIds.size})
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 3. Desktop Enquiries Data Table */}
         <div className="admin-table-container products-table-wrap enquiries-table-wrap">
           <table className="admin-data-table enquiries-data-table" aria-label="Customer Enquiries List">
             <thead>
               <tr>
+                {isSuperadmin && activeWorkflowTab !== 'removed' && (
+                  <th scope="col" style={{ width: '40px', minWidth: '40px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      id="select-all-eligible-enquiries-checkbox"
+                      aria-label="Select all eligible enquiries for removal"
+                      checked={
+                        eligibleEnquiriesInView.length > 0 &&
+                        eligibleEnquiriesInView.every((e) => selectedEnquiryIds.has(e.id))
+                      }
+                      ref={(el) => {
+                        if (el) {
+                          el.indeterminate =
+                            eligibleEnquiriesInView.some((e) => selectedEnquiryIds.has(e.id)) &&
+                            !eligibleEnquiriesInView.every((e) => selectedEnquiryIds.has(e.id))
+                        }
+                      }}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedEnquiryIds((prev) => {
+                            const next = new Set(prev)
+                            eligibleEnquiriesInView.forEach((item) => next.add(item.id))
+                            return next
+                          })
+                        } else {
+                          setSelectedEnquiryIds((prev) => {
+                            const next = new Set(prev)
+                            eligibleEnquiriesInView.forEach((item) => next.delete(item.id))
+                            return next
+                          })
+                        }
+                      }}
+                      disabled={eligibleEnquiriesInView.length === 0}
+                    />
+                  </th>
+                )}
                 <th scope="col" style={{ width: '130px', minWidth: '130px' }}>Enquiry ID</th>
                 <th scope="col" style={{ width: '210px', minWidth: '190px' }}>Customer / Company</th>
                 <th scope="col" style={{ width: '180px', minWidth: '160px' }}>Requirement</th>
@@ -1850,8 +1984,8 @@ export default function AdminEnquiriesPage() {
                 <th
                   scope="col"
                   style={{
-                    width: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '200px' : '100px',
-                    minWidth: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '190px' : '90px',
+                    width: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '220px' : (isSuperadmin ? '180px' : '100px'),
+                    minWidth: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '200px' : (isSuperadmin ? '160px' : '90px'),
                     textAlign: 'center'
                   }}
                 >
@@ -1862,7 +1996,7 @@ export default function AdminEnquiriesPage() {
             <tbody>
               {filteredEnquiries.length === 0 ? (
                 <tr>
-                  <td colSpan="7">
+                  <td colSpan={isSuperadmin && activeWorkflowTab !== 'removed' ? 8 : 7}>
                     <div className="empty-state-wrap">
                       <span className="empty-icon">🔍</span>
                       <h3>No enquiries match your selection</h3>
@@ -1892,6 +2026,41 @@ export default function AdminEnquiriesPage() {
                       className={`enquiry-table-row ${isPendingRejection ? 'row-pending-rejection' : ''}`}
                       style={isPendingRejection ? { background: '#fffbeb' } : (enq.is_archived ? { opacity: 0.75 } : undefined)}
                     >
+                      {/* Checkbox Column for Superadmin */}
+                      {isSuperadmin && activeWorkflowTab !== 'removed' && (
+                        <td style={{ textAlign: 'center' }}>
+                          {isEnquiryEligibleForRemoval(enq) ? (
+                            <input
+                              type="checkbox"
+                              className="enquiry-select-checkbox"
+                              aria-label={`Select enquiry ${enq.enquiry_number || enq.id}`}
+                              checked={selectedEnquiryIds.has(enq.id)}
+                              onChange={(e) => {
+                                setSelectedEnquiryIds((prev) => {
+                                  const next = new Set(prev)
+                                  if (e.target.checked) next.add(enq.id)
+                                  else next.delete(enq.id)
+                                  return next
+                                })
+                              }}
+                            />
+                          ) : (
+                            <span
+                              title={
+                                enq.completion_approved_at || enq.status === 'completed'
+                                  ? 'Completed/approved enquiries are permanently protected from removal'
+                                  : !isCurrentCalendarMonth(enq.created_at)
+                                  ? 'Historical month enquiries cannot be removed'
+                                  : 'Ineligible for removal'
+                              }
+                              style={{ color: '#cbd5e1', fontSize: '0.85rem' }}
+                            >
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
+
                       {/* ID & Badges */}
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
@@ -2038,8 +2207,59 @@ export default function AdminEnquiriesPage() {
 
                       {/* Actions */}
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        {enq.status === 'rejection_requested' && isSuperadmin ? (
+                        {activeWorkflowTab === 'removed' && isSuperadmin ? (
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn-action-icon restore-removed-action-btn"
+                              onClick={() => handleRestoreRemoved(enq)}
+                              disabled={isRestoringRemoved}
+                              title={`Restore ${enq.enquiry_number || enq.id} to active status`}
+                              style={{
+                                background: '#f0fdf4',
+                                borderColor: '#86efac',
+                                color: '#16a34a',
+                                fontWeight: 600,
+                                fontSize: '0.8rem',
+                                padding: '5px 10px'
+                              }}
+                            >
+                              🔄 Restore
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-action-icon view-details-btn"
+                              onClick={() => handleOpenDetails(enq)}
+                              title={`Inspect details for ${enq.id}`}
+                            >
+                              👁️ View
+                            </button>
+                          </div>
+                        ) : enq.status === 'rejection_requested' && isSuperadmin ? (
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                            {isEnquiryEligibleForRemoval(enq) && (
+                              <button
+                                type="button"
+                                className="btn-action-icon remove-enquiry-row-btn"
+                                onClick={() => {
+                                  setRemovalTargets([enq])
+                                  setRemovalCategory('spam')
+                                  setRemovalReason('')
+                                  setRemovalError('')
+                                }}
+                                title={`Soft-remove enquiry ${enq.enquiry_number || enq.id}`}
+                                style={{
+                                  background: '#fef2f2',
+                                  borderColor: '#fca5a5',
+                                  color: '#dc2626',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  padding: '5px 10px'
+                                }}
+                              >
+                                🚫 Remove
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="btn-action-icon approve-rejection-action-btn"
@@ -2083,6 +2303,29 @@ export default function AdminEnquiriesPage() {
                           </div>
                         ) : enq.status === 'completion_requested' && isSuperadmin ? (
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                            {isEnquiryEligibleForRemoval(enq) && (
+                              <button
+                                type="button"
+                                className="btn-action-icon remove-enquiry-row-btn"
+                                onClick={() => {
+                                  setRemovalTargets([enq])
+                                  setRemovalCategory('spam')
+                                  setRemovalReason('')
+                                  setRemovalError('')
+                                }}
+                                title={`Soft-remove enquiry ${enq.enquiry_number || enq.id}`}
+                                style={{
+                                  background: '#fef2f2',
+                                  borderColor: '#fca5a5',
+                                  color: '#dc2626',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  padding: '5px 10px'
+                                }}
+                              >
+                                🚫 Remove
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="btn-action-icon approve-completion-action-btn btn-approve-completion"
@@ -2118,6 +2361,29 @@ export default function AdminEnquiriesPage() {
                           </div>
                         ) : (enq.is_in_bin || enq.status === 'in_bin') && isSuperadmin ? (
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                            {isEnquiryEligibleForRemoval(enq) && (
+                              <button
+                                type="button"
+                                className="btn-action-icon remove-enquiry-row-btn"
+                                onClick={() => {
+                                  setRemovalTargets([enq])
+                                  setRemovalCategory('spam')
+                                  setRemovalReason('')
+                                  setRemovalError('')
+                                }}
+                                title={`Soft-remove enquiry ${enq.enquiry_number || enq.id}`}
+                                style={{
+                                  background: '#fef2f2',
+                                  borderColor: '#fca5a5',
+                                  color: '#dc2626',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  padding: '5px 10px'
+                                }}
+                              >
+                                🚫 Remove
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="btn-action-icon restore-bin-action-btn btn-restore-bin"
@@ -2140,14 +2406,39 @@ export default function AdminEnquiriesPage() {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            className="btn-action-icon view-details-btn"
-                            onClick={() => handleOpenDetails(enq)}
-                            title={`Inspect details for ${enq.id}`}
-                          >
-                            👁️ View
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                            {isSuperadmin && activeWorkflowTab !== 'removed' && isEnquiryEligibleForRemoval(enq) && (
+                              <button
+                                type="button"
+                                className="btn-action-icon remove-enquiry-row-btn"
+                                onClick={() => {
+                                  setRemovalTargets([enq])
+                                  setRemovalCategory('spam')
+                                  setRemovalReason('')
+                                  setRemovalError('')
+                                }}
+                                title={`Soft-remove enquiry ${enq.enquiry_number || enq.id}`}
+                                style={{
+                                  background: '#fef2f2',
+                                  borderColor: '#fca5a5',
+                                  color: '#dc2626',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  padding: '5px 10px'
+                                }}
+                              >
+                                🚫 Remove
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="btn-action-icon view-details-btn"
+                              onClick={() => handleOpenDetails(enq)}
+                              title={`Inspect details for ${enq.id}`}
+                            >
+                              👁️ View
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -2198,7 +2489,25 @@ export default function AdminEnquiriesPage() {
                   }
                 >
                   <div className="mobile-card-header">
-                    <span className="enquiry-id-badge">{enq.id}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isSuperadmin && activeWorkflowTab !== 'removed' && isEnquiryEligibleForRemoval(enq) && (
+                        <input
+                          type="checkbox"
+                          className="enquiry-select-checkbox-mobile"
+                          aria-label={`Select enquiry ${enq.enquiry_number || enq.id}`}
+                          checked={selectedEnquiryIds.has(enq.id)}
+                          onChange={(e) => {
+                            setSelectedEnquiryIds((prev) => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(enq.id)
+                              else next.delete(enq.id)
+                              return next
+                            })
+                          }}
+                        />
+                      )}
+                      <span className="enquiry-id-badge">{enq.enquiry_number || enq.id}</span>
+                    </div>
                     <span
                       className="enquiry-status-chip"
                       style={{
@@ -2251,6 +2560,35 @@ export default function AdminEnquiriesPage() {
                   <p className="mobile-specs-snippet">{enq.message}</p>
 
                   <div className="mobile-card-actions">
+                    {activeWorkflowTab === 'removed' && isSuperadmin && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn-outline btn-block restore-removed-action-btn"
+                          onClick={() => handleRestoreRemoved(enq)}
+                          disabled={isRestoringRemoved}
+                          style={{ borderColor: '#86efac', color: '#16a34a', fontWeight: 600 }}
+                        >
+                          🔄 Restore Enquiry
+                        </button>
+                      </div>
+                    )}
+
+                    {isSuperadmin && activeWorkflowTab !== 'removed' && isEnquiryEligibleForRemoval(enq) && (
+                      <button
+                        type="button"
+                        className="btn-outline btn-block remove-enquiry-mobile-btn"
+                        onClick={() => {
+                          setRemovalTargets([enq])
+                          setRemovalCategory('spam')
+                          setRemovalReason('')
+                          setRemovalError('')
+                        }}
+                        style={{ borderColor: '#fca5a5', color: '#dc2626', fontWeight: 600, marginBottom: '8px' }}
+                      >
+                        🚫 Remove (Spam / Fake)
+                      </button>
+                    )}
                     {enq.status === 'rejection_requested' && isSuperadmin && (
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                         <button
@@ -3570,7 +3908,7 @@ export default function AdminEnquiriesPage() {
                           id="open-removal-modal-btn"
                           className="btn-danger btn-sm"
                           onClick={() => {
-                            setRemovalTarget(selectedEnquiry);
+                            setRemovalTargets([selectedEnquiry]);
                             setRemovalCategory('spam');
                             setRemovalReason('');
                             setRemovalError('');
@@ -5017,10 +5355,10 @@ export default function AdminEnquiriesPage() {
       )}
 
       {/* 13. Superadmin Fake/Spam Current-Month Soft-Removal Modal */}
-      {removalTarget && isSuperadmin && (
+      {(removalTarget || (removalTargets && removalTargets.length > 0)) && isSuperadmin && (
         <div
           className="admin-modal-backdrop"
-          onClick={() => !isRemoving && setRemovalTarget(null)}
+          onClick={() => !isRemoving && (setRemovalTargets([]), setRemovalTarget(null))}
           role="dialog"
           aria-modal="true"
           aria-labelledby="removal-modal-title"
@@ -5028,19 +5366,21 @@ export default function AdminEnquiriesPage() {
           <div
             className="admin-modal-dialog confirm-dialog"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '480px' }}
+            style={{ maxWidth: '520px' }}
           >
             <div className="admin-modal-header" style={{ borderBottom: '1px solid #fee2e2' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.25rem' }}>🚫</span>
                 <h2 id="removal-modal-title" className="admin-modal-title" style={{ margin: 0, color: '#991b1b' }}>
-                  Soft-Remove Current-Month Enquiry
+                  {removalTargets.length > 1
+                    ? `Soft-Remove ${removalTargets.length} Current-Month Enquiries`
+                    : 'Soft-Remove Current-Month Enquiry'}
                 </h2>
               </div>
               <button
                 type="button"
                 className="modal-close-btn"
-                onClick={() => setRemovalTarget(null)}
+                onClick={() => { setRemovalTargets([]); setRemovalTarget(null); }}
                 disabled={isRemoving}
                 aria-label="Close dialog"
               >
@@ -5050,16 +5390,42 @@ export default function AdminEnquiriesPage() {
 
             <form onSubmit={handleConfirmRemoval}>
               <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
-                <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#334155' }}>
-                  Soft-removing enquiry <strong>{removalTarget.enquiry_number || removalTarget.id}</strong> ({removalTarget.customer_name || removalTarget.name}).
-                </p>
+                {removalTargets.length === 1 ? (
+                  <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#334155' }}>
+                    Soft-removing enquiry <strong>{removalTargets[0].enquiry_number || removalTargets[0].id}</strong> ({removalTargets[0].customer_name || removalTargets[0].name || 'Anonymous Customer'}).
+                  </p>
+                ) : (
+                  <div style={{ marginBottom: '12px' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: '0.9rem', color: '#334155' }}>
+                      Soft-removing <strong>{removalTargets.length}</strong> selected enquiries:
+                    </p>
+                    <div
+                      style={{
+                        maxHeight: '130px',
+                        overflowY: 'auto',
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        padding: '8px 12px'
+                      }}
+                    >
+                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.82rem', color: '#334155' }}>
+                        {removalTargets.map((t) => (
+                          <li key={t.id} style={{ marginBottom: '3px' }}>
+                            <strong style={{ color: '#0f172a' }}>{t.enquiry_number || t.id}</strong> — {t.customer_name || t.name || 'Anonymous Customer'}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '10px 12px', marginBottom: '16px', fontSize: '0.82rem', color: '#991b1b' }}>
                   ⚠️ <strong>Head-Only Safe Removal:</strong> The record will NOT be physically deleted. It will be excluded from all active enquiry lists, operational counts, and reports. Audit history and actor attribution are permanently recorded.
                 </div>
 
                 {removalError && (
-                  <div style={{ background: '#fee2e2', border: '1px solid #ef4444', color: '#991b1b', padding: '8px 12px', borderRadius: '6px', marginBottom: '12px', fontSize: '0.85rem' }}>
+                  <div style={{ background: '#fee2e2', border: '1px solid #ef4444', color: '#991b1b', padding: '8px 12px', borderRadius: '6px', marginBottom: '12px', fontSize: '0.85rem', whiteSpace: 'pre-line' }}>
                     {removalError}
                   </div>
                 )}
@@ -5110,7 +5476,7 @@ export default function AdminEnquiriesPage() {
                 <button
                   type="button"
                   className="btn-outline btn-sm"
-                  onClick={() => setRemovalTarget(null)}
+                  onClick={() => { setRemovalTargets([]); setRemovalTarget(null); }}
                   disabled={isRemoving}
                 >
                   Cancel
@@ -5122,7 +5488,11 @@ export default function AdminEnquiriesPage() {
                   disabled={isRemoving}
                   style={{ background: '#dc2626', borderColor: '#b91c1c', color: '#ffffff' }}
                 >
-                  {isRemoving ? 'Removing...' : '🚫 Confirm Soft-Removal'}
+                  {isRemoving
+                    ? 'Removing...'
+                    : removalTargets.length > 1
+                    ? `🚫 Confirm Removal (${removalTargets.length})`
+                    : '🚫 Confirm Soft-Removal'}
                 </button>
               </div>
             </form>

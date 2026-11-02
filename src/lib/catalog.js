@@ -813,8 +813,12 @@ export function searchActiveCatalog(query, catalogSource = null, { limit = 8 } =
       score = 35
       matchedField = 'category'
     }
-    // Priority 6: Description or specification match
-    else if (specSummary.includes(q) || desc.includes(q) || specsStr.includes(q)) {
+    // Priority 6: Description or specification match (for short queries <= 2 chars, require word boundary)
+    else if (
+      q.length > 2
+        ? (specSummary.includes(q) || desc.includes(q) || specsStr.includes(q))
+        : new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(`${specSummary} ${desc} ${specsStr}`)
+    ) {
       score = 20
       matchedField = 'specs'
     }

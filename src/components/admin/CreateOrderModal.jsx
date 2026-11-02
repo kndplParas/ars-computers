@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAdminData } from '../../context/adminDataContext'
 
 /**
@@ -16,11 +16,25 @@ import { useAdminData } from '../../context/adminDataContext'
  * ============================================================================
  */
 export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
-  const { products = [], createSalesOrder, loadAdminCatalog, uploadOrderAttachments } = useAdminData()
+  const { products = [], staff = [], createSalesOrder, loadAdminCatalog, uploadOrderAttachments } = useAdminData()
+
+  // Eligible technical / engineering staff
+  const technicalStaff = useMemo(() => {
+    return (staff || []).filter(
+      (s) => s.is_active !== false && ['engineer', 'technical', 'admin', 'superadmin'].includes(s.role)
+    )
+  }, [staff])
 
   // Form State
   const [customerName, setCustomerName] = useState('')
   const [contactInfo, setContactInfo] = useState('')
+  const [customerEmail, setCustomerEmail] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [customerAddress, setCustomerAddress] = useState('')
+  const [assignedEngineerId, setAssignedEngineerId] = useState('')
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('')
+  const [discountAmount, setDiscountAmount] = useState(0)
+  const [taxAmount, setTaxAmount] = useState(0)
   const [items, setItems] = useState([
     {
       id: 1,
@@ -52,6 +66,13 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
   const resetForm = () => {
     setCustomerName('')
     setContactInfo('')
+    setCustomerEmail('')
+    setCustomerPhone('')
+    setCustomerAddress('')
+    setAssignedEngineerId('')
+    setExpectedDeliveryDate('')
+    setDiscountAmount(0)
+    setTaxAmount(0)
     setItems([
       {
         id: Date.now(),
@@ -79,10 +100,13 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
   if (!isOpen) return null
 
   // Calculate Order Total
-  const calculatedTotal = items.reduce(
+  const calculatedSubtotal = items.reduce(
     (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
     0
   )
+  const numDiscount = Math.max(0, Number(discountAmount) || 0)
+  const numTax = Math.max(0, Number(taxAmount) || 0)
+  const calculatedTotal = Math.max(0, calculatedSubtotal - numDiscount + numTax)
 
   const numPaid = Math.max(0, Number(paidAmount) || 0)
   const balance = Math.max(0, calculatedTotal - numPaid)
@@ -254,6 +278,13 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
       const result = await createSalesOrder({
         customer_name: customerName.trim(),
         contact_info: contactInfo.trim(),
+        customer_email: customerEmail.trim() || null,
+        customer_phone: customerPhone.trim() || null,
+        customer_address: customerAddress.trim() || null,
+        assigned_engineer_id: assignedEngineerId || null,
+        expected_delivery_date: expectedDeliveryDate ? new Date(expectedDeliveryDate).toISOString() : null,
+        discount_amount: numDiscount,
+        tax_amount: numTax,
         items: formattedItems,
         paid_amount: numPaid,
         payment_method: paymentMethod,
@@ -336,7 +367,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
             )}
 
             {/* Customer Details */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
               <div className="form-group">
                 <label htmlFor="order-cust-name" className="form-label">
                   Customer Name <span style={{ color: '#ef4444' }}>*</span>
@@ -365,6 +396,88 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                   value={contactInfo}
                   onChange={(e) => setContactInfo(e.target.value)}
                   required
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="order-cust-phone" className="form-label">
+                  Customer Phone
+                </label>
+                <input
+                  id="order-cust-phone"
+                  type="tel"
+                  className="form-input"
+                  placeholder="e.g. 9876543210"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="order-cust-email" className="form-label">
+                  Customer Email
+                </label>
+                <input
+                  id="order-cust-email"
+                  type="email"
+                  className="form-input"
+                  placeholder="e.g. customer@example.com"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label htmlFor="order-cust-address" className="form-label">
+                  Delivery / Site Address
+                </label>
+                <input
+                  id="order-cust-address"
+                  type="text"
+                  className="form-input"
+                  placeholder="Street, locality, city, pincode"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            {/* Engineer Assignment & Delivery Schedule */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div className="form-group">
+                <label htmlFor="order-assigned-eng" className="form-label">
+                  Assign Technical Staff / Engineer
+                </label>
+                <select
+                  id="order-assigned-eng"
+                  className="form-select"
+                  value={assignedEngineerId}
+                  onChange={(e) => setAssignedEngineerId(e.target.value)}
+                  disabled={isSubmitting}
+                >
+                  <option value="">— Unassigned (Assign Later) —</option>
+                  {technicalStaff.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.full_name || st.email} ({st.employee_code || st.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="order-delivery-date" className="form-label">
+                  Expected Delivery / Completion Date
+                </label>
+                <input
+                  id="order-delivery-date"
+                  type="datetime-local"
+                  className="form-input"
+                  value={expectedDeliveryDate}
+                  onChange={(e) => setExpectedDeliveryDate(e.target.value)}
                   disabled={isSubmitting}
                 />
               </div>
@@ -592,7 +705,33 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
 
             {/* Payment & Totals Section */}
             <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <label className="form-label" style={{ marginBottom: '4px' }}>Discount (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-input"
+                    value={discountAmount}
+                    onChange={(e) => setDiscountAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ marginBottom: '4px' }}>Tax (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-input"
+                    value={taxAmount}
+                    onChange={(e) => setTaxAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                    disabled={isSubmitting}
+                  />
+                </div>
+
                 <div>
                   <label className="form-label" style={{ marginBottom: '4px' }}>Payment Method</label>
                   <select
@@ -631,6 +770,15 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                     onChange={(e) => setPaidAmount(e.target.value)}
                     disabled={isSubmitting}
                   />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>Subtotal:</div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
+                    ₹{calculatedSubtotal.toFixed(2)}
+                  </div>
                 </div>
 
                 <div>

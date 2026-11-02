@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
+import BusinessAnalyticsOverlay from './BusinessAnalyticsOverlay'
 
 /**
  * ============================================================================
@@ -16,6 +17,7 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
   const { metrics, categories, enquiries, orders, isLiveDatabase } = useAdminData()
   const navigate = useNavigate()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isBusinessReportOpen, setIsBusinessReportOpen] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -97,7 +99,17 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
           </Link>
         </div>
 
-        <div className="admin-topbar-right">
+                <div className="admin-topbar-right">
+          {['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(userRole) && (
+            <button
+              type="button"
+              className="btn-outline btn-sm admin-business-btn"
+              onClick={() => setIsBusinessReportOpen(true)}
+              title="Open Monthly Business Analytics and Performance Review"
+            >
+              <span>📈 Business</span>
+            </button>
+          )}
           <Link to="/" className="btn-outline btn-sm admin-live-site-btn" target="_blank" rel="noreferrer">
             <span>🌐 View Customer Website</span>
           </Link>
@@ -202,7 +214,13 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
         <main className="admin-content-pane">
           {children}
         </main>
-      </div>
+            </div>
+
+      {/* Monthly Business Analytics Full-Screen Overlay */}
+      <BusinessAnalyticsOverlay
+        isOpen={isBusinessReportOpen}
+        onClose={() => setIsBusinessReportOpen(false)}
+      />
     </div>
   )
 }

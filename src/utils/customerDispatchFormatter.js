@@ -81,13 +81,13 @@ export function resolveCustomerPhone(record) {
     if (raw.includes('|')) {
       const parts = raw.split('|').map(p => p.trim())
       for (const p of parts) {
-        if (!p.includes('@') && /\d{10}/.test(p)) {
+        if (!p.includes('@') && p.replace(/\D/g, '').length >= 10) {
           return p
         }
       }
     }
     // Handle pure phone or text containing phone
-    if (!raw.includes('@') && /\d{10}/.test(raw)) {
+    if (!raw.includes('@') && raw.replace(/\D/g, '').length >= 10) {
       return raw
     }
   }
@@ -371,6 +371,8 @@ export function formatOrderPaymentStatus(status) {
       return 'Fully Paid'
     case 'partial':
       return 'Partially Paid'
+    case 'refunded':
+      return 'Refunded'
     case 'pending':
     default:
       return 'Payment Pending'
@@ -419,17 +421,28 @@ export function formatOrderCustomerDispatch(order) {
   const customerEmail = resolveCustomerEmail(order)
   const customerAddress = order.customer_address || order.address || null
 
-  const orderDate = order.created_at
-    ? new Date(order.created_at).toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      })
-    : new Date().toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      })
+  let orderDate = ''
+  if (order.created_at) {
+    try {
+      const d = new Date(order.created_at)
+      if (!isNaN(d.getTime())) {
+        orderDate = d.toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        })
+      }
+    } catch {
+      orderDate = ''
+    }
+  }
+  if (!orderDate) {
+    orderDate = new Date().toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
+  }
 
   const lines = []
 
@@ -484,13 +497,22 @@ export function formatOrderCustomerDispatch(order) {
   if (payments.length > 1) {
     lines.push('PAYMENTS')
     payments.forEach((p) => {
-      const pDate = p.received_at || p.created_at
-        ? new Date(p.received_at || p.created_at).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-          })
-        : 'Payment'
+      let pDate = 'Payment'
+      const rawDate = p.received_at || p.created_at
+      if (rawDate) {
+        try {
+          const d = new Date(rawDate)
+          if (!isNaN(d.getTime())) {
+            pDate = d.toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric'
+            })
+          }
+        } catch {
+          pDate = 'Payment'
+        }
+      }
       const pAmt = formatINR(p.amount_received)
       const pMethod = formatPaymentMethodLabel(p.payment_method)
       lines.push(`${pDate} — ${pAmt} — ${pMethod}`)
@@ -518,22 +540,57 @@ export function formatOrderCustomerDispatch(order) {
   lines.push(formatOrderCustomerStatus(order.status))
   lines.push('')
 
-  // Handled By (Staff snapshot, zero internal UUIDs)
+  // Handled By (Staff display name only, zero employee codes, zero internal UUIDs)
   const handlerName = order.completed_by_name || order.created_by_name
-  const handlerCode = order.completed_by_employee_code || order.created_by_employee_code
   if (handlerName) {
     lines.push('Handled By:')
     lines.push(handlerName)
-    if (handlerCode) {
-      lines.push(`Employee Code: ${handlerCode}`)
+    lines.push('')
+  }
+
+  // Assigned Engineer
+  if (order.assigned_engineer_name) {
+    lines.push('Assigned Engineer:')
+    lines.push(order.assigned_engineer_name)
+    if (order.assigned_engineer_phone) {
+      lines.push(`Engineer Phone: ${order.assigned_engineer_phone}`)
     }
     lines.push('')
   }
 
+  // Expected Delivery Date
+  if (order.expected_delivery_date) {
+    const formattedDelivery = formatExpectedVisitDateTime(order.expected_delivery_date)
+    if (formattedDelivery) {
+      lines.push('Expected Delivery:')
+      lines.push(formattedDelivery)
+      lines.push('')
+    }
+  }
+
   // Footer
-  lines.push('Thank you for choosing ARS Computers.')
+  if (order.status === 'cancelled') {
+    lines.push('This order has been cancelled. For any queries or assistance, please contact ARS Computers.')
+  } else {
+    lines.push('Thank you for choosing ARS Computers.')
+  }
 
   return lines.join('\n')
+}
+
+/**
+ * Produces a concise, single-line text summary of an order for fast clipboard copying.
+ */
+export function formatOrderSummaryCompact(order) {
+  if (!order) return ''
+  const orderNumber = order.order_number || 'Order'
+  const customerName = order.customer_name || 'Customer'
+  const total = formatINR(order.total_amount)
+  const paid = formatINR(order.paid_amount)
+  const balance = formatINR(Math.max(0, (Number(order.total_amount) || 0) - (Number(order.paid_amount) || 0)))
+  const status = formatOrderCustomerStatus(order.status)
+  const eng = order.assigned_engineer_name ? ` | Eng: ${order.assigned_engineer_name}` : ''
+  return `${orderNumber} — ${customerName} | Total: ${total} | Paid: ${paid} | Balance: ${balance} | Status: ${status}${eng}`
 }
 
 /**

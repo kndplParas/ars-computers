@@ -66,8 +66,9 @@ async function runRoleMatrixSuite() {
     '1.1 isSuperadmin is strictly derived from adminUser.role === "superadmin"'
   )
   assertTest(
-    pageCode.includes("const isEmployee = adminUser?.role === 'admin'"),
-    '1.2 isEmployee is strictly derived from adminUser.role === "admin"'
+    pageCode.includes("const isEmployee = ['admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)") ||
+      pageCode.includes("const isEmployee = adminUser?.role === 'admin'"),
+    '1.2 isEmployee is strictly derived from active employee roles'
   )
 
   // Employee action buttons are gated

@@ -2,33 +2,58 @@
  * ============================================================================
  * ARS Computers — Dedicated Monthly Sales Excel Report & Orders Register Generator
  * ============================================================================
- * Generates standardized monthly audit and compliance Excel (.xlsx) workbooks
- * using ExcelJS.
+ * Generates standardized, professional multi-sheet audit and compliance Excel
+ * (.xlsx) workbooks using ExcelJS.
  *
- * Strict Requirements:
- * 1. Reporting month is based SOLELY on `completion_approved_at`.
- * 2. Filename format: ARS_Sales_<Month>_<Year>.xlsx
- * 3. Cancelled orders are excluded from the monthly completed-sales report.
- * 4. Grounded in actual order data without data fabrication.
+ * Core Sheets:
+ * 1. Orders — Complete active, completed, and processed orders in the operating cycle.
+ * 2. Sales — Settled & Head-approved sales revenue ledger.
+ * 3. Summary — Executive overview, KPI totals (INR ₹), and payment method distribution.
+ *
+ * Invariants:
+ * - Strictly increasing numerical sequence across all order rows (ORD-0001, ORD-0002...).
+ * - Professional ARS COMPUTERS styling (Navy Blue #1E3A8A, white bold text, zebra striping).
+ * - Indian Rupee formatting (₹ #,##0.00) on all monetary columns.
+ * - Frozen header rows and column auto-widths with safety padding (no ### truncation).
+ * - Grounded strictly in authentic database records without fabricated figures.
  * ============================================================================
  */
 
 import { MONTH_NAMES, formatDateTimeParts, getExcelJS } from './excelReportGenerator.js'
+import { ORDER_REGISTER_COLUMNS, extractOrderRegisterRow } from './liveOrdersRegisterHelper.js'
+
+/**
+ * Extracts numeric sequence number from order number string.
+ * Handles formats like: 'ARS-ORD-00042' -> 42, 'ORD-0001' -> 1, 'ORD-10' -> 10.
+ */
+export function extractOrderSequenceNumber(orderNumber) {
+  if (!orderNumber || typeof orderNumber !== 'string') return 0
+  const match = orderNumber.match(/(\d+)/g)
+  if (!match || match.length === 0) return 0
+  return parseInt(match[match.length - 1], 10) || 0
+}
+
+/**
+ * Sorts orders in strictly increasing numerical sequence (lowest order number first).
+ */
+export function sortOrdersAscending(ordersList) {
+  if (!Array.isArray(ordersList)) return []
+  return [...ordersList].sort((a, b) => {
+    const seqA = extractOrderSequenceNumber(a.order_number)
+    const seqB = extractOrderSequenceNumber(b.order_number)
+    if (seqA !== seqB) return seqA - seqB
+    return new Date(a.created_at || 0) - new Date(b.created_at || 0)
+  })
+}
 
 /**
  * Filters orders strictly by `completion_approved_at` matching the target month & year.
  * Only orders with status = 'completed' are included.
- *
- * @param {Array} orders - Complete orders array
- * @param {number} targetMonthIndex - 0-indexed (0 = Jan, 11 = Dec)
- * @param {number} targetYear - Full year (e.g. 2026)
- * @returns {Array} Filtered orders
  */
 export function filterOrdersByReportingMonth(orders, targetMonthIndex, targetYear) {
   if (!Array.isArray(orders)) return []
 
   return orders.filter((order) => {
-    // Only completed, Head-approved orders belong in the monthly completed sales report
     if (order.status !== 'completed' || !order.completion_approved_at) {
       return false
     }
@@ -45,20 +70,6 @@ export function filterOrdersByReportingMonth(orders, targetMonthIndex, targetYea
 
 /**
  * Determines whether an order belongs to the Current Month operational cycle.
- *
- * Rules:
- * 1. ACTIVE orders ('new', 'processing', 'completion_requested'):
- *    ALWAYS remain visible in current month operational view regardless of creation date,
- *    so unfinished cross-month work is never lost.
- * 2. COMPLETED orders:
- *    Membership is strictly based on completion_approved_at falling within target month & year.
- * 3. CANCELLED orders:
- *    Membership is based on cancelled_at (or created_at fallback) falling within target month & year.
- *
- * @param {Object} order
- * @param {number} currentMonthIndex - 0-indexed (0 = Jan, 11 = Dec)
- * @param {number} currentYear - Full year (e.g. 2026)
- * @returns {boolean}
  */
 export function isOrderInCurrentMonthCycle(order, currentMonthIndex, currentYear) {
   if (!order || typeof order !== 'object') return false
@@ -90,16 +101,6 @@ export function isOrderInCurrentMonthCycle(order, currentMonthIndex, currentYear
 
 /**
  * Filters orders for a historical month view.
- *
- * Rules:
- * 1. For 'completed' orders: matches if completion_approved_at is in the target month & year.
- * 2. For 'cancelled' orders: matches if cancelled_at (or created_at fallback) is in target month & year.
- * 3. For other records: matches if created_at is in target month & year.
- *
- * @param {Array} orders
- * @param {number} targetMonthIndex - 0-indexed
- * @param {number} targetYear - Full year
- * @returns {Array}
  */
 export function filterOrdersForHistoricalMonth(orders, targetMonthIndex, targetYear) {
   if (!Array.isArray(orders)) return []
@@ -107,7 +108,6 @@ export function filterOrdersForHistoricalMonth(orders, targetMonthIndex, targetY
   return orders.filter((order) => {
     if (!order || typeof order !== 'object') return false
 
-    // If completed: strictly check completion_approved_at
     if (order.status === 'completed') {
       if (!order.completion_approved_at) return false
       const d = new Date(order.completion_approved_at)
@@ -115,7 +115,6 @@ export function filterOrdersForHistoricalMonth(orders, targetMonthIndex, targetY
       return d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
     }
 
-    // If cancelled: check cancelled_at or created_at
     if (order.status === 'cancelled') {
       const rawDate = order.cancelled_at || order.created_at
       if (!rawDate) return false
@@ -124,12 +123,10 @@ export function filterOrdersForHistoricalMonth(orders, targetMonthIndex, targetY
       return d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
     }
 
-    // For active/unresolved records created in that historical month
     if (order.created_at) {
       const d = new Date(order.created_at)
-      if (!Number.isNaN(d.getTime())) {
-        return d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
-      }
+      if (Number.isNaN(d.getTime())) return false
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
     }
 
     return false
@@ -137,13 +134,7 @@ export function filterOrdersForHistoricalMonth(orders, targetMonthIndex, targetY
 }
 
 /**
- * Calculates operational metrics for a specific month view (current or historical).
- *
- * @param {Array} orders - Complete orders list
- * @param {number} targetMonthIndex
- * @param {number} targetYear
- * @param {boolean} isCurrentMonth
- * @returns {Object} { active, pending, completed, revenue, cancelled }
+ * Computes monthly summary metrics based strictly on real database order records.
  */
 export function calculateMonthlyCycleMetrics(orders, targetMonthIndex, targetYear, isCurrentMonth = true) {
   if (!Array.isArray(orders)) {
@@ -151,17 +142,15 @@ export function calculateMonthlyCycleMetrics(orders, targetMonthIndex, targetYea
   }
 
   if (isCurrentMonth) {
-    // Current operational cycle:
-    // Active orders include all open work across any creation month
     const active = orders.filter((o) => ['new', 'processing'].includes(o.status)).length
     const pending = orders.filter((o) => o.status === 'completion_requested').length
 
-    // Completed sales strictly within current calendar month
     const completedOrders = orders.filter((o) => {
       if (o.status !== 'completed' || !o.completion_approved_at) return false
       const d = new Date(o.completion_approved_at)
       return !Number.isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
     })
+
     const completed = completedOrders.length
     const revenue = completedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
 
@@ -173,8 +162,12 @@ export function calculateMonthlyCycleMetrics(orders, targetMonthIndex, targetYea
 
     return { active, pending, completed, revenue, cancelled }
   } else {
-    // Historical month metrics
-    const completedOrders = filterOrdersByReportingMonth(orders, targetMonthIndex, targetYear)
+    const completedOrders = orders.filter((o) => {
+      if (o.status !== 'completed' || !o.completion_approved_at) return false
+      const d = new Date(o.completion_approved_at)
+      return !Number.isNaN(d.getTime()) && d.getFullYear() === targetYear && d.getMonth() === targetMonthIndex
+    })
+
     const completed = completedOrders.length
     const revenue = completedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
 
@@ -195,8 +188,7 @@ export function calculateMonthlyCycleMetrics(orders, targetMonthIndex, targetYea
 }
 
 /**
- * Builds the standard filename for the monthly sales report.
- * Format: ARS_Sales_<Month>_<Year>.xlsx
+ * Standard filename builder.
  */
 export function getMonthlySalesReportFilename(targetMonthIndex, targetYear) {
   const monthName = MONTH_NAMES[targetMonthIndex] || `Month_${targetMonthIndex + 1}`
@@ -206,7 +198,7 @@ export function getMonthlySalesReportFilename(targetMonthIndex, targetYear) {
 export const buildMonthlySalesExcelFilename = getMonthlySalesReportFilename
 
 /**
- * Generates workbook buffer for monthly sales report (testable in Node & browser).
+ * Generates workbook buffer for monthly sales report (Node & browser compatible).
  */
 export async function generateMonthlySalesExcelBuffer(allOrders, targetMonthIndex, targetYear) {
   const res = await downloadMonthlySalesExcel(allOrders, targetMonthIndex, targetYear)
@@ -214,61 +206,15 @@ export async function generateMonthlySalesExcelBuffer(allOrders, targetMonthInde
 }
 
 /**
- * Generates the Monthly Sales Excel workbook.
- *
- * @param {Array} allOrders - All orders
- * @param {number} targetMonthIndex - 0 for January, 11 for December
- * @param {number} targetYear - e.g. 2026
- * @returns {Promise<{ filename: string, count: number, buffer: ArrayBuffer }>}
+ * Styling helper: applies ARS Computers Navy Header formatting
  */
-export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, targetYear) {
-  const filtered = filterOrdersByReportingMonth(allOrders, targetMonthIndex, targetYear)
-  const monthName = MONTH_NAMES[targetMonthIndex] || `Month_${targetMonthIndex + 1}`
-  const filename = getMonthlySalesReportFilename(targetMonthIndex, targetYear)
-
-  const ExcelJS = await getExcelJS()
-  const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'ARS Computers Admin Portal'
-  workbook.lastModifiedBy = 'ARS Computers Sales & Accounting'
-  workbook.created = new Date()
-  workbook.modified = new Date()
-
-  const worksheet = workbook.addWorksheet(`${monthName} ${targetYear} Sales`, {
-    views: [{ showGridLines: true }],
-    pageSetup: { orientation: 'landscape', fitToPage: true }
-  })
-
-  // Fixed 19 Columns
-  worksheet.columns = [
-    { header: 'Order Reference', key: 'order_ref', width: 18 },
-    { header: 'Order Date', key: 'order_date', width: 14 },
-    { header: 'Customer Name', key: 'customer_name', width: 22 },
-    { header: 'Contact Information', key: 'contact_info', width: 26 },
-    { header: 'Item Summary', key: 'items_summary', width: 36 },
-    { header: 'Total Quantity', key: 'total_quantity', width: 14 },
-    { header: 'Total Amount (₹)', key: 'total_amount', width: 18 },
-    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 18 },
-    { header: 'Balance (₹)', key: 'balance_amount', width: 16 },
-    { header: 'Payment Status', key: 'payment_status', width: 16 },
-    { header: 'Payment Method', key: 'payment_method', width: 16 },
-    { header: 'Completed By', key: 'completed_by', width: 22 },
-    { header: 'Employee Code', key: 'completed_by_code', width: 18 },
-    { header: 'Completion Date/Time', key: 'completion_datetime', width: 22 },
-    { header: 'Employee Remarks', key: 'employee_remarks', width: 36 },
-    { header: 'Approved By', key: 'approved_by', width: 22 },
-    { header: 'Approval Date/Time', key: 'approval_datetime', width: 22 },
-    { header: 'Head Remarks', key: 'head_remarks', width: 36 },
-    { header: 'Final Status', key: 'final_status', width: 16 }
-  ]
-
-  // Style Header Row
-  const headerRow = worksheet.getRow(1)
-  headerRow.height = 28
-  headerRow.eachCell((cell) => {
+function styleHeaderRow(row) {
+  row.height = 28
+  row.eachCell((cell) => {
     cell.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'FF0F172A' } // Slate 900
+      fgColor: { argb: 'FF1E3A8A' } // Navy Blue #1E3A8A
     }
     cell.font = {
       name: 'Calibri',
@@ -282,16 +228,225 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
       wrapText: true
     }
     cell.border = {
-      top: { style: 'thin', color: { argb: 'FF334155' } },
-      bottom: { style: 'medium', color: { argb: 'FF020617' } },
+      top: { style: 'thin', color: { argb: 'FF1E293B' } },
+      bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
       left: { style: 'thin', color: { argb: 'FF334155' } },
       right: { style: 'thin', color: { argb: 'FF334155' } }
     }
   })
+}
 
-  filtered.forEach((order, index) => {
+/**
+ * Styling helper: applies zebra striping and borders to data row
+ */
+function styleDataRow(row, isEven, alignConfig = {}) {
+  row.height = 22
+  row.eachCell((cell, colNumber) => {
+    cell.font = { name: 'Calibri', size: 10 }
+    if (isEven) {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF8FAFC' } // Slate 50
+      }
+    }
+    const alignment = alignConfig[colNumber] || 'left'
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: alignment,
+      wrapText: false
+    }
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+    }
+  })
+}
+
+/**
+ * Formats monetary cell with Indian Rupee currency format (₹#,##0.00)
+ */
+function formatCurrencyCell(cell, value) {
+  cell.value = Number(value) || 0
+  cell.numFmt = '"₹"#,##0.00;[Red]-"₹"#,##0.00;"₹"0.00'
+  cell.alignment = { vertical: 'middle', horizontal: 'right' }
+}
+
+/**
+ * Generates the Comprehensive 3-Sheet Monthly Sales & Orders Excel workbook.
+ *
+ * Sheet 1: Orders (All orders in target cycle sorted strictly increasing numerically)
+ * Sheet 2: Sales (Completed sales approved in reporting month)
+ * Sheet 3: Summary (Executive KPI totals & payment methods breakdown)
+ */
+export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, targetYear) {
+  const monthName = MONTH_NAMES[targetMonthIndex] || `Month_${targetMonthIndex + 1}`
+  const filename = getMonthlySalesReportFilename(targetMonthIndex, targetYear)
+
+  // 1. Prepare data sets
+  const isCurrent = targetMonthIndex === new Date().getMonth() && targetYear === new Date().getFullYear()
+  const ordersInCycle = (allOrders || []).filter((o) =>
+    isCurrent
+      ? isOrderInCurrentMonthCycle(o, targetMonthIndex, targetYear)
+      : filterOrdersForHistoricalMonth([o], targetMonthIndex, targetYear).length > 0
+  )
+
+  const sortedOrders = sortOrdersAscending(ordersInCycle)
+  const completedSales = sortOrdersAscending(filterOrdersByReportingMonth(allOrders, targetMonthIndex, targetYear))
+
+  const ExcelJS = await getExcelJS()
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'ARS Computers Admin Portal'
+  workbook.lastModifiedBy = 'ARS Computers Accounting'
+  workbook.created = new Date()
+  workbook.modified = new Date()
+
+  // ==========================================================================
+  // SHEET 1: ORDERS
+  // ==========================================================================
+  const ordersSheet = workbook.addWorksheet('Orders', {
+    views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
+    pageSetup: { orientation: 'landscape', fitToPage: true }
+  })
+
+  ordersSheet.columns = [
+    { header: 'Order #', key: 'order_number', width: 16 },
+    { header: 'Order Date', key: 'order_date', width: 14 },
+    { header: 'Customer Name', key: 'customer_name', width: 22 },
+    { header: 'Customer Phone', key: 'customer_phone', width: 18 },
+    { header: 'Items Summary', key: 'items_summary', width: 34 },
+    { header: 'Total Qty', key: 'total_qty', width: 12 },
+    { header: 'Total Amount (₹)', key: 'total_amount', width: 18 },
+    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 18 },
+    { header: 'Balance (₹)', key: 'balance_amount', width: 16 },
+    { header: 'Assigned Engineer', key: 'assigned_engineer', width: 22 },
+    { header: 'Expected Delivery', key: 'expected_delivery', width: 18 },
+    { header: 'Status', key: 'status', width: 16 }
+  ]
+
+  styleHeaderRow(ordersSheet.getRow(1))
+  ordersSheet.autoFilter = { from: 'A1', to: 'L1' }
+
+  let totalOrdersSum = 0
+  let totalPaidSum = 0
+  let totalQtySum = 0
+
+  sortedOrders.forEach((order, index) => {
     const received = formatDateTimeParts(order.created_at)
-    const completed = formatDateTimeParts(order.completion_requested_at)
+    const delivery = formatDateTimeParts(order.expected_delivery_date)
+
+    let itemsSummary = '—'
+    let totalQty = 0
+    if (Array.isArray(order.order_items) && order.order_items.length > 0) {
+      itemsSummary = order.order_items
+        .map((it) => `${it.product_name_snapshot} (x${it.quantity})`)
+        .join(', ')
+      totalQty = order.order_items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
+    }
+
+    const total = Number(order.total_amount) || 0
+    const paid = Number(order.paid_amount) || 0
+    const balance = Math.max(0, total - paid)
+
+    totalOrdersSum += total
+    totalPaidSum += paid
+    totalQtySum += totalQty
+
+    const row = ordersSheet.addRow({
+      order_number: order.order_number || '—',
+      order_date: received.date,
+      customer_name: order.customer_name || '—',
+      customer_phone: order.customer_phone || order.contact_info || '—',
+      items_summary: itemsSummary,
+      total_qty: totalQty,
+      total_amount: total,
+      paid_amount: paid,
+      balance_amount: balance,
+      assigned_engineer: order.assigned_engineer_name || 'Unassigned',
+      expected_delivery: delivery.date !== '—' ? delivery.date : '—',
+      status: (order.status || 'new').toUpperCase()
+    })
+
+    styleDataRow(row, index % 2 === 1, {
+      1: 'center',
+      2: 'center',
+      6: 'center',
+      7: 'right',
+      8: 'right',
+      9: 'right',
+      11: 'center',
+      12: 'center'
+    })
+
+    formatCurrencyCell(row.getCell(7), total)
+    formatCurrencyCell(row.getCell(8), paid)
+    formatCurrencyCell(row.getCell(9), balance)
+  })
+
+  // Totals Row for Orders
+  if (sortedOrders.length > 0) {
+    const totalRow = ordersSheet.addRow({
+      order_number: 'TOTAL',
+      order_date: '',
+      customer_name: `${sortedOrders.length} Orders`,
+      customer_phone: '',
+      items_summary: '',
+      total_qty: totalQtySum,
+      total_amount: totalOrdersSum,
+      paid_amount: totalPaidSum,
+      balance_amount: Math.max(0, totalOrdersSum - totalPaidSum),
+      assigned_engineer: '',
+      expected_delivery: '',
+      status: ''
+    })
+    totalRow.height = 24
+    totalRow.eachCell((cell) => {
+      cell.font = { name: 'Calibri', size: 10, bold: true }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF64748B' } },
+        bottom: { style: 'double', color: { argb: 'FF0F172A' } }
+      }
+    })
+    formatCurrencyCell(totalRow.getCell(7), totalOrdersSum)
+    formatCurrencyCell(totalRow.getCell(8), totalPaidSum)
+    formatCurrencyCell(totalRow.getCell(9), Math.max(0, totalOrdersSum - totalPaidSum))
+  }
+
+  // ==========================================================================
+  // SHEET 2: SALES (Completed & Approved)
+  // ==========================================================================
+  const salesSheet = workbook.addWorksheet('Sales', {
+    views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
+    pageSetup: { orientation: 'landscape', fitToPage: true }
+  })
+
+  salesSheet.columns = [
+    { header: 'Sales Ref', key: 'order_ref', width: 18 },
+    { header: 'Order Date', key: 'order_date', width: 14 },
+    { header: 'Approval Date', key: 'approval_date', width: 16 },
+    { header: 'Customer Name', key: 'customer_name', width: 22 },
+    { header: 'Contact Info', key: 'contact_info', width: 24 },
+    { header: 'Products Sold', key: 'products_sold', width: 34 },
+    { header: 'Qty', key: 'qty', width: 10 },
+    { header: 'Total Value (₹)', key: 'total_amount', width: 18 },
+    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 18 },
+    { header: 'Balance (₹)', key: 'balance_amount', width: 16 },
+    { header: 'Payment Method', key: 'payment_method', width: 16 },
+    { header: 'Completed By', key: 'completed_by', width: 20 },
+    { header: 'Approved By', key: 'approved_by', width: 20 }
+  ]
+
+  styleHeaderRow(salesSheet.getRow(1))
+  salesSheet.autoFilter = { from: 'A1', to: 'M1' }
+
+  let totalSalesRevenue = 0
+  let totalSalesPaid = 0
+
+  completedSales.forEach((order, index) => {
+    const received = formatDateTimeParts(order.created_at)
     const approved = formatDateTimeParts(order.completion_approved_at)
 
     let itemsSummary = '—'
@@ -307,83 +462,174 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
     const paid = Number(order.paid_amount) || 0
     const balance = Math.max(0, total - paid)
 
-    const row = worksheet.addRow({
+    totalSalesRevenue += total
+    totalSalesPaid += paid
+
+    const row = salesSheet.addRow({
       order_ref: order.order_number || order.id,
       order_date: received.date,
+      approval_date: approved.date !== '—' ? approved.date : '—',
       customer_name: order.customer_name || '—',
       contact_info: order.contact_info || '—',
-      items_summary: itemsSummary,
-      total_quantity: totalQty,
-      total_amount: total.toFixed(2),
-      paid_amount: paid.toFixed(2),
-      balance_amount: balance.toFixed(2),
-      payment_status: (order.payment_status || 'pending').toUpperCase(),
+      products_sold: itemsSummary,
+      qty: totalQty,
+      total_amount: total,
+      paid_amount: paid,
+      balance_amount: balance,
       payment_method: (order.payment_method || 'cash').toUpperCase(),
       completed_by: order.completed_by_name || '—',
-      completed_by_code: order.completed_by_employee_code || '—',
-      completion_datetime: completed.date !== '—' ? `${completed.date} ${completed.time}` : '—',
-      employee_remarks: order.employee_remarks || '—',
-      approved_by: order.approved_by_name || '—',
-      approval_datetime: approved.date !== '—' ? `${approved.date} ${approved.time}` : '—',
-      head_remarks: order.head_remarks || '—',
-      final_status: order.status || 'completed'
+      approved_by: order.approved_by_name || 'Store Head'
     })
 
-    row.height = 22
-    const isEven = index % 2 === 1
-    row.eachCell((cell, colNumber) => {
-      cell.font = { name: 'Calibri', size: 10 }
-      if (isEven) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF8FAFC' }
-        }
-      }
-      cell.alignment = {
-        vertical: 'middle',
-        horizontal: colNumber === 1 || colNumber === 2 || colNumber === 6 ||
-                    colNumber === 10 || colNumber === 11 || colNumber === 13 ||
-                    colNumber === 14 || colNumber === 17 || colNumber === 19
-                      ? 'center'
-                      : colNumber === 7 || colNumber === 8 || colNumber === 9
-                        ? 'right'
-                        : 'left'
-      }
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-      }
+    styleDataRow(row, index % 2 === 1, {
+      1: 'center',
+      2: 'center',
+      3: 'center',
+      7: 'center',
+      8: 'right',
+      9: 'right',
+      10: 'right',
+      11: 'center'
     })
+
+    formatCurrencyCell(row.getCell(8), total)
+    formatCurrencyCell(row.getCell(9), paid)
+    formatCurrencyCell(row.getCell(10), balance)
   })
 
-  if (filtered.length === 0) {
-    const emptyRow = worksheet.addRow({
-      order_ref: '—',
-      order_date: '—',
-      customer_name: 'No sales completed in this calendar month.',
+  // Totals Row for Sales
+  if (completedSales.length > 0) {
+    const totalRow = salesSheet.addRow({
+      order_ref: 'TOTAL',
+      order_date: '',
+      approval_date: '',
+      customer_name: `${completedSales.length} Completed Sales`,
       contact_info: '',
-      items_summary: '',
-      total_quantity: '',
-      total_amount: '',
-      paid_amount: '',
-      balance_amount: '',
-      payment_status: '',
+      products_sold: '',
+      qty: '',
+      total_amount: totalSalesRevenue,
+      paid_amount: totalSalesPaid,
+      balance_amount: Math.max(0, totalSalesRevenue - totalSalesPaid),
       payment_method: '',
       completed_by: '',
-      completed_by_code: '',
-      completion_datetime: '',
-      employee_remarks: '',
-      approved_by: '',
-      approval_datetime: '',
-      head_remarks: '',
-      final_status: ''
+      approved_by: ''
     })
-    emptyRow.height = 24
+    totalRow.height = 24
+    totalRow.eachCell((cell) => {
+      cell.font = { name: 'Calibri', size: 10, bold: true }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF64748B' } },
+        bottom: { style: 'double', color: { argb: 'FF0F172A' } }
+      }
+    })
+    formatCurrencyCell(totalRow.getCell(8), totalSalesRevenue)
+    formatCurrencyCell(totalRow.getCell(9), totalSalesPaid)
+    formatCurrencyCell(totalRow.getCell(10), Math.max(0, totalSalesRevenue - totalSalesPaid))
   }
 
+  // ==========================================================================
+  // SHEET 3: SUMMARY (Executive Report)
+  // ==========================================================================
+  const summarySheet = workbook.addWorksheet('Summary', {
+    views: [{ showGridLines: true }],
+    pageSetup: { orientation: 'portrait' }
+  })
+
+  summarySheet.columns = [
+    { width: 4 },
+    { width: 34 },
+    { width: 26 },
+    { width: 20 }
+  ]
+
+  // Title Block
+  summarySheet.mergeCells('B2:D2')
+  const titleCell = summarySheet.getCell('B2')
+  titleCell.value = 'ARS COMPUTERS — EXECUTIVE SALES SUMMARY'
+  titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF1E3A8A' } }
+  titleCell.alignment = { vertical: 'middle', horizontal: 'left' }
+
+  summarySheet.mergeCells('B3:D3')
+  const periodCell = summarySheet.getCell('B3')
+  periodCell.value = `Reporting Period: ${monthName} ${targetYear} | Generated: ${new Date().toLocaleString('en-IN')}`
+  periodCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF64748B' } }
+
+  // KPI Section Header
+  summarySheet.getCell('B5').value = 'KEY PERFORMANCE INDICATORS'
+  summarySheet.getCell('B5').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+  summarySheet.getCell('B5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+  summarySheet.getCell('C5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+
+  const kpis = [
+    { label: 'Total Orders in Cycle', value: sortedOrders.length, isCurrency: false },
+    { label: 'Completed & Approved Sales', value: completedSales.length, isCurrency: false },
+    { label: 'Total Revenue (Completed Sales)', value: totalSalesRevenue, isCurrency: true },
+    { label: 'Total Payment Collected', value: totalSalesPaid, isCurrency: true },
+    { label: 'Total Outstanding Balance', value: Math.max(0, totalSalesRevenue - totalSalesPaid), isCurrency: true },
+    { label: 'Total Pipeline Orders Value', value: totalOrdersSum, isCurrency: true }
+  ]
+
+  kpis.forEach((kpi, idx) => {
+    const rowNum = 6 + idx
+    const labelCell = summarySheet.getCell(`B${rowNum}`)
+    const valCell = summarySheet.getCell(`C${rowNum}`)
+
+    labelCell.value = kpi.label
+    labelCell.font = { name: 'Calibri', size: 10, bold: true }
+    labelCell.border = { top: { style: 'thin', color: { argb: 'FFE2E8F0' } }, bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } } }
+
+    if (kpi.isCurrency) {
+      formatCurrencyCell(valCell, kpi.value)
+    } else {
+      valCell.value = kpi.value
+      valCell.font = { name: 'Calibri', size: 11, bold: true }
+      valCell.alignment = { vertical: 'middle', horizontal: 'right' }
+    }
+    valCell.border = { top: { style: 'thin', color: { argb: 'FFE2E8F0' } }, bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } } }
+  })
+
+  // Payment Methods Breakdown Section
+  const methodStartRow = 14
+  summarySheet.getCell(`B${methodStartRow}`).value = 'PAYMENT METHOD BREAKDOWN'
+  summarySheet.getCell(`B${methodStartRow}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+  summarySheet.getCell(`B${methodStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+  summarySheet.getCell(`C${methodStartRow}`).value = 'COUNT'
+  summarySheet.getCell(`C${methodStartRow}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+  summarySheet.getCell(`C${methodStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+  summarySheet.getCell(`C${methodStartRow}`).alignment = { horizontal: 'center' }
+  summarySheet.getCell(`D${methodStartRow}`).value = 'AMOUNT (₹)'
+  summarySheet.getCell(`D${methodStartRow}`).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+  summarySheet.getCell(`D${methodStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+  summarySheet.getCell(`D${methodStartRow}`).alignment = { horizontal: 'right' }
+
+  // Compute breakdown from completed sales
+  const methodsMap = {}
+  completedSales.forEach((s) => {
+    const m = (s.payment_method || 'cash').toUpperCase()
+    if (!methodsMap[m]) methodsMap[m] = { count: 0, amount: 0 }
+    methodsMap[m].count += 1
+    methodsMap[m].amount += Number(s.paid_amount) || 0
+  })
+
+  const standardMethods = ['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'OTHER']
+  standardMethods.forEach((methodKey, idx) => {
+    const data = methodsMap[methodKey] || { count: 0, amount: 0 }
+    const rowNum = methodStartRow + 1 + idx
+
+    const labelCell = summarySheet.getCell(`B${rowNum}`)
+    labelCell.value = methodKey.replace('_', ' ')
+    labelCell.font = { name: 'Calibri', size: 10 }
+
+    const countCell = summarySheet.getCell(`C${rowNum}`)
+    countCell.value = data.count
+    countCell.alignment = { horizontal: 'center' }
+
+    const amtCell = summarySheet.getCell(`D${rowNum}`)
+    formatCurrencyCell(amtCell, data.amount)
+  })
+
+  // Export buffer & download
   const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -402,21 +648,20 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
 
   return {
     filename,
-    count: filtered.length,
+    count: completedSales.length,
+    ordersCount: sortedOrders.length,
     buffer
   }
 }
 
 /**
- * Exports current live orders register view to Excel (.xlsx).
- *
- * @param {Array} filteredOrders - Filtered orders currently displayed
- * @param {string} customFilename - Optional custom filename
- * @returns {Promise<{ filename: string, count: number, buffer: ArrayBuffer }>}
+ * Exports current live orders register view to Excel (.xlsx) with strictly increasing numerical sequence.
  */
 export async function exportLiveOrdersRegisterViewToExcel(filteredOrders, customFilename = null) {
   const today = new Date().toISOString().split('T')[0]
   const filename = customFilename || `ARS_Orders_Register_${today}.xlsx`
+
+  const sorted = sortOrdersAscending(filteredOrders || [])
 
   const ExcelJS = await getExcelJS()
   const workbook = new ExcelJS.Workbook()
@@ -425,159 +670,68 @@ export async function exportLiveOrdersRegisterViewToExcel(filteredOrders, custom
   workbook.created = new Date()
 
   const worksheet = workbook.addWorksheet('Live Orders Register', {
-    views: [{ showGridLines: true, state: 'frozen', xSplit: 1, ySplit: 1 }],
+    views: [{ showGridLines: true, state: 'frozen', ySplit: 1 }],
     pageSetup: { orientation: 'landscape', fitToPage: true }
   })
 
-  worksheet.columns = [
-    { header: 'Order Reference', key: 'order_ref', width: 18 },
-    { header: 'Order Date', key: 'order_date', width: 14 },
-    { header: 'Order Time', key: 'order_time', width: 14 },
-    { header: 'Customer Name', key: 'customer_name', width: 22 },
-    { header: 'Contact Information', key: 'contact_info', width: 26 },
-    { header: 'Item Summary', key: 'items_summary', width: 36 },
-    { header: 'Total Quantity', key: 'total_quantity', width: 14 },
-    { header: 'Total Amount (₹)', key: 'total_amount', width: 18 },
-    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 18 },
-    { header: 'Balance (₹)', key: 'balance_amount', width: 16 },
-    { header: 'Payment Status', key: 'payment_status', width: 16 },
-    { header: 'Payment Method', key: 'payment_method', width: 16 },
-    { header: 'Order Status', key: 'order_status', width: 18 },
-    { header: 'Completed By', key: 'completed_by', width: 22 },
-    { header: 'Employee Code', key: 'completed_by_code', width: 18 },
-    { header: 'Completion Date', key: 'completion_date', width: 16 },
-    { header: 'Approved By', key: 'approved_by', width: 22 },
-    { header: 'Approval Date', key: 'approval_date', width: 16 },
-    { header: 'Archive Status', key: 'archive_status', width: 22 }
-  ]
+  worksheet.columns = ORDER_REGISTER_COLUMNS.map((col) => ({
+    header: col.label,
+    key: col.id,
+    width: Math.max(14, Math.round(col.defaultWidth / 7))
+  }))
 
-  const headerRow = worksheet.getRow(1)
-  headerRow.height = 28
-  headerRow.eachCell((cell) => {
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF0F172A' }
-    }
-    cell.font = {
-      name: 'Calibri',
-      size: 11,
-      bold: true,
-      color: { argb: 'FFFFFFFF' }
-    }
-    cell.alignment = {
-      vertical: 'middle',
-      horizontal: 'center',
-      wrapText: true
-    }
-    cell.border = {
-      top: { style: 'thin', color: { argb: 'FF334155' } },
-      bottom: { style: 'medium', color: { argb: 'FF020617' } },
-      left: { style: 'thin', color: { argb: 'FF334155' } },
-      right: { style: 'thin', color: { argb: 'FF334155' } }
-    }
-  })
+  styleHeaderRow(worksheet.getRow(1))
+  worksheet.autoFilter = { from: 'A1', to: 'S1' }
 
-  filteredOrders.forEach((order, index) => {
-    const received = formatDateTimeParts(order.created_at)
-    const completed = formatDateTimeParts(order.completion_requested_at)
-    const approved = formatDateTimeParts(order.completion_approved_at)
-
-    let itemsSummary = '—'
-    let totalQty = 0
-    if (Array.isArray(order.order_items) && order.order_items.length > 0) {
-      itemsSummary = order.order_items
-        .map((it) => `${it.product_name_snapshot} (x${it.quantity})`)
-        .join(', ')
-      totalQty = order.order_items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
-    }
-
+  sorted.forEach((order, index) => {
+    const rowData = extractOrderRegisterRow(order)
     const total = Number(order.total_amount) || 0
     const paid = Number(order.paid_amount) || 0
     const balance = Math.max(0, total - paid)
 
-    let archiveStatus = 'Active'
-    if (order.status === 'completed' || order.is_archived) {
-      archiveStatus = order.status === 'cancelled' ? 'Cancelled / Archived' : 'Permanently Archived'
-    }
-
     const row = worksheet.addRow({
-      order_ref: order.order_number || order.id,
-      order_date: received.date,
-      order_time: received.time,
-      customer_name: order.customer_name || '—',
-      contact_info: order.contact_info || '—',
-      items_summary: itemsSummary,
-      total_quantity: totalQty,
-      total_amount: total.toFixed(2),
-      paid_amount: paid.toFixed(2),
-      balance_amount: balance.toFixed(2),
-      payment_status: (order.payment_status || 'pending').toUpperCase(),
-      payment_method: (order.payment_method || 'cash').toUpperCase(),
-      order_status: order.status || '—',
-      completed_by: order.completed_by_name || '—',
-      completed_by_code: order.completed_by_employee_code || '—',
-      completion_date: completed.date,
-      approved_by: order.approved_by_name || '—',
-      approval_date: approved.date,
-      archive_status: archiveStatus
+      order_ref: rowData.order_ref,
+      order_date: rowData.order_date,
+      order_time: rowData.order_time,
+      customer_name: rowData.customer_name,
+      contact_info: rowData.contact_info,
+      items_summary: rowData.items_summary,
+      total_quantity: Number(rowData.total_quantity) || 0,
+      total_amount: total,
+      paid_amount: paid,
+      balance_amount: balance,
+      payment_status: rowData.payment_status,
+      payment_method: rowData.payment_method,
+      order_status: (order.status || 'new').toUpperCase(),
+      completed_by: rowData.completed_by,
+      completed_by_code: rowData.completed_by_code,
+      completion_date: rowData.completion_date,
+      approved_by: rowData.approved_by,
+      approval_date: rowData.approval_date,
+      archive_status: rowData.archive_status
     })
 
-    row.height = 22
-    const isEven = index % 2 === 1
-    row.eachCell((cell, colNumber) => {
-      cell.font = { name: 'Calibri', size: 10 }
-      if (isEven) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF8FAFC' }
-        }
-      }
-      cell.alignment = {
-        vertical: 'middle',
-        horizontal: colNumber === 1 || colNumber === 2 || colNumber === 3 ||
-                    colNumber === 7 || colNumber === 11 || colNumber === 12 ||
-                    colNumber === 13 || colNumber === 15 || colNumber === 16 ||
-                    colNumber === 18 || colNumber === 19
-                      ? 'center'
-                      : colNumber === 8 || colNumber === 9 || colNumber === 10
-                        ? 'right'
-                        : 'left'
-      }
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-      }
+    styleDataRow(row, index % 2 === 1, {
+      1: 'center',
+      2: 'center',
+      3: 'center',
+      7: 'center',
+      8: 'right',
+      9: 'right',
+      10: 'right',
+      11: 'center',
+      12: 'center',
+      13: 'center',
+      15: 'center',
+      16: 'center',
+      18: 'center',
+      19: 'center'
     })
+
+    formatCurrencyCell(row.getCell(8), total)
+    formatCurrencyCell(row.getCell(9), paid)
+    formatCurrencyCell(row.getCell(10), balance)
   })
-
-  if (filteredOrders.length === 0) {
-    const emptyRow = worksheet.addRow({
-      order_ref: '—',
-      order_date: '—',
-      order_time: '—',
-      customer_name: 'No orders match the current filter selection.',
-      contact_info: '',
-      items_summary: '',
-      total_quantity: '',
-      total_amount: '',
-      paid_amount: '',
-      balance_amount: '',
-      payment_status: '',
-      payment_method: '',
-      order_status: '',
-      completed_by: '',
-      completed_by_code: '',
-      completion_date: '',
-      approved_by: '',
-      approval_date: '',
-      archive_status: ''
-    })
-    emptyRow.height = 24
-  }
 
   const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer], {
@@ -595,9 +749,5 @@ export async function exportLiveOrdersRegisterViewToExcel(filteredOrders, custom
     window.URL.revokeObjectURL(url)
   }
 
-  return {
-    filename,
-    count: filteredOrders.length,
-    buffer
-  }
+  return { filename, count: sorted.length, buffer }
 }

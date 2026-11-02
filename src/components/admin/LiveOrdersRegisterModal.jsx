@@ -5,7 +5,8 @@ import {
   extractOrderRegisterRow
 } from '../../utils/liveOrdersRegisterHelper.js'
 import {
-  exportLiveOrdersRegisterViewToExcel
+  exportLiveOrdersRegisterViewToExcel,
+  extractOrderSequenceNumber
 } from '../../utils/salesReportGenerator.js'
 import { MONTH_NAMES } from '../../utils/excelReportGenerator.js'
 import './LiveEnquiryRegister.css'
@@ -198,6 +199,15 @@ export default function LiveOrdersRegisterModal({
         valA = Number(valA) || 0
         valB = Number(valB) || 0
         return sortDirection === 'asc' ? valA - valB : valB - valA
+      }
+
+      // Order Reference numerical sequence comparison (e.g. ARS-ORD-00001, ARS-ORD-00010)
+      if (sortColumn === 'order_ref') {
+        const numA = extractOrderSequenceNumber(String(valA))
+        const numB = extractOrderSequenceNumber(String(valB))
+        if (numA !== numB) {
+          return sortDirection === 'asc' ? numA - numB : numB - numA
+        }
       }
 
       const strA = String(valA).toLowerCase()

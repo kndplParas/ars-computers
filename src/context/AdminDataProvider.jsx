@@ -2157,7 +2157,21 @@ export function AdminDataProvider({ children }) {
 
   // 1. Create Sales Order
   const createSalesOrder = useCallback(
-    async ({ customer_name, contact_info, items, paid_amount = 0, payment_method = 'cash', employee_remarks = null }) => {
+    async ({
+      customer_name,
+      contact_info,
+      items,
+      paid_amount = 0,
+      payment_method = 'cash',
+      employee_remarks = null,
+      customer_email = null,
+      customer_phone = null,
+      customer_address = null,
+      assigned_engineer_id = null,
+      expected_delivery_date = null,
+      discount_amount = 0,
+      tax_amount = 0
+    }) => {
       const role = adminUser?.role
       if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
         throw new Error('Access denied: Active staff privileges required to create orders.')
@@ -2172,7 +2186,14 @@ export function AdminDataProvider({ children }) {
           p_items: items,
           p_paid_amount: Number(paid_amount) || 0,
           p_payment_method: payment_method,
-          p_employee_remarks: employee_remarks || null
+          p_employee_remarks: employee_remarks || null,
+          p_customer_email: customer_email || null,
+          p_customer_phone: customer_phone || null,
+          p_customer_address: customer_address || null,
+          p_assigned_engineer_id: assigned_engineer_id || null,
+          p_expected_delivery_date: expected_delivery_date || null,
+          p_discount_amount: Number(discount_amount) || 0,
+          p_tax_amount: Number(tax_amount) || 0
         })
 
         if (error) throw error
@@ -2181,10 +2202,11 @@ export function AdminDataProvider({ children }) {
       }
 
       // Demo Mode
-      const totalAmount = items.reduce(
+      const subtotal = items.reduce(
         (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
         0
       )
+      const totalAmount = Math.max(0, subtotal - (Number(discount_amount) || 0) + (Number(tax_amount) || 0))
       const paid = Number(paid_amount) || 0
       const paymentStatus = paid === 0 ? 'pending' : paid >= totalAmount ? 'paid' : 'partial'
       const newOrder = {
@@ -2192,11 +2214,18 @@ export function AdminDataProvider({ children }) {
         order_number: `ARS-ORD-0${Math.floor(1000 + Math.random() * 9000)}`,
         customer_name,
         contact_info,
+        customer_email,
+        customer_phone,
+        customer_address,
         status: 'new',
         total_amount: totalAmount,
         paid_amount: paid,
         payment_status: paymentStatus,
         payment_method,
+        discount_amount: Number(discount_amount) || 0,
+        tax_amount: Number(tax_amount) || 0,
+        assigned_engineer_id,
+        expected_delivery_date,
         created_by: adminUser?.id,
         created_by_name: adminUser?.full_name || 'Store Employee',
         created_by_employee_code: adminUser?.employee_code || null,
@@ -2213,11 +2242,323 @@ export function AdminDataProvider({ children }) {
           line_total: it.quantity * it.unit_price,
           created_at: new Date().toISOString()
         })),
+        is_in_bin: false,
         is_archived: false,
         updated_at: new Date().toISOString()
       }
       setDemoOrders((prev) => [newOrder, ...prev])
       return newOrder
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 1b. Update Sales Order
+  const updateSalesOrder = useCallback(
+    async ({
+      order_id,
+      customer_name,
+      contact_info,
+      items,
+      customer_email = null,
+      customer_phone = null,
+      customer_address = null,
+      assigned_engineer_id = null,
+      expected_delivery_date = null,
+      employee_remarks = null,
+      discount_amount = 0,
+      tax_amount = 0,
+      order_status = null
+    }) => {
+      const role = adminUser?.role
+      if (!OPERATIONAL_ROLES.includes(role)) {
+        throw new Error('Access denied: Active staff privileges required to edit orders.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('update_sales_order', {
+          p_order_id: order_id,
+          p_customer_name: customer_name,
+          p_contact_info: contact_info,
+          p_items: items,
+          p_customer_email: customer_email || null,
+          p_customer_phone: customer_phone || null,
+          p_customer_address: customer_address || null,
+          p_assigned_engineer_id: assigned_engineer_id || null,
+          p_expected_delivery_date: expected_delivery_date || null,
+          p_employee_remarks: employee_remarks || null,
+          p_discount_amount: Number(discount_amount) || 0,
+          p_tax_amount: Number(tax_amount) || 0,
+          p_order_status: order_status || null
+        })
+
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      const subtotal = items.reduce(
+        (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
+        0
+      )
+      const totalAmount = Math.max(0, subtotal - (Number(discount_amount) || 0) + (Number(tax_amount) || 0))
+      setDemoOrders((prev) =>
+        prev.map((o) => {
+          if (o.id !== order_id) return o
+          const paid = Number(o.paid_amount) || 0
+          const paymentStatus = paid === 0 ? 'pending' : paid >= totalAmount ? 'paid' : 'partial'
+          return {
+            ...o,
+            customer_name,
+            contact_info,
+            customer_email,
+            customer_phone,
+            customer_address,
+            total_amount: totalAmount,
+            discount_amount: Number(discount_amount) || 0,
+            tax_amount: Number(tax_amount) || 0,
+            payment_status: paymentStatus,
+            assigned_engineer_id,
+            expected_delivery_date,
+            employee_remarks: employee_remarks || o.employee_remarks,
+            status: order_status || o.status,
+            order_items: items.map((it) => ({
+              id: crypto.randomUUID(),
+              product_id: it.product_id || null,
+              product_name_snapshot: it.product_name || 'Hardware Item',
+              brand_snapshot: it.brand || '',
+              model_snapshot: it.model || '',
+              sku_snapshot: it.sku || '',
+              quantity: it.quantity,
+              unit_price: it.unit_price,
+              line_total: it.quantity * it.unit_price,
+              created_at: new Date().toISOString()
+            })),
+            updated_at: new Date().toISOString()
+          }
+        })
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 1c. Assign Order Engineer
+  const assignOrderEngineer = useCallback(
+    async (orderId, engineerId, expectedDeliveryDate = null, notes = null) => {
+      const role = adminUser?.role
+      if (!OPERATIONAL_ROLES.includes(role)) {
+        throw new Error('Access denied: Staff privileges required to assign engineers.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('assign_order_engineer', {
+          p_order_id: orderId,
+          p_engineer_id: engineerId || null,
+          p_expected_delivery_date: expectedDeliveryDate || null,
+          p_notes: notes || null
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                assigned_engineer_id: engineerId,
+                expected_delivery_date: expectedDeliveryDate || o.expected_delivery_date,
+                updated_at: new Date().toISOString()
+              }
+            : o
+        )
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 1d. Request Order Deletion
+  const requestOrderDeletion = useCallback(
+    async (orderId, reason, category = 'Customer Cancelled') => {
+      const role = adminUser?.role
+      if (!OPERATIONAL_ROLES.includes(role)) {
+        throw new Error('Access denied: Staff privileges required.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('request_order_deletion', {
+          p_order_id: orderId,
+          p_reason: reason,
+          p_category: category
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      const isSuper = adminUser?.role === 'superadmin'
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? isSuper
+              ? {
+                  ...o,
+                  is_in_bin: true,
+                  is_removed: true,
+                  removed_at: new Date().toISOString(),
+                  removed_by_name: adminUser?.full_name || 'Head Admin',
+                  removal_reason: reason,
+                  removal_category: category,
+                  updated_at: new Date().toISOString()
+                }
+              : {
+                  ...o,
+                  deletion_reason: reason,
+                  removal_category: category,
+                  deletion_requested_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                }
+            : o
+        )
+      )
+      return { success: true, is_in_bin: isSuper }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 1e. Review Order Deletion
+  const reviewOrderDeletion = useCallback(
+    async (orderId, decision, reviewNotes = null) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only Superadministrators can review order deletions.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('review_order_deletion', {
+          p_order_id: orderId,
+          p_decision: decision,
+          p_review_notes: reviewNotes || null
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      setDemoOrders((prev) =>
+        prev.map((o) => {
+          if (o.id !== orderId) return o
+          if (decision === 'approved') {
+            return {
+              ...o,
+              is_in_bin: true,
+              is_removed: true,
+              removed_at: new Date().toISOString(),
+              removed_by_name: adminUser?.full_name || 'Head Admin',
+              removal_reason: o.deletion_reason || 'Deletion approved by Head',
+              updated_at: new Date().toISOString()
+            }
+          }
+          return {
+            ...o,
+            deletion_reason: null,
+            deletion_requested_at: null,
+            updated_at: new Date().toISOString()
+          }
+        })
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 1f. Remove Current Month Order
+  const removeCurrentMonthOrder = useCallback(
+    async (orderId, category, reason) => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only Superadministrators can remove orders.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('remove_current_month_order', {
+          p_order_id: orderId,
+          p_category: category,
+          p_reason: reason
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                is_in_bin: true,
+                is_removed: true,
+                removed_at: new Date().toISOString(),
+                removed_by_name: adminUser?.full_name || 'Head Admin',
+                removal_reason: reason,
+                removal_category: category,
+                updated_at: new Date().toISOString()
+              }
+            : o
+        )
+      )
+      return { success: true }
+    },
+    [isLiveDatabase, adminUser, loadAdminOrders]
+  )
+
+  // 1g. Restore Order from Bin
+  const restoreOrderFromBin = useCallback(
+    async (orderId, reason = 'Restored from Bin') => {
+      if (adminUser?.role !== 'superadmin') {
+        throw new Error('Unauthorized: Only Superadministrators can restore orders from the Bin.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('restore_order_from_bin', {
+          p_order_id: orderId,
+          p_reason: reason
+        })
+        if (error) throw error
+        await loadAdminOrders()
+        return data
+      }
+
+      // Demo Mode
+      setDemoOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                is_in_bin: false,
+                is_removed: false,
+                removed_at: null,
+                removed_by_name: null,
+                removal_reason: null,
+                removal_category: null,
+                updated_at: new Date().toISOString()
+              }
+            : o
+        )
+      )
+      return { success: true }
     },
     [isLiveDatabase, adminUser, loadAdminOrders]
   )
@@ -2445,13 +2786,13 @@ export function AdminDataProvider({ children }) {
     [isLiveDatabase, adminUser, loadAdminOrders]
   )
 
-  // 7. Load Specific Order Details (Payments & Attachments on demand)
+  // 7. Load Specific Order Details (Payments, Attachments & Shares on demand)
   const loadOrderDetails = useCallback(
     async (orderId) => {
       if (!orderId) return null
       if (isLiveDatabase) {
         if (!supabase) return null
-        const [payRes, attRes] = await Promise.all([
+        const [payRes, attRes, shareRes] = await Promise.all([
           supabase
             .from('order_payments')
             .select('*')
@@ -2461,24 +2802,35 @@ export function AdminDataProvider({ children }) {
             .from('order_attachments')
             .select('*')
             .eq('order_id', orderId)
-            .order('created_at', { ascending: true })
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('order_attachment_shares')
+            .select('*')
+            .eq('order_id', orderId)
+            .order('created_at', { ascending: false })
         ])
 
         const payments = payRes.data || []
         const attachments = attRes.data || []
+        const shares = shareRes.data || []
 
         setLiveOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, order_payments: payments, order_attachments: attachments } : o))
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, order_payments: payments, order_attachments: attachments, order_attachment_shares: shares }
+              : o
+          )
         )
 
-        return { payments, attachments }
+        return { payments, attachments, shares }
       }
 
       // Demo Mode
       const order = demoOrders.find((o) => o.id === orderId)
       return {
         payments: order?.order_payments || [],
-        attachments: order?.order_attachments || []
+        attachments: order?.order_attachments || [],
+        shares: order?.order_attachment_shares || []
       }
     },
     [isLiveDatabase, demoOrders]
@@ -2593,6 +2945,212 @@ export function AdminDataProvider({ children }) {
       return null
     },
     [isLiveDatabase]
+  )
+
+  // 9. Approve or Reject Order Attachment Customer Shareability (Head Superadmin ONLY)
+  const approveOrderAttachmentShareability = useCallback(
+    async (attachmentId, isShareable, documentType) => {
+      const role = adminUser?.role
+      if (role !== 'superadmin') {
+        throw new Error('Access denied: Only Head / Superadmin can approve customer shareability.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('approve_order_attachment_shareability', {
+          p_attachment_id: attachmentId,
+          p_is_shareable: Boolean(isShareable),
+          p_document_type: documentType
+        })
+        if (error) throw error
+        if (data?.order_id) {
+          await loadOrderDetails(data.order_id)
+        }
+        return data
+      }
+
+      // Demo Mode
+      setDemoOrders((prev) =>
+        prev.map((o) => ({
+          ...o,
+          order_attachments: (o.order_attachments || []).map((att) =>
+            att.id === attachmentId
+              ? {
+                  ...att,
+                  is_customer_shareable: Boolean(isShareable),
+                  is_head_approved: Boolean(isShareable),
+                  document_type: documentType || (isShareable ? 'CUSTOMER_INVOICE' : 'OTHER_INTERNAL'),
+                  approved_by: isShareable ? adminUser?.id : null,
+                  approved_at: isShareable ? new Date().toISOString() : null,
+                  share_request_status: isShareable ? 'APPROVED' : 'NONE'
+                }
+              : att
+          )
+        }))
+      )
+      return { success: true, attachment_id: attachmentId, is_customer_shareable: isShareable }
+    },
+    [isLiveDatabase, adminUser, loadOrderDetails]
+  )
+
+  // 9b. Request Order Attachment Customer Shareability (Store Admin & Head)
+  const requestOrderAttachmentShareability = useCallback(
+    async (attachmentId, documentType, notes = '') => {
+      const role = adminUser?.role
+      if (!['superadmin', 'admin'].includes(role)) {
+        throw new Error('Access denied: Store Administrator or Head privileges required to request customer shareability.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('request_order_attachment_shareability', {
+          p_attachment_id: attachmentId,
+          p_document_type: documentType,
+          p_notes: notes
+        })
+        if (error) throw error
+        if (data?.order_id) {
+          await loadOrderDetails(data.order_id)
+        }
+        return data
+      }
+
+      // Demo Mode
+      setDemoOrders((prev) =>
+        prev.map((o) => ({
+          ...o,
+          order_attachments: (o.order_attachments || []).map((att) =>
+            att.id === attachmentId
+              ? {
+                  ...att,
+                  share_request_status: 'PENDING',
+                  share_requested_by: adminUser?.id,
+                  share_requested_by_name: adminUser?.full_name || adminUser?.email,
+                  share_requested_at: new Date().toISOString(),
+                  share_requested_document_type: documentType,
+                  share_request_notes: notes
+                }
+              : att
+          )
+        }))
+      )
+      return { success: true, attachment_id: attachmentId, share_request_status: 'PENDING' }
+    },
+    [isLiveDatabase, adminUser, loadOrderDetails]
+  )
+
+  // 9c. Review Order Attachment Customer Share Request (Head ONLY)
+  const reviewOrderAttachmentShareRequest = useCallback(
+    async (attachmentId, decision, documentType = null, rejectionReason = null) => {
+      const role = adminUser?.role
+      if (role !== 'superadmin') {
+        throw new Error('Access denied: Only Head / Superadmin can review customer share requests.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('review_order_attachment_share_request', {
+          p_attachment_id: attachmentId,
+          p_decision: decision,
+          p_document_type: documentType,
+          p_rejection_reason: rejectionReason
+        })
+        if (error) throw error
+        if (data?.order_id) {
+          await loadOrderDetails(data.order_id)
+        }
+        return data
+      }
+
+      // Demo Mode
+      const isApproved = decision === 'APPROVED'
+      setDemoOrders((prev) =>
+        prev.map((o) => ({
+          ...o,
+          order_attachments: (o.order_attachments || []).map((att) =>
+            att.id === attachmentId
+              ? {
+                  ...att,
+                  share_request_status: decision,
+                  is_customer_shareable: isApproved,
+                  is_head_approved: isApproved,
+                  document_type: isApproved ? (documentType || att.share_requested_document_type || 'CUSTOMER_INVOICE') : att.document_type,
+                  approved_by: isApproved ? adminUser?.id : null,
+                  approved_at: isApproved ? new Date().toISOString() : null,
+                  share_reviewed_by: adminUser?.id,
+                  share_reviewed_at: new Date().toISOString(),
+                  share_review_rejection_reason: isApproved ? null : rejectionReason
+                }
+              : att
+          )
+        }))
+      )
+      return { success: true, attachment_id: attachmentId, share_request_status: decision }
+    },
+    [isLiveDatabase, adminUser, loadOrderDetails]
+  )
+
+  // 10. Create Customer Share Link for Approved Attachment (Head & Store Admin ONLY)
+  const createOrderAttachmentShare = useCallback(
+    async (attachmentId, durationHours = 48, maxAccessCount = null) => {
+      const role = adminUser?.role
+      if (!['superadmin', 'admin'].includes(role)) {
+        throw new Error('Access denied: Active administrator privileges required to generate share links.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('create_order_attachment_share', {
+          p_attachment_id: attachmentId,
+          p_duration_hours: Number(durationHours) || 48,
+          p_max_access_count: maxAccessCount ? Number(maxAccessCount) : null
+        })
+        if (error) throw error
+        if (data?.order_id) {
+          await loadOrderDetails(data.order_id)
+        }
+        return data
+      }
+
+      // Demo Mode
+      const demoToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+      const demoShare = {
+        id: crypto.randomUUID(),
+        attachment_id: attachmentId,
+        raw_token: demoToken,
+        expires_at: new Date(Date.now() + durationHours * 3600 * 1000).toISOString(),
+        is_revoked: false,
+        access_count: 0
+      }
+      return { success: true, ...demoShare }
+    },
+    [isLiveDatabase, adminUser, loadOrderDetails]
+  )
+
+  // 11. Revoke Customer Share Link (Head & Store Admin ONLY)
+  const revokeOrderAttachmentShare = useCallback(
+    async (shareId, reason = 'Revoked by staff') => {
+      const role = adminUser?.role
+      if (!['superadmin', 'admin'].includes(role)) {
+        throw new Error('Access denied: Active administrator privileges required to revoke share links.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+        const { data, error } = await supabase.rpc('revoke_order_attachment_share', {
+          p_share_id: shareId,
+          p_reason: reason
+        })
+        if (error) throw error
+        return data
+      }
+
+      // Demo Mode
+      return { success: true, share_id: shareId, is_revoked: true }
+    },
+    [isLiveDatabase, adminUser]
   )
 
   // ============================================================
@@ -2969,9 +3527,15 @@ export function AdminDataProvider({ children }) {
     closeServiceTicket,
     reopenServiceTicket,
 
-    // Orders Mutators & Actions (Phase 2)
+    // Orders Mutators & Actions (Phase 2 & Complete Implementation)
     setOrders: setDemoOrders,
     createSalesOrder,
+    updateSalesOrder,
+    assignOrderEngineer,
+    requestOrderDeletion,
+    reviewOrderDeletion,
+    removeCurrentMonthOrder,
+    restoreOrderFromBin,
     startSalesOrder,
     submitOrderCompletion,
     reviewOrderCompletion,
@@ -2979,6 +3543,11 @@ export function AdminDataProvider({ children }) {
     recordOrderPayment,
     uploadOrderAttachments,
     getOrderAttachmentDownloadUrl,
+    approveOrderAttachmentShareability,
+    requestOrderAttachmentShareability,
+    reviewOrderAttachmentShareRequest,
+    createOrderAttachmentShare,
+    revokeOrderAttachmentShare,
     loadOrderDetails,
 
     // Role Permission Capabilities
