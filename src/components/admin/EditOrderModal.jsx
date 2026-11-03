@@ -22,7 +22,9 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
     products = [],
     staff = [],
     updateSalesOrder,
-    loadAdminCatalog
+    loadAdminCatalog,
+    adminUser,
+    isSuperadmin
   } = useAdminData()
 
   // Technical staff eligible for assignment
@@ -31,6 +33,12 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
       (s) => s.is_active !== false && ['engineer', 'technical', 'admin', 'superadmin'].includes(s.role)
     )
   }, [staff])
+
+  // Permission & Approval Invariant Resolution
+  const userRole = (adminUser?.role || '').toLowerCase()
+  const isAuthorizedRole = ['superadmin', 'hr', 'account', 'accountant', 'technical'].includes(userRole)
+  const isApproved = Boolean(order?.completion_approved_at || order?.status === 'completed')
+  const canUserEdit = isSuperadmin || (!isApproved && isAuthorizedRole)
 
   // Form State
   const [customerName, setCustomerName] = useState('')
@@ -43,6 +51,9 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('')
   const [discountAmount, setDiscountAmount] = useState(0)
   const [taxAmount, setTaxAmount] = useState(0)
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [paidAmount, setPaidAmount] = useState(0)
+  const [paymentStatus, setPaymentStatus] = useState('pending')
   const [employeeRemarks, setEmployeeRemarks] = useState('')
   const [orderStatus, setOrderStatus] = useState('new')
 
@@ -68,6 +79,9 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
         )
         setDiscountAmount(Number(order.discount_amount) || 0)
         setTaxAmount(Number(order.tax_amount) || 0)
+        setPaymentMethod(order.payment_method || 'cash')
+        setPaidAmount(Number(order.paid_amount) || 0)
+        setPaymentStatus(order.payment_status || 'pending')
         setEmployeeRemarks(order.employee_remarks || '')
         setOrderStatus(order.status || 'new')
 
@@ -121,8 +135,8 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
   const numDiscount = Math.max(0, Number(discountAmount) || 0)
   const numTax = Math.max(0, Number(taxAmount) || 0)
   const calculatedTotal = Math.max(0, calculatedSubtotal - numDiscount + numTax)
-  const paidAmount = Number(order.paid_amount) || 0
-  const balance = Math.max(0, calculatedTotal - paidAmount)
+  const numPaid = Math.max(0, Number(paidAmount) || 0)
+  const balance = Math.max(0, calculatedTotal - numPaid)
 
   // Item Handlers
   const handleProductSelect = (index, productId) => {
@@ -222,12 +236,32 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
       }
     }
 
-    // Financial check
-    if (calculatedTotal < paidAmount) {
-      setFormError(
-        `Updated total (₹${calculatedTotal.toLocaleString('en-IN')}) cannot be less than already collected payment (₹${paidAmount.toLocaleString('en-IN')}).`
-      )
+    // Strict Role and Super Admin Approval Invariant
+    if (!canUserEdit) {
+      if (isApproved) {
+        setFormError('Order has been approved by Super Admin. Editing is restricted to Superadministrators.')
+      } else {
+        setFormError('Access denied: Order editing is restricted to HR, Accountant, and Technical roles.')
+      }
       return
+    }
+
+    // Flexible Payment Editing: Allow adjusting payment forward or backward freely up to order total
+    let finalPaid = Math.max(0, Number(paidAmount) || 0)
+    if (finalPaid > calculatedTotal) {
+      finalPaid = calculatedTotal
+      setPaidAmount(calculatedTotal)
+    }
+
+    let finalPaymentStatus = paymentStatus
+    if (calculatedTotal === 0) {
+      finalPaymentStatus = 'paid'
+    } else if (finalPaid === 0) {
+      finalPaymentStatus = 'pending'
+    } else if (finalPaid >= calculatedTotal) {
+      finalPaymentStatus = 'paid'
+    } else {
+      finalPaymentStatus = 'partial'
     }
 
     setIsSubmitting(true)
@@ -255,6 +289,9 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
         discount_amount: numDiscount,
         tax_amount: numTax,
         order_status: orderStatus,
+        payment_method: paymentMethod,
+        paid_amount: finalPaid,
+        payment_status: finalPaymentStatus,
         items: formattedItems
       })
 
@@ -309,7 +346,7 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
           }}
         >
           <div>
-            <h2 id="edit-order-title" className="admin-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.2rem', margin: 0 }}>
+            <h2 id="edit-order-title" className="admin-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '1.2rem', margin: 0 }}>
               <span>Edit Order</span>
               <span
                 style={{
@@ -324,6 +361,21 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
               >
                 {order.order_number}
               </span>
+              {isApproved && isSuperadmin && (
+                <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                  ⚠️ Super Admin Correction
+                </span>
+              )}
+              {isApproved && !isSuperadmin && (
+                <span style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                  🔒 Approved — Editing Restricted
+                </span>
+              )}
+              {!isApproved && (
+                <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                  ⏳ Awaiting Super Admin Approval
+                </span>
+              )}
             </h2>
             <span className="modal-subtitle-note" style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px', display: 'block' }}>
               Update customer details, line items, assigned engineer, and delivery schedule.
@@ -382,6 +434,31 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
               background: '#ffffff'
             }}
           >
+            {/* Permission Restriction Warning Banner */}
+            {!canUserEdit && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: isApproved ? '#f8fafc' : '#fef2f2',
+                  border: isApproved ? '1px solid #cbd5e1' : '1px solid #fecaca',
+                  borderRadius: '8px',
+                  color: isApproved ? '#475569' : '#b91c1c',
+                  fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}
+              >
+                <span style={{ fontSize: '1.1rem' }}>{isApproved ? '🔒' : '🚫'}</span>
+                <div>
+                  <strong>{isApproved ? 'Approved — Editing Restricted:' : 'Read-Only Access:'}</strong>{' '}
+                  {isApproved
+                    ? 'This order has been explicitly approved by the Super Admin. Core workflow and financial records are locked against ordinary edits.'
+                    : 'Order editing prior to Super Admin approval is permitted exclusively for HR, Accountant, and Technical roles.'}
+                </div>
+              </div>
+            )}
+
             {formError && (
               <div
                 style={{
@@ -760,7 +837,7 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
                 <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
                   <span>Subtotal: ₹{calculatedSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   <span style={{ margin: '0 8px' }}>•</span>
-                  <span>Received So Far: ₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span>Received So Far: ₹{numPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Order Total:</span>
@@ -783,7 +860,87 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
               </div>
             </div>
 
-            {/* Section 5: Remarks & Operational Status */}
+            {/* Section 5: Payment Details & Settlement */}
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a' }}>
+                5. PAYMENT DETAILS & SETTLEMENT
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Payment Method *
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    disabled={!canUserEdit || isSubmitting}
+                    style={{ width: '100%', padding: '8px 12px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI / QR Code</option>
+                    <option value="bank_transfer">Bank Transfer (NEFT / IMPS)</option>
+                    <option value="card">Card Payment</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="other">Other / Store Credit</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155', margin: 0 }}>
+                      Amount Received (₹) *
+                    </label>
+                    {canUserEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaidAmount(calculatedTotal)
+                          setPaymentStatus('paid')
+                        }}
+                        style={{ fontSize: '0.75rem', background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                      >
+                        Received in Full
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max={calculatedTotal}
+                    step="0.01"
+                    value={paidAmount}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setPaidAmount(val)
+                      const num = Math.max(0, Number(val) || 0)
+                      if (num === 0) setPaymentStatus('pending')
+                      else if (num >= calculatedTotal) setPaymentStatus('paid')
+                      else setPaymentStatus('partial')
+                    }}
+                    disabled={!canUserEdit || isSubmitting}
+                    style={{ width: '100%', padding: '8px 12px', fontSize: '0.875rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'monospace' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Payment Status
+                  </label>
+                  <select
+                    value={paymentStatus}
+                    onChange={(e) => setPaymentStatus(e.target.value)}
+                    disabled={!canUserEdit || isSubmitting}
+                    style={{ width: '100%', padding: '8px 12px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="partial">Partial</option>
+                    <option value="paid">Received</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 6: Remarks & Operational Status */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
               <div style={{ gridColumn: 'span 2' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
@@ -853,7 +1010,7 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={!canUserEdit || isSubmitting}
               className="btn-primary"
               style={{
                 minHeight: '40px',
@@ -863,16 +1020,21 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
                 fontWeight: 700,
                 borderRadius: '8px',
                 border: 'none',
-                background: '#2563eb',
+                background: !canUserEdit ? '#94a3b8' : '#2563eb',
                 color: '#ffffff',
-                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                boxShadow: !canUserEdit ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.3)',
+                cursor: !canUserEdit || isSubmitting ? 'not-allowed' : 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
                 opacity: isSubmitting ? 0.7 : 1
               }}
+              title={
+                !canUserEdit
+                  ? (isApproved ? 'Approved — Editing Restricted' : 'Read-Only: Restricted to HR, Accountant, and Technical roles')
+                  : 'Save all changes to this order'
+              }
             >
               {isSubmitting ? (
                 <>

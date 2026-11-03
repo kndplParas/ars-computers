@@ -42,6 +42,8 @@ export default function AdminOrdersPage() {
   const isSuperadmin = adminUser?.role === 'superadmin'
   const isInventoryStaff = adminUser?.role === 'inventory_staff'
   const isAdminEmployee = adminUser?.role === 'admin'
+  const userRole = (adminUser?.role || '').toLowerCase()
+  const isOrderEditor = ['superadmin', 'hr', 'account', 'accountant', 'technical'].includes(userRole)
 
   const {
     orders = [],
@@ -1390,6 +1392,38 @@ export default function AdminOrdersPage() {
                       >
                         PAYMENT: {displayOrder.payment_status === 'paid' ? 'RECEIVED' : (displayOrder.payment_status || 'pending').toUpperCase()}
                       </span>
+                      {/* Super Admin Approval State Indicator */}
+                      {(displayOrder.completion_approved_at || displayOrder.status === 'completed') ? (
+                        <span
+                          style={{
+                            padding: '2px 8px',
+                            borderRadius: '999px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: isSuperadmin ? '#fef3c7' : '#f1f5f9',
+                            color: isSuperadmin ? '#92400e' : '#475569',
+                            border: isSuperadmin ? '1px solid #fde68a' : '1px solid #cbd5e1'
+                          }}
+                        >
+                          {isSuperadmin ? '✓ Approved (Super Admin Correction)' : '🔒 Approved — Editing Restricted'}
+                        </span>
+                      ) : (
+                        displayOrder.status !== 'cancelled' && (
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '999px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: '#eff6ff',
+                              color: '#1d4ed8',
+                              border: '1px solid #bfdbfe'
+                            }}
+                          >
+                            ⏳ Awaiting Super Admin Approval
+                          </span>
+                        )
+                      )}
                       {(displayOrder.is_in_bin || displayOrder.is_removed) && (
                         <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 600 }}>
                           🗑️ In Bin
@@ -1484,30 +1518,87 @@ export default function AdminOrdersPage() {
                   >
                     {/* Left: Management Actions (Edit, Delete/Restore) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      {/* Edit Order */}
-                      {(!['cancelled'].includes(displayOrder.status) && (displayOrder.status !== 'completed' || isSuperadmin)) && !displayOrder.is_in_bin && !displayOrder.is_removed && (
-                        <button
-                          type="button"
-                          id="order-details-edit-btn"
-                          className="btn-outline btn-sm edit-order-action-btn"
-                          style={{
-                            padding: '6px 14px',
-                            fontWeight: 600,
-                            color: '#0284c7',
-                            borderColor: '#7dd3fc',
-                            background: '#ffffff',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '0.84rem'
-                          }}
-                          onClick={() => setEditingOrder(displayOrder)}
-                          title="Edit order items, customer information, pricing, or remarks"
-                        >
-                          <span>✏️</span>
-                          <span>Edit Order</span>
-                        </button>
-                      )}
+                      {/* Edit Order Action or Permission Explanation */}
+                      {(() => {
+                        const isOrderApproved = Boolean(displayOrder.completion_approved_at || displayOrder.status === 'completed')
+                        const canEditThisOrder = !displayOrder.is_in_bin && !displayOrder.is_removed && displayOrder.status !== 'cancelled' && (isSuperadmin || (!isOrderApproved && isOrderEditor))
+
+                        if (canEditThisOrder) {
+                          return (
+                            <button
+                              type="button"
+                              id="order-details-edit-btn"
+                              className="btn-outline btn-sm edit-order-action-btn"
+                              style={{
+                                padding: '6px 14px',
+                                fontWeight: 600,
+                                color: '#0284c7',
+                                borderColor: '#7dd3fc',
+                                background: '#ffffff',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '0.84rem'
+                              }}
+                              onClick={() => setEditingOrder(displayOrder)}
+                              title={isSuperadmin && isOrderApproved ? 'Privileged Super Admin correction with audit log' : 'Edit order items, customer information, pricing, or payment details'}
+                            >
+                              <span>✏️</span>
+                              <span>{isSuperadmin && isOrderApproved ? 'Super Admin Correction' : 'Edit Order'}</span>
+                            </button>
+                          )
+                        }
+
+                        if (!displayOrder.is_in_bin && !displayOrder.is_removed && displayOrder.status !== 'cancelled') {
+                          if (isOrderApproved && !isSuperadmin) {
+                            return (
+                              <span
+                                id="order-details-edit-restricted-notice"
+                                style={{
+                                  fontSize: '0.82rem',
+                                  fontWeight: 600,
+                                  color: '#475569',
+                                  background: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  padding: '5px 12px',
+                                  borderRadius: '6px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                                title="Order has been approved by the Super Admin and cannot be edited by ordinary staff."
+                              >
+                                <span>🔒</span>
+                                <span>Approved — Editing Restricted</span>
+                              </span>
+                            )
+                          }
+                          if (!isOrderEditor && !isSuperadmin) {
+                            return (
+                              <span
+                                id="order-details-readonly-notice"
+                                style={{
+                                  fontSize: '0.82rem',
+                                  fontWeight: 600,
+                                  color: '#64748b',
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  padding: '5px 12px',
+                                  borderRadius: '6px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                                title="Order editing prior to Super Admin approval is permitted exclusively for HR, Accountant, and Technical roles."
+                              >
+                                <span>👁️</span>
+                                <span>Read-Only (HR, Accountant & Technical Only)</span>
+                              </span>
+                            )
+                          }
+                        }
+                        return null
+                      })()}
 
                       {/* Delete Order (Opens Confirmation Modal) */}
                       {displayOrder.is_in_bin || displayOrder.is_removed ? (
@@ -1822,7 +1913,7 @@ export default function AdminOrdersPage() {
                       </div>
                     </div>
                     {/* Update Payment Button */}
-                    {currentBal > 0 && displayOrder.status !== 'cancelled' && !isInventoryStaff && (
+                    {currentBal > 0 && displayOrder.status !== 'cancelled' && isOrderEditor && (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
                         <button
                           type="button"
@@ -1865,48 +1956,61 @@ export default function AdminOrdersPage() {
                           <tbody>
                             {[...displayOrder.order_payments]
                               .sort((a, b) => new Date(a.received_at || a.created_at) - new Date(b.received_at || b.created_at))
-                              .map((pay) => (
-                                <tr key={pay.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                  <td style={{ padding: '8px 10px', color: '#475569' }}>
-                                    {formatDateTimeParts(pay.received_at || pay.created_at).date}{' '}
-                                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                      {formatDateTimeParts(pay.received_at || pay.created_at).time}
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: '#166534' }}>
-                                    ₹{Number(pay.amount_received).toFixed(2)}
-                                  </td>
-                                  <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                                    <span
-                                      style={{
-                                        padding: '2px 6px',
-                                        borderRadius: '4px',
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        background: '#f1f5f9',
-                                        color: '#334155'
-                                      }}
-                                    >
-                                      {(pay.payment_method || 'cash').toUpperCase()}
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
-                                    {pay.transaction_reference || '—'}
-                                  </td>
-                                  <td style={{ padding: '8px 10px', color: '#334155' }}>
-                                    {pay.received_by_name || 'Staff'}{' '}
-                                    {pay.received_by_employee_code ? (
-                                      <span style={{ fontSize: '11px', color: '#64748b' }}>
-                                        ({pay.received_by_employee_code})
+                              .map((pay) => {
+                                const isAdjustment = pay.entry_type === 'adjustment' || pay.entry_type === 'reversal' || pay.entry_type === 'refund' || Number(pay.amount_received) < 0
+                                const numAmt = Number(pay.amount_received) || 0
+                                return (
+                                  <tr key={pay.id} style={{ borderBottom: '1px solid #f1f5f9', background: isAdjustment ? '#fef2f2' : 'transparent' }}>
+                                    <td style={{ padding: '8px 10px', color: '#475569' }}>
+                                      {formatDateTimeParts(pay.received_at || pay.created_at).date}{' '}
+                                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                        {formatDateTimeParts(pay.received_at || pay.created_at).time}
                                       </span>
-                                    ) : null}
-                                  </td>
-                                  <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
-                                    {pay.remarks || '—'}
-                                  </td>
-                                </tr>
-                              ))}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: isAdjustment ? '#b91c1c' : '#166534' }}>
+                                      {isAdjustment ? `-₹${Math.abs(numAmt).toFixed(2)}` : `₹${numAmt.toFixed(2)}`}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                      <span
+                                        style={{
+                                          padding: '2px 6px',
+                                          borderRadius: '4px',
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          background: isAdjustment ? '#fee2e2' : '#f1f5f9',
+                                          color: isAdjustment ? '#991b1b' : '#334155'
+                                        }}
+                                      >
+                                        {isAdjustment ? 'ADJUSTMENT' : (pay.payment_method || 'cash').toUpperCase()}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
+                                      {pay.transaction_reference || '—'}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', color: '#334155' }}>
+                                      {pay.received_by_name || 'Staff'}{' '}
+                                      {pay.received_by_employee_code ? (
+                                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                          ({pay.received_by_employee_code})
+                                        </span>
+                                      ) : null}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
+                                      {pay.remarks || '—'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
                           </tbody>
+                          <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontWeight: 600 }}>
+                            <tr>
+                              <td style={{ padding: '8px 10px', color: '#0f172a' }}>Net Total Received</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', color: '#0f172a' }}>
+                                ₹{displayOrder.order_payments.reduce((sum, p) => sum + (Number(p.amount_received) || 0), 0).toFixed(2)}
+                              </td>
+                              <td colSpan={4}></td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     ) : (

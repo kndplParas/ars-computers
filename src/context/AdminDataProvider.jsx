@@ -2267,11 +2267,16 @@ export function AdminDataProvider({ children }) {
       employee_remarks = null,
       discount_amount = 0,
       tax_amount = 0,
-      order_status = null
+      order_status = null,
+      payment_method = null,
+      paid_amount = null,
+      payment_status = null
     }) => {
-      const role = adminUser?.role
-      if (!OPERATIONAL_ROLES.includes(role)) {
-        throw new Error('Access denied: Active staff privileges required to edit orders.')
+      const role = (adminUser?.role || '').toLowerCase()
+      const isSuperadmin = role === 'superadmin'
+      const CAN_EDIT_ORDER_ROLES = ['superadmin', 'hr', 'account', 'accountant', 'technical']
+      if (!CAN_EDIT_ORDER_ROLES.includes(role)) {
+        throw new Error('Access denied: Order editing is restricted to HR, Accountant, and Technical roles.')
       }
 
       if (isLiveDatabase) {
@@ -2290,7 +2295,10 @@ export function AdminDataProvider({ children }) {
           p_employee_remarks: employee_remarks || null,
           p_discount_amount: Number(discount_amount) || 0,
           p_tax_amount: Number(tax_amount) || 0,
-          p_order_status: order_status || null
+          p_order_status: order_status || null,
+          p_payment_method: payment_method || null,
+          p_paid_amount: paid_amount !== null && paid_amount !== undefined ? Number(paid_amount) : null,
+          p_payment_status: payment_status || null
         })
 
         if (error) throw error
@@ -2299,16 +2307,58 @@ export function AdminDataProvider({ children }) {
       }
 
       // Demo Mode
+      const targetOrder = demoOrders.find((o) => o.id === order_id)
+      if (!targetOrder) throw new Error('Order not found.')
+      if (targetOrder.status === 'cancelled') {
+        throw new Error('Cannot edit a cancelled order.')
+      }
+      const isApproved = Boolean(targetOrder.completion_approved_at || targetOrder.status === 'completed')
+      if (isApproved && !isSuperadmin) {
+        throw new Error('Order has been approved by Super Admin. Editing is restricted to Superadministrators.')
+      }
+
       const subtotal = items.reduce(
         (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
         0
       )
       const totalAmount = Math.max(0, subtotal - (Number(discount_amount) || 0) + (Number(tax_amount) || 0))
+      const targetPaid = paid_amount !== null && paid_amount !== undefined
+        ? Math.max(0, Number(paid_amount))
+        : Number(targetOrder.paid_amount || 0)
+
+      // Flexible payment editing: allow adjusting payment forward or backward up to totalAmount
+      const finalPaid = Math.min(totalAmount, Math.max(0, targetPaid))
+      const newPaymentStatus = totalAmount === 0 || finalPaid >= totalAmount
+        ? 'paid'
+        : finalPaid === 0
+          ? 'pending'
+          : 'partial'
+      const newPaymentMethod = payment_method || targetOrder.payment_method || 'cash'
+
+      // Reconcile incremental payments if payment increased
+      const currentPaid = Number(targetOrder.paid_amount || 0)
+      const paymentDiff = finalPaid - currentPaid
+      let updatedPayments = Array.isArray(targetOrder.order_payments) ? [...targetOrder.order_payments] : []
+
+      if (paymentDiff > 0) {
+        updatedPayments.push({
+          id: crypto.randomUUID(),
+          order_id,
+          amount_received: paymentDiff,
+          payment_method: newPaymentMethod,
+          transaction_reference: 'ORDER-EDIT-ADJUSTMENT',
+          remarks: employee_remarks || 'Incremental payment recorded during order edit.',
+          received_by: adminUser?.id,
+          received_by_name: adminUser?.name || adminUser?.full_name || 'Staff',
+          received_by_employee_code: adminUser?.employee_code || null,
+          received_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        })
+      }
+
       setDemoOrders((prev) =>
         prev.map((o) => {
           if (o.id !== order_id) return o
-          const paid = Number(o.paid_amount) || 0
-          const paymentStatus = paid === 0 ? 'pending' : paid >= totalAmount ? 'paid' : 'partial'
           return {
             ...o,
             customer_name,
@@ -2317,13 +2367,16 @@ export function AdminDataProvider({ children }) {
             customer_phone,
             customer_address,
             total_amount: totalAmount,
+            paid_amount: finalPaid,
+            payment_method: newPaymentMethod,
+            payment_status: newPaymentStatus,
+            order_payments: updatedPayments,
             discount_amount: Number(discount_amount) || 0,
             tax_amount: Number(tax_amount) || 0,
-            payment_status: paymentStatus,
             assigned_engineer_id,
             expected_delivery_date,
             employee_remarks: employee_remarks || o.employee_remarks,
-            status: order_status || o.status,
+            status: isApproved ? o.status : (order_status || o.status),
             order_items: items.map((it) => ({
               id: crypto.randomUUID(),
               product_id: it.product_id || null,
@@ -2342,7 +2395,7 @@ export function AdminDataProvider({ children }) {
       )
       return { success: true }
     },
-    [isLiveDatabase, adminUser, loadAdminOrders]
+    [isLiveDatabase, adminUser, loadAdminOrders, demoOrders]
   )
 
   // 1c. Assign Order Engineer
@@ -3665,8 +3718,9 @@ export function AdminDataProvider({ children }) {
     isEngineer: ['engineer', 'technical', 'hr', 'account'].includes(adminUser?.role),
     isHr: adminUser?.role === 'hr',
     isTechnical: adminUser?.role === 'technical',
-    isAccount: adminUser?.role === 'account',
+    isAccount: adminUser?.role === 'account' || adminUser?.role === 'accountant',
     isInventoryStaff: adminUser?.role === 'inventory_staff',
+    canEditOrders: ['superadmin', 'hr', 'account', 'accountant', 'technical'].includes((adminUser?.role || '').toLowerCase()),
     canWriteCatalog: adminUser?.role === 'superadmin',
     canWriteCategories: adminUser?.role === 'superadmin',
     canWriteEnquiries: adminUser?.role === 'superadmin',

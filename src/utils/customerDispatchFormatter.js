@@ -24,6 +24,9 @@ import { formatAadhaarMasked } from './aadhaarFormatter.js'
 export function formatINR(val) {
   const num = Number(val)
   if (isNaN(num)) return '₹0.00'
+  if (num < 0) {
+    return `-₹${Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
   return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
@@ -513,21 +516,23 @@ export function formatOrderCustomerDispatch(order) {
           pDate = 'Payment'
         }
       }
+      const isAdjustment = p.entry_type === 'adjustment' || p.entry_type === 'reversal' || p.entry_type === 'refund' || Number(p.amount_received) < 0
+      const typeLabel = isAdjustment ? 'Adjustment' : 'Payment'
       const pAmt = formatINR(p.amount_received)
       const pMethod = formatPaymentMethodLabel(p.payment_method)
-      lines.push(`${pDate} — ${pAmt} — ${pMethod}`)
+      lines.push(`${pDate} (${typeLabel}) — ${pAmt} — ${pMethod}`)
     })
     lines.push('')
 
     lines.push('PAYMENT SUMMARY')
     lines.push(`Order Total: ${formatINR(totalAmount)}`)
-    lines.push(`Total Paid: ${formatINR(paidAmount)}`)
+    lines.push(`Total Received: ${formatINR(paidAmount)}`)
     lines.push(`Balance: ${formatINR(balance)}`)
     lines.push(`Payment Status: ${paymentStatus}`)
   } else {
     lines.push('PAYMENT SUMMARY')
     lines.push(`Order Total: ${formatINR(totalAmount)}`)
-    lines.push(`Paid: ${formatINR(paidAmount)}`)
+    lines.push(`Received: ${formatINR(paidAmount)}`)
     lines.push(`Balance: ${formatINR(balance)}`)
     lines.push(`Payment Status: ${paymentStatus}`)
     const singleMethod = payments.length === 1 ? payments[0].payment_method : order.payment_method

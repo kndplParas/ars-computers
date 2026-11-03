@@ -69,10 +69,11 @@ describe('ARS Computers — Edit Order Modal & Validation Invariants', () => {
       'Validates numeric item quantities and selling prices'
     )
 
-    // Financial check: updated total cannot be less than collected payment
+    // Flexible payment check: automatically clamps and synchronizes payment forward and backward up to order total
     assert.ok(
-      modalSource.includes('calculatedTotal < paidAmount'),
-      'Guarantees order total cannot be reduced below already collected payment'
+      modalSource.includes('finalPaid > calculatedTotal') &&
+      modalSource.includes('finalPaid = calculatedTotal'),
+      'Allows flexible forward and backward payment editing up to order total'
     )
   })
 
