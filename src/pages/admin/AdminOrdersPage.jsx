@@ -5,8 +5,6 @@ import { useAdminAuth } from '../../context/adminAuthContext'
 import {
   downloadMonthlySalesExcel,
   filterOrdersByReportingMonth,
-  isOrderInCurrentMonthCycle,
-  filterOrdersForHistoricalMonth,
   calculateMonthlyCycleMetrics,
   sortOrdersAscending
 } from '../../utils/salesReportGenerator.js'
@@ -49,6 +47,7 @@ export default function AdminOrdersPage() {
     orders = [],
     loadAdminOrders,
     requestOrderDeletion,
+    reviewOrderDeletion,
     removeCurrentMonthOrder,
     restoreOrderFromBin,
     startSalesOrder,
@@ -73,12 +72,7 @@ export default function AdminOrdersPage() {
   const currentCalendarMonth = currentCalendarDate.getMonth() // 0-indexed (0 = Jan, 11 = Dec)
   const currentCalendarYear = currentCalendarDate.getFullYear()
 
-  // Operating Cycle mode: 'current' (default) | 'history'
-  const [cycleMode, setCycleMode] = useState('current')
 
-  // History selector: default to previous calendar month
-  const [historyMonth, setHistoryMonth] = useState(() => (currentCalendarMonth === 0 ? 11 : currentCalendarMonth - 1))
-  const [historyYear, setHistoryYear] = useState(() => (currentCalendarMonth === 0 ? currentCalendarYear - 1 : currentCalendarYear))
 
   // Tabs & Filters
   const [activeTab, setActiveTab] = useState('active') // 'active' | 'pending' | 'completed' | 'cancelled' | 'all'
@@ -97,7 +91,7 @@ export default function AdminOrdersPage() {
     isOpen: false,
     order: null,
     category: 'Customer Cancelled',
-    reason: '',
+    reason: 'Customer requested order cancellation and removal.',
     error: null,
     isSubmitting: false
   })
@@ -296,16 +290,36 @@ export default function AdminOrdersPage() {
     })
   }
 
+  const DEFAULT_DELETION_REASONS = {
+    'Customer Cancelled': 'Customer requested order cancellation and removal.',
+    'Spam / Fake Order': 'Spam or fraudulent test order.',
+    'Duplicate Order': 'Duplicate sales order record.',
+    'Invalid Request': 'Invalid test order entry.',
+    'Other': 'Removal requested by store administrator.'
+  }
+
   // Deletion & Bin Workflow Handlers
   const handleOpenDeletionModal = (order, e) => {
     if (e) e.stopPropagation()
+    const defaultCat = 'Customer Cancelled'
     setDeletionModal({
       isOpen: true,
       order,
-      category: 'Customer Cancelled',
-      reason: '',
+      category: defaultCat,
+      reason: DEFAULT_DELETION_REASONS[defaultCat],
       error: null,
       isSubmitting: false
+    })
+  }
+
+  const handleDeletionCategoryChange = (newCat) => {
+    setDeletionModal((prev) => {
+      const isDefault = Object.values(DEFAULT_DELETION_REASONS).includes(prev.reason) || !prev.reason.trim()
+      return {
+        ...prev,
+        category: newCat,
+        reason: isDefault ? (DEFAULT_DELETION_REASONS[newCat] || prev.reason) : prev.reason
+      }
     })
   }
 
@@ -321,17 +335,69 @@ export default function AdminOrdersPage() {
     try {
       if (isSuperadmin) {
         await removeCurrentMonthOrder(deletionModal.order.id, deletionModal.category, deletionModal.reason.trim())
-        showToast(`Order ${deletionModal.order.order_number} moved to Bin.`, 'success')
+        showToast(`Order ${deletionModal.order.order_number} moved to Bin. Check the "🗑️ Removed (Bin)" tab to restore.`, 'success')
       } else {
         await requestOrderDeletion(deletionModal.order.id, deletionModal.reason.trim(), deletionModal.category)
-        showToast(`Deletion request submitted for ${deletionModal.order.order_number}.`, 'success')
+        showToast(`Deletion request submitted for ${deletionModal.order.order_number}. Waiting for Head review.`, 'success')
       }
-      setDeletionModal({ isOpen: false, order: null, category: 'Customer Cancelled', reason: '', error: null, isSubmitting: false })
+      setDeletionModal({
+        isOpen: false,
+        order: null,
+        category: 'Customer Cancelled',
+        reason: DEFAULT_DELETION_REASONS['Customer Cancelled'],
+        error: null,
+        isSubmitting: false
+      })
       if (selectedOrder && selectedOrder.id === deletionModal.order.id) {
         setSelectedOrder(null)
       }
+      if (loadAdminOrders) {
+        await loadAdminOrders()
+      }
     } catch (err) {
       setDeletionModal((prev) => ({ ...prev, isSubmitting: false, error: err.message || 'Operation failed.' }))
+    }
+  }
+
+  const handleDeleteMultipleOrders = async (orderIds, reason = 'Selected removal from Live Register') => {
+    try {
+      for (const id of orderIds) {
+        if (isSuperadmin) {
+          await removeCurrentMonthOrder(id, 'Customer Cancelled', reason)
+        } else {
+          await requestOrderDeletion(id, reason, 'Customer Cancelled')
+        }
+      }
+      showToast(
+        isSuperadmin
+          ? `${orderIds.length} order(s) moved to Bin.`
+          : `Deletion request(s) submitted for ${orderIds.length} order(s).`,
+        'success'
+      )
+      if (loadAdminOrders) await loadAdminOrders()
+    } catch (err) {
+      showToast('Deletion failed: ' + (err.message || 'Error'), 'error')
+    }
+  }
+
+  const handleReviewDeletion = async (orderId, decision) => {
+    if (!isSuperadmin) return
+    try {
+      const notes = decision === 'approved' ? 'Approved by Head Superadmin' : 'Rejected by Head Superadmin'
+      await reviewOrderDeletion(orderId, decision, notes)
+      showToast(decision === 'approved' ? 'Order deletion approved and moved to Bin.' : 'Deletion request rejected.', 'success')
+      if (selectedOrder?.id === orderId) {
+        if (decision === 'approved') {
+          setSelectedOrder(null)
+        } else {
+          await loadOrderDetails(orderId)
+        }
+      }
+      if (loadAdminOrders) {
+        await loadAdminOrders()
+      }
+    } catch (err) {
+      showToast('Review failed: ' + (err.message || 'Error'), 'error')
     }
   }
 
@@ -562,40 +628,17 @@ export default function AdminOrdersPage() {
     }
   }, [selectedOrder?.id, loadOrderDetails])
 
-  // Extract available years for history selector
-  const availableYears = useMemo(() => {
-    const yearsSet = new Set([currentCalendarYear, currentCalendarYear - 1])
-    orders.forEach((o) => {
-      if (o.created_at) {
-        const y = new Date(o.created_at).getFullYear()
-        if (!Number.isNaN(y)) yearsSet.add(y)
-      }
-      if (o.completion_approved_at) {
-        const y = new Date(o.completion_approved_at).getFullYear()
-        if (!Number.isNaN(y)) yearsSet.add(y)
-      }
-    })
-    return Array.from(yearsSet).sort((a, b) => b - a)
-  }, [orders, currentCalendarYear])
 
-  // Orders partitioned by active operating cycle
+
+  // Orders list
   const cycleOrders = useMemo(() => {
-    if (cycleMode === 'current') {
-      return orders.filter((o) => isOrderInCurrentMonthCycle(o, currentCalendarMonth, currentCalendarYear))
-    } else {
-      return filterOrdersForHistoricalMonth(orders, historyMonth, historyYear)
-    }
-  }, [orders, cycleMode, currentCalendarMonth, currentCalendarYear, historyMonth, historyYear])
+    return orders
+  }, [orders])
 
-  // Active target parameters for metrics
-  const activeTargetMonth = cycleMode === 'current' ? currentCalendarMonth : historyMonth
-  const activeTargetYear = cycleMode === 'current' ? currentCalendarYear : historyYear
-  const isCurrentCycle = cycleMode === 'current'
-
-  // Top Metrics based on operating cycle
+  // Top Metrics based on current operating cycle
   const metrics = useMemo(() => {
-    return calculateMonthlyCycleMetrics(orders, activeTargetMonth, activeTargetYear, isCurrentCycle)
-  }, [orders, activeTargetMonth, activeTargetYear, isCurrentCycle])
+    return calculateMonthlyCycleMetrics(orders, currentCalendarMonth, currentCalendarYear, true)
+  }, [orders, currentCalendarMonth, currentCalendarYear])
 
   // Filtered Orders within active cycle (Strictly Increasing Numerical Order Sequence)
   const filteredOrders = useMemo(() => {
@@ -648,19 +691,6 @@ export default function AdminOrdersPage() {
       const res = await downloadMonthlySalesExcel(orders, exportMonthIndex, exportYear)
       showToast(`Sales report generated: ${res.filename} (${res.count} records)`, 'success')
       setIsExportModalOpen(false)
-    } catch (err) {
-      showToast(`Failed to generate Excel report: ${err.message}`, 'error')
-    } finally {
-      setIsExporting(false)
-    }
-  }
-
-  // 1-Click Monthly Excel download for active or historical cycle
-  const handleDownloadCycleExcel = async (targetMonth, targetYear) => {
-    setIsExporting(true)
-    try {
-      const res = await downloadMonthlySalesExcel(orders, targetMonth, targetYear)
-      showToast(`Sales report generated: ${res.filename} (${res.count} records)`, 'success')
     } catch (err) {
       showToast(`Failed to generate Excel report: ${err.message}`, 'error')
     } finally {
@@ -797,180 +827,7 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
-        {/* Monthly Operating Cycle Control Bar */}
-        <div
-          className="admin-cycle-control-bar"
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            padding: '14px 18px',
-            marginBottom: '20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}
-        >
-          {/* Left: Operating Cycle Mode Switcher */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Operating Cycle:
-            </span>
 
-            <button
-              type="button"
-              className={`btn-sm ${cycleMode === 'current' ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setCycleMode('current')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                fontSize: '13px'
-              }}
-            >
-              <span>📅</span>
-              <span>Current Month — {MONTH_NAMES[currentCalendarMonth]} {currentCalendarYear}</span>
-            </button>
-
-            <button
-              type="button"
-              className={`btn-sm ${cycleMode === 'history' ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setCycleMode('history')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                fontSize: '13px'
-              }}
-            >
-              <span>📜</span>
-              <span>Monthly History</span>
-            </button>
-          </div>
-
-          {/* Right: Contextual Controls & Quick Excel Download */}
-          {cycleMode === 'current' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '4px 10px',
-                  borderRadius: '999px',
-                  background: '#ecfdf5',
-                  color: '#065f46',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  border: '1px solid #a7f3d0'
-                }}
-              >
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
-                Live Working Month
-              </span>
-
-              <button
-                type="button"
-                className="btn-outline btn-sm"
-                onClick={() => handleDownloadCycleExcel(currentCalendarMonth, currentCalendarYear)}
-                disabled={isExporting}
-                title={`Download standard Excel report for ${MONTH_NAMES[currentCalendarMonth]} ${currentCalendarYear}`}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
-              >
-                <span>📥</span>
-                <span>Download Current Month Excel</span>
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Month:</label>
-              <select
-                className="form-select"
-                style={{ width: 'auto', minWidth: '130px', padding: '5px 10px', fontSize: '13px' }}
-                value={historyMonth}
-                onChange={(e) => setHistoryMonth(Number(e.target.value))}
-              >
-                {MONTH_NAMES.map((name, idx) => (
-                  <option key={name} value={idx}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Year:</label>
-              <select
-                className="form-select"
-                style={{ width: 'auto', minWidth: '95px', padding: '5px 10px', fontSize: '13px' }}
-                value={historyYear}
-                onChange={(e) => setHistoryYear(Number(e.target.value))}
-              >
-                {availableYears.map((yr) => (
-                  <option key={yr} value={yr}>
-                    {yr}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                className="btn-outline btn-sm"
-                onClick={() => handleDownloadCycleExcel(historyMonth, historyYear)}
-                disabled={isExporting}
-                title={`Download standard Excel report for ${MONTH_NAMES[historyMonth]} ${historyYear}`}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
-              >
-                <span>📥</span>
-                <span>Download {MONTH_NAMES[historyMonth]} Excel</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Historical Archive Notice Banner */}
-        {cycleMode === 'history' && (
-          <div
-            style={{
-              background: '#f8fafc',
-              border: '1px dashed #94a3b8',
-              borderRadius: '6px',
-              padding: '10px 14px',
-              marginBottom: '16px',
-              fontSize: '13px',
-              color: '#334155',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '8px'
-            }}
-          >
-            <div>
-              <span>📜 <strong>Viewing Historical Archive:</strong> {MONTH_NAMES[historyMonth]} {historyYear} (Read-Only Inspection).</span>
-              <span style={{ display: 'block', fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                All database records remain permanently preserved in Supabase. Unfinished active jobs remain in Current Month.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCycleMode('current')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#0284c7',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: '12px',
-                textDecoration: 'underline'
-              }}
-            >
-              Return to Current Month ({MONTH_NAMES[currentCalendarMonth]} {currentCalendarYear}) →
-            </button>
-          </div>
-        )}
 
         {/* Metrics Cards */}
         <div className="admin-summary-grid four-cards" style={{ marginBottom: '24px' }}>
@@ -978,17 +835,15 @@ export default function AdminOrdersPage() {
           <div className="admin-stat-card">
             <div className="stat-card-icon blue">🛒</div>
             <div className="stat-card-content">
-              <span className="stat-label">
-                {cycleMode === 'current' ? 'Active Orders' : 'Historical Active'}
-              </span>
+              <span className="stat-label">Active Orders</span>
               <div className="stat-number-wrap">
                 <span className="stat-number">{metrics.active}</span>
                 <span className="stat-badge blue" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-                  {cycleMode === 'current' ? 'Live' : 'Archive'}
+                  Live
                 </span>
               </div>
               <span className="stat-subtext">
-                {cycleMode === 'current' ? 'New & Processing (All Live Work)' : `Created in ${MONTH_NAMES[historyMonth]}`}
+                New & Processing (All Live Work)
               </span>
             </div>
           </div>
@@ -1009,7 +864,7 @@ export default function AdminOrdersPage() {
                 )}
               </div>
               <span className="stat-subtext">
-                {cycleMode === 'current' ? 'Awaiting Head Approval' : 'Historical Pending'}
+                Awaiting Head Approval
               </span>
             </div>
           </div>
@@ -1028,7 +883,7 @@ export default function AdminOrdersPage() {
                 </span>
               </div>
               <span className="stat-subtext">
-                Approved in {MONTH_NAMES[activeTargetMonth]} {activeTargetYear}
+                Approved in {MONTH_NAMES[currentCalendarMonth]} {currentCalendarYear}
               </span>
             </div>
           </div>
@@ -1044,7 +899,7 @@ export default function AdminOrdersPage() {
                 </span>
               </div>
               <span className="stat-subtext">
-                Finalized Sales in {MONTH_NAMES[activeTargetMonth]} {activeTargetYear}
+                Finalized Sales in {MONTH_NAMES[currentCalendarMonth]} {currentCalendarYear}
               </span>
             </div>
           </div>
@@ -1186,21 +1041,21 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* Orders Table Container */}
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+        <div className="admin-table-container orders-table-wrap" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%', maxWidth: '100%' }}>
           {/* Desktop Table View */}
-          <div className="admin-orders-table-desktop" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <div className="admin-orders-table-desktop" style={{ width: '100%' }}>
+            <table className="admin-data-table" style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
                 <tr>
-                  <th style={{ padding: '12px 14px' }}>Order Reference</th>
-                  <th style={{ padding: '12px 14px' }}>Date</th>
-                  <th style={{ padding: '12px 14px' }}>Customer</th>
-                  <th style={{ padding: '12px 14px' }}>Contact</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right' }}>Total (₹)</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right' }}>Paid (₹)</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center' }}>Payment</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center' }}>Status</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center' }}>Action</th>
+                  <th style={{ padding: '12px 14px', minWidth: '150px' }}>Order Reference</th>
+                  <th style={{ padding: '12px 14px', minWidth: '110px' }}>Date</th>
+                  <th style={{ padding: '12px 14px', minWidth: '150px' }}>Customer</th>
+                  <th style={{ padding: '12px 14px', minWidth: '140px' }}>Contact</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: '110px' }}>Total (₹)</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: '110px' }}>Paid (₹)</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: '100px' }}>Payment</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: '110px' }}>Status</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: '130px', position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-2px 0 5px rgba(0,0,0,0.05)', zIndex: 2 }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1277,8 +1132,13 @@ export default function AdminOrdersPage() {
                           >
                             {o.status}
                           </span>
+                          {o.deletion_requested_at && !o.is_in_bin && (
+                            <span style={{ display: 'block', marginTop: '3px', fontSize: '10px', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              ⚠️ Delete Req
+                            </span>
+                          )}
                         </td>
-                        <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                        <td style={{ padding: '10px 14px', textAlign: 'center', minWidth: '130px', position: 'sticky', right: 0, background: '#ffffff', boxShadow: '-2px 0 5px rgba(0,0,0,0.05)', zIndex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                             {o.is_in_bin || o.is_removed ? (
                               isSuperadmin && (
@@ -1460,1033 +1320,1086 @@ export default function AdminOrdersPage() {
           const custEmail = resolveCustomerEmail(displayOrder)
           const isCustEmailValid = Boolean(custEmail)
           return (
-          <div
-            className="admin-modal-backdrop"
-            onClick={handleCloseOrderDetails}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="order-details-title"
-          >
             <div
-              className="admin-modal-dialog order-details-dialog enquiry-details-dialog"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                maxWidth: '820px',
-                width: 'min(820px, calc(100vw - 20px))',
-                maxHeight: 'min(92vh, calc(100dvh - 24px))',
-                display: 'flex',
-                flexDirection: 'column'
-              }}
+              className="admin-modal-backdrop"
+              onClick={handleCloseOrderDetails}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="order-details-title"
             >
-              {/* Header */}
-              <div className="admin-modal-header" style={{ position: 'sticky', top: 0, background: '#ffffff', zIndex: 10, borderBottom: '1px solid #e2e8f0', padding: '16px 20px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <h2 id="order-details-title" className="admin-modal-title" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>
-                      Order {displayOrder.order_number || displayOrder.id}
-                    </h2>
-                    <span
-                      className="enquiry-status-chip modal-status-badge"
-                      style={{
-                        padding: '2px 10px',
-                        borderRadius: '999px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        background: displayOrder.status === 'completed' ? '#dcfce7' : displayOrder.status === 'cancelled' ? '#f1f5f9' : '#e0f2fe',
-                        color: displayOrder.status === 'completed' ? '#166534' : displayOrder.status === 'cancelled' ? '#64748b' : '#0369a1',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
+              <div
+                className="admin-modal-dialog order-details-dialog enquiry-details-dialog"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: '820px',
+                  width: 'min(820px, calc(100vw - 20px))',
+                  maxHeight: 'min(92vh, calc(100dvh - 24px))',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                {/* Header */}
+                <div className="admin-modal-header" style={{ position: 'sticky', top: 0, background: '#ffffff', zIndex: 10, borderBottom: '1px solid #e2e8f0', padding: '16px 20px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <h2 id="order-details-title" className="admin-modal-title" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>
+                        Order {displayOrder.order_number || displayOrder.id}
+                      </h2>
                       <span
+                        className="enquiry-status-chip modal-status-badge"
                         style={{
-                          width: '7px',
-                          height: '7px',
-                          borderRadius: '50%',
-                          background: displayOrder.status === 'completed' ? '#16a34a' : displayOrder.status === 'cancelled' ? '#64748b' : '#0284c7'
-                        }}
-                      ></span>
-                      STATUS: {displayOrder.status.toUpperCase()}
-                    </span>
-                    <span
-                      style={{
-                        padding: '2px 8px',
-                        borderRadius: '999px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        background: displayOrder.payment_status === 'paid' ? '#dcfce7' : displayOrder.payment_status === 'partial' ? '#fef3c7' : '#fee2e2',
-                        color: displayOrder.payment_status === 'paid' ? '#166534' : displayOrder.payment_status === 'partial' ? '#92400e' : '#991b1b'
-                      }}
-                    >
-                      PAYMENT: {(displayOrder.payment_status || 'pending').toUpperCase()}
-                    </span>
-                    {(displayOrder.is_in_bin || displayOrder.is_removed) && (
-                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 600 }}>
-                        🗑️ In Bin
-                      </span>
-                    )}
-                  </div>
-                  <span className="modal-subtitle-note" style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                    Created on {formatDateTimeParts(displayOrder.created_at).date} {formatDateTimeParts(displayOrder.created_at).time}
-                    {displayOrder.created_by_name && ` by ${displayOrder.created_by_name}`}
-                    {` | UUID: ${displayOrder.id}`}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="modal-close-btn"
-                  onClick={handleCloseOrderDetails}
-                  aria-label="Close order details"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Scrollable Body */}
-              <div className="admin-modal-body enquiry-modal-body" style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '16px 20px' }}>
-                {/* Section: Primary Order Actions Toolbar (Matching Enquiries Detail View) */}
-                <div
-                  className="order-actions-toolbar"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '10px',
-                    flexWrap: 'wrap',
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '12px 16px',
-                    marginBottom: '16px'
-                  }}
-                >
-                  {/* Left: Management Actions (Edit, Delete/Restore) */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    {/* Edit Order */}
-                    {(!['cancelled'].includes(displayOrder.status) && (displayOrder.status !== 'completed' || isSuperadmin)) && !displayOrder.is_in_bin && !displayOrder.is_removed && (
-                      <button
-                        type="button"
-                        id="order-details-edit-btn"
-                        className="btn-outline btn-sm edit-order-action-btn"
-                        style={{
-                          padding: '6px 14px',
-                          fontWeight: 600,
-                          color: '#0284c7',
-                          borderColor: '#7dd3fc',
-                          background: '#ffffff',
+                          padding: '2px 10px',
+                          borderRadius: '999px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          background: displayOrder.status === 'completed' ? '#dcfce7' : displayOrder.status === 'cancelled' ? '#f1f5f9' : '#e0f2fe',
+                          color: displayOrder.status === 'completed' ? '#166534' : displayOrder.status === 'cancelled' ? '#64748b' : '#0369a1',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '0.84rem'
+                          gap: '6px'
                         }}
-                        onClick={() => setEditingOrder(displayOrder)}
-                        title="Edit order items, customer information, pricing, or remarks"
                       >
-                        <span>✏️</span>
-                        <span>Edit Order</span>
-                      </button>
-                    )}
+                        <span
+                          style={{
+                            width: '7px',
+                            height: '7px',
+                            borderRadius: '50%',
+                            background: displayOrder.status === 'completed' ? '#16a34a' : displayOrder.status === 'cancelled' ? '#64748b' : '#0284c7'
+                          }}
+                        ></span>
+                        STATUS: {displayOrder.status.toUpperCase()}
+                      </span>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          background: displayOrder.payment_status === 'paid' ? '#dcfce7' : displayOrder.payment_status === 'partial' ? '#fef3c7' : '#fee2e2',
+                          color: displayOrder.payment_status === 'paid' ? '#166534' : displayOrder.payment_status === 'partial' ? '#92400e' : '#991b1b'
+                        }}
+                      >
+                        PAYMENT: {(displayOrder.payment_status || 'pending').toUpperCase()}
+                      </span>
+                      {(displayOrder.is_in_bin || displayOrder.is_removed) && (
+                        <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 600 }}>
+                          🗑️ In Bin
+                        </span>
+                      )}
+                      {displayOrder.deletion_requested_at && !displayOrder.is_in_bin && (
+                        <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 600 }}>
+                          ⚠️ Deletion Requested
+                        </span>
+                      )}
+                    </div>
+                    <span className="modal-subtitle-note" style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                      Created on {formatDateTimeParts(displayOrder.created_at).date} {formatDateTimeParts(displayOrder.created_at).time}
+                      {displayOrder.created_by_name && ` by ${displayOrder.created_by_name}`}
+                      {` | UUID: ${displayOrder.id}`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={handleCloseOrderDetails}
+                    aria-label="Close order details"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-                    {/* Delete Order (Opens Confirmation Modal) */}
-                    {displayOrder.is_in_bin || displayOrder.is_removed ? (
-                      isSuperadmin && (
+                {/* Scrollable Body */}
+                <div className="admin-modal-body enquiry-modal-body" style={{ overflowY: 'auto', flex: 1, minHeight: 0, padding: '16px 20px' }}>
+                  {/* Deletion Request Review Banner */}
+                  {displayOrder.deletion_requested_at && !displayOrder.is_in_bin && (
+                    <div
+                      style={{
+                        marginBottom: '16px',
+                        padding: '12px 16px',
+                        background: '#fffbeb',
+                        border: '1px solid #fcd34d',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        flexWrap: 'wrap'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>⚠️</span>
+                          <span>Order Deletion Requested</span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#78350f', marginTop: '2px' }}>
+                          Category: <strong>{displayOrder.removal_category || 'Customer Cancelled'}</strong> | Reason: <em>"{displayOrder.deletion_reason || 'No specific reason provided'}"</em>
+                        </div>
+                      </div>
+                      {isSuperadmin && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="btn-primary btn-sm"
+                            style={{ background: '#dc2626', borderColor: '#b91c1c' }}
+                            onClick={() => handleReviewDeletion(displayOrder.id, 'approved')}
+                          >
+                            Approve (Move to Bin)
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-outline btn-sm"
+                            onClick={() => handleReviewDeletion(displayOrder.id, 'rejected')}
+                          >
+                            Reject Request
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Section: Primary Order Actions Toolbar (Matching Enquiries Detail View) */}
+                  <div
+                    className="order-actions-toolbar"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                      flexWrap: 'wrap',
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    {/* Left: Management Actions (Edit, Delete/Restore) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {/* Edit Order */}
+                      {(!['cancelled'].includes(displayOrder.status) && (displayOrder.status !== 'completed' || isSuperadmin)) && !displayOrder.is_in_bin && !displayOrder.is_removed && (
                         <button
                           type="button"
-                          id="order-details-restore-btn"
-                          className="btn-outline btn-sm restore-order-action-btn"
+                          id="order-details-edit-btn"
+                          className="btn-outline btn-sm edit-order-action-btn"
                           style={{
                             padding: '6px 14px',
                             fontWeight: 600,
-                            color: '#16a34a',
-                            borderColor: '#86efac',
+                            color: '#0284c7',
+                            borderColor: '#7dd3fc',
                             background: '#ffffff',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
                             fontSize: '0.84rem'
                           }}
-                          onClick={(e) => handleRestoreFromBin(displayOrder, e)}
-                          title="Restore Order from Bin to active status"
+                          onClick={() => setEditingOrder(displayOrder)}
+                          title="Edit order items, customer information, pricing, or remarks"
                         >
-                          <span>♻️</span>
-                          <span>Restore Order</span>
+                          <span>✏️</span>
+                          <span>Edit Order</span>
                         </button>
-                      )
-                    ) : (
-                      <button
-                        type="button"
-                        id="order-details-delete-btn"
-                        className="btn-outline btn-sm delete-order-action-btn"
-                        style={{
-                          padding: '6px 14px',
-                          fontWeight: 600,
-                          color: '#dc2626',
-                          borderColor: '#fca5a5',
-                          background: '#fef2f2',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '0.84rem'
-                        }}
-                        onClick={(e) => handleOpenDeletionModal(displayOrder, e)}
-                        title={isSuperadmin ? 'Remove Order to Bin with mandatory confirmation' : 'Request Order Deletion with mandatory confirmation'}
-                      >
-                        <span>🗑️</span>
-                        <span>Delete Order</span>
-                      </button>
-                    )}
-                  </div>
+                      )}
 
-                  {/* Right: WhatsApp Copy, Send WhatsApp, and Payment Recording */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    {/* WhatsApp Copy (Prominent One-Click Copy) */}
-                    <button
-                      type="button"
-                      id="order-details-whatsapp-copy-btn"
-                      className="btn-outline btn-sm whatsapp-copy-action-btn"
-                      onClick={() => handleCustomerCopy(displayOrder)}
-                      title="Copy complete, WhatsApp-ready order summary with customer, item, and payment breakdown"
-                      style={{
-                        padding: '6px 14px',
-                        fontWeight: 600,
-                        color: copyFeedback ? '#ffffff' : '#15803d',
-                        borderColor: copyFeedback ? '#16a34a' : '#86efac',
-                        background: copyFeedback ? '#16a34a' : '#f0fdf4',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '0.84rem',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <span>{copyFeedback ? '✓' : '📋'}</span>
-                      <span>{copyFeedback ? 'WhatsApp Order Copied!' : 'WhatsApp Copy'}</span>
-                    </button>
-
-                    {/* Direct Customer WhatsApp Dispatch */}
-                    <button
-                      type="button"
-                      className="btn-outline btn-sm"
-                      onClick={() => handleCustomerWhatsApp(displayOrder)}
-                      disabled={!isCustWhatsAppValid}
-                      title={
-                        isCustWhatsAppValid
-                          ? `Open WhatsApp to dispatch order to ${custPhone}`
-                          : 'No valid customer WhatsApp number registered'
-                      }
-                      style={{
-                        padding: '6px 12px',
-                        fontWeight: 600,
-                        color: isCustWhatsAppValid ? '#16a34a' : '#94a3b8',
-                        borderColor: isCustWhatsAppValid ? '#86efac' : '#cbd5e1',
-                        background: '#ffffff',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '0.84rem',
-                        cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed'
-                      }}
-                    >
-                      <span>💬</span>
-                      <span>WhatsApp Customer</span>
-                    </button>
-
-                    {/* Update / Record Payment Action */}
-                    {currentBal > 0 && displayOrder.status !== 'cancelled' && !isInventoryStaff && (
-                      <button
-                        type="button"
-                        className="btn-primary btn-sm"
-                        onClick={() => handleOpenPaymentModal(displayOrder)}
-                        style={{
-                          padding: '6px 14px',
-                          fontWeight: 600,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '0.84rem'
-                        }}
-                      >
-                        <span>💳</span>
-                        <span>Record Payment</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Contextual Status Alerts (Matching Enquiries Detail Layout) */}
-                {/* Soft-Removed / Bin Notice */}
-                {(displayOrder.is_in_bin || displayOrder.is_removed) && (
-                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '8px', marginBottom: '14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                      <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
-                        🚫 Soft-Removed Record in Bin ({displayOrder.removal_category ? displayOrder.removal_category.replace('_', ' ').toUpperCase() : 'CANCELLED / REMOVED'})
-                      </span>
-                      {isSuperadmin && (
+                      {/* Delete Order (Opens Confirmation Modal) */}
+                      {displayOrder.is_in_bin || displayOrder.is_removed ? (
+                        isSuperadmin && (
+                          <button
+                            type="button"
+                            id="order-details-restore-btn"
+                            className="btn-outline btn-sm restore-order-action-btn"
+                            style={{
+                              padding: '6px 14px',
+                              fontWeight: 600,
+                              color: '#16a34a',
+                              borderColor: '#86efac',
+                              background: '#ffffff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '0.84rem'
+                            }}
+                            onClick={(e) => handleRestoreFromBin(displayOrder, e)}
+                            title="Restore Order from Bin to active status"
+                          >
+                            <span>♻️</span>
+                            <span>Restore Order</span>
+                          </button>
+                        )
+                      ) : (
                         <button
                           type="button"
-                          className="btn-outline btn-sm"
-                          onClick={(e) => handleRestoreFromBin(displayOrder, e)}
-                          style={{ borderColor: '#0d9488', color: '#0d9488', fontSize: '0.8rem', padding: '3px 8px', background: '#ffffff' }}
+                          id="order-details-delete-btn"
+                          className="btn-outline btn-sm delete-order-action-btn"
+                          style={{
+                            padding: '6px 14px',
+                            fontWeight: 600,
+                            color: '#dc2626',
+                            borderColor: '#fca5a5',
+                            background: '#fef2f2',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.84rem'
+                          }}
+                          onClick={(e) => handleOpenDeletionModal(displayOrder, e)}
+                          title={isSuperadmin ? 'Remove Order to Bin with mandatory confirmation' : 'Request Order Deletion with mandatory confirmation'}
                         >
-                          🔄 Restore to Active
+                          <span>🗑️</span>
+                          <span>Delete Order</span>
                         </button>
                       )}
                     </div>
-                    <div style={{ color: '#b91c1c', fontSize: '0.82rem', marginTop: '4px' }}>
-                      Removed by <strong>{displayOrder.removed_by_name || 'Admin'}</strong> on {formatDateTimeParts(displayOrder.removed_at).date}
-                    </div>
-                    <div style={{ color: '#7f1d1d', fontSize: '0.85rem', marginTop: '6px' }}>
-                      <strong>Mandatory Reason:</strong> {displayOrder.removal_reason || '—'}
-                    </div>
-                  </div>
-                )}
 
-                {/* Permanent Archive Accountability Audit Card (Completed Orders) */}
-                {(displayOrder.completion_approved_at || displayOrder.status === 'completed') && (
-                  <div
-                    style={{
-                      background: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
-                      borderRadius: '8px',
-                      padding: '14px 16px',
-                      marginBottom: '16px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
-                      <span style={{ fontWeight: 700, color: '#166534', fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>🔒</span> Permanent Accountability &amp; Audit Trail
-                      </span>
-                      <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
-                        Completed &amp; Head-Approved
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '0.84rem' }}>
-                      <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
-                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                          Completed By (Staff):
-                        </span>
-                        <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
-                          {displayOrder.completed_by_name || 'Staff Member'}
-                        </strong>
-                        {displayOrder.completed_by_employee_code && (
-                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
-                            Code: {displayOrder.completed_by_employee_code}
-                          </span>
-                        )}
-                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                          Submitted: {formatDateTimeParts(displayOrder.completion_requested_at).date} {formatDateTimeParts(displayOrder.completion_requested_at).time}
-                        </span>
-                      </div>
-
-                      <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
-                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                          Approved By (Head Person):
-                        </span>
-                        <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
-                          {displayOrder.approved_by_name || 'Store Head Person'}
-                        </strong>
-                        {displayOrder.approved_by_employee_code && (
-                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
-                            Code: {displayOrder.approved_by_employee_code}
-                          </span>
-                        )}
-                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                          Approved: {formatDateTimeParts(displayOrder.completion_approved_at).date} {formatDateTimeParts(displayOrder.completion_approved_at).time}
-                        </span>
-                      </div>
-                    </div>
-
-                    {displayOrder.employee_remarks && (
-                      <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
-                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
-                          Employee Completion Remarks:
-                        </span>
-                        <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
-                          {displayOrder.employee_remarks}
-                        </p>
-                      </div>
-                    )}
-
-                    {displayOrder.head_remarks && (
-                      <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
-                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
-                          Head-Person Approval Remarks:
-                        </span>
-                        <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
-                          {displayOrder.head_remarks}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Customer Info */}
-                <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '6px' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '6px' }}>Customer Information</div>
-                  <div><strong>Name:</strong> {selectedOrder.customer_name}</div>
-                  <div><strong>Contact:</strong> {selectedOrder.contact_info}</div>
-                </div>
-
-                {/* Items Breakdown */}
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: '8px' }}>Line Items</div>
-                  {/* Desktop Table View */}
-                  <div className="order-details-table-desktop" style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        <tr>
-                          <th style={{ padding: '8px', textAlign: 'left' }}>Product</th>
-                          <th style={{ padding: '8px', textAlign: 'center' }}>Qty</th>
-                          <th style={{ padding: '8px', textAlign: 'right' }}>Unit Price</th>
-                          <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.isArray(selectedOrder.order_items) && selectedOrder.order_items.length > 0 ? (
-                          selectedOrder.order_items.map((it) => (
-                            <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px' }}>
-                                {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
-                              </td>
-                              <td style={{ padding: '8px', textAlign: 'center' }}>{it.quantity}</td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(it.unit_price).toFixed(2)}</td>
-                              <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>₹{Number(it.line_total).toFixed(2)}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="4" style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
-                              No line item details available.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile Cards View */}
-                  <div className="order-details-cards-mobile">
-                    {Array.isArray(selectedOrder.order_items) && selectedOrder.order_items.length > 0 ? (
-                      selectedOrder.order_items.map((it) => (
-                        <div key={it.id} className="order-detail-card-mobile">
-                          <div style={{ fontWeight: 600, color: '#0f172a' }}>
-                            {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
-                          </div>
-                          <div className="order-detail-card-mobile-row">
-                            <span style={{ color: '#64748b' }}>Qty: <strong>{it.quantity}</strong> × ₹{Number(it.unit_price).toFixed(2)}</span>
-                            <strong style={{ color: '#0f172a' }}>₹{Number(it.line_total).toFixed(2)}</strong>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
-                        No line item details available.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Financial Summary */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
-                  <div>
-                    <div><strong>Payment Method:</strong> {(displayOrder.payment_method || 'cash').toUpperCase()}</div>
-                    <div><strong>Payment Status:</strong> {(displayOrder.payment_status || 'pending').toUpperCase()}</div>
-                  </div>
-                  <div>
-                    <div><strong>Total Amount:</strong> ₹{Number(displayOrder.total_amount).toFixed(2)}</div>
-                    <div><strong>Amount Paid:</strong> ₹{Number(displayOrder.paid_amount).toFixed(2)}</div>
-                    <div style={{ color: currentBal > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
-                      Balance Due: ₹{currentBal.toFixed(2)}
-                    </div>
-                  </div>
-                  {/* Update Payment Button */}
-                  {currentBal > 0 && displayOrder.status !== 'cancelled' && !isInventoryStaff && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                    {/* Right: WhatsApp Copy, Send WhatsApp, and Payment Recording */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {/* WhatsApp Copy (Prominent One-Click Copy) */}
                       <button
                         type="button"
-                        className="btn-primary"
+                        id="order-details-whatsapp-copy-btn"
+                        className="btn-outline btn-sm whatsapp-copy-action-btn"
+                        onClick={() => handleCustomerCopy(displayOrder)}
+                        title="Copy complete, WhatsApp-ready order summary with customer, item, and payment breakdown"
                         style={{
-                          padding: '8px 16px',
-                          fontSize: '13px',
+                          padding: '6px 14px',
                           fontWeight: 600,
-                          borderRadius: '6px',
+                          color: copyFeedback ? '#ffffff' : '#15803d',
+                          borderColor: copyFeedback ? '#16a34a' : '#86efac',
+                          background: copyFeedback ? '#16a34a' : '#f0fdf4',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '6px'
+                          gap: '6px',
+                          fontSize: '0.84rem',
+                          transition: 'all 0.15s ease'
                         }}
-                        onClick={() => handleOpenPaymentModal(displayOrder)}
                       >
-                        💳 Update Payment
+                        <span>{copyFeedback ? '✓' : '📋'}</span>
+                        <span>{copyFeedback ? 'WhatsApp Order Copied!' : 'WhatsApp Copy'}</span>
                       </button>
-                    </div>
-                  )}
-                </div>
 
-                {/* Payment History */}
-                <div style={{ marginTop: '16px' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '8px', color: '#0f172a' }}>
-                    Payment History
-                  </div>
-                  {Array.isArray(displayOrder.order_payments) && displayOrder.order_payments.length > 0 ? (
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                        <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                          <tr>
-                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Date & Time</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Amount</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'center' }}>Method</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Reference</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Received By</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Remarks</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[...displayOrder.order_payments]
-                            .sort((a, b) => new Date(a.received_at || a.created_at) - new Date(b.received_at || b.created_at))
-                            .map((pay) => (
-                              <tr key={pay.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                <td style={{ padding: '8px 10px', color: '#475569' }}>
-                                  {formatDateTimeParts(pay.received_at || pay.created_at).date}{' '}
-                                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                    {formatDateTimeParts(pay.received_at || pay.created_at).time}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: '#166534' }}>
-                                  ₹{Number(pay.amount_received).toFixed(2)}
-                                </td>
-                                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                                  <span
-                                    style={{
-                                      padding: '2px 6px',
-                                      borderRadius: '4px',
-                                      fontSize: '11px',
-                                      fontWeight: 600,
-                                      background: '#f1f5f9',
-                                      color: '#334155'
-                                    }}
-                                  >
-                                    {(pay.payment_method || 'cash').toUpperCase()}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
-                                  {pay.transaction_reference || '—'}
-                                </td>
-                                <td style={{ padding: '8px 10px', color: '#334155' }}>
-                                  {pay.received_by_name || 'Staff'}{' '}
-                                  {pay.received_by_employee_code ? (
-                                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                                      ({pay.received_by_employee_code})
-                                    </span>
-                                  ) : null}
-                                </td>
-                                <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
-                                  {pay.remarks || '—'}
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#64748b', fontStyle: 'italic', border: '1px solid #e2e8f0' }}>
-                      No payment transaction history recorded.
-                    </div>
-                  )}
-                </div>
-
-                {/* Supporting Documents (Order Attachments) */}
-                <div style={{ marginTop: '16px' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '8px', color: '#0f172a' }}>
-                    Supporting Documents
-                  </div>
-                  {Array.isArray(displayOrder.order_attachments) && displayOrder.order_attachments.length > 0 ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
-                      {displayOrder.order_attachments.map((att) => {
-                        const ext = (att.original_filename || '').split('.').pop().toUpperCase()
-                        const isPdf = ext === 'PDF' || att.mime_type === 'application/pdf'
-                        const isDownloading = downloadingAttachmentId === att.id
-                        return (
-                          <div
-                            key={att.id}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #e2e8f0',
-                              borderRadius: '6px',
-                              padding: '10px 12px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              justifyContent: 'space-between',
-                              gap: '8px'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                              <span
-                                style={{
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  background: isPdf ? '#fee2e2' : '#e0f2fe',
-                                  color: isPdf ? '#991b1b' : '#0369a1',
-                                  flexShrink: 0
-                                }}
-                              >
-                                {ext || 'FILE'}
-                              </span>
-                              <div style={{ minWidth: 0, flex: 1 }}>
-                                <div
-                                  style={{
-                                    fontSize: '13px',
-                                    fontWeight: 500,
-                                    color: '#0f172a',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                  title={att.original_filename}
-                                >
-                                  {att.original_filename}
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                  {formatFileSize(att.file_size)} • {formatDateTimeParts(att.uploaded_at || att.created_at).date}
-                                </div>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-                              <span
-                                style={{
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  background: att.is_customer_shareable && att.is_head_approved
-                                    ? '#dcfce7'
-                                    : att.share_request_status === 'PENDING'
-                                    ? '#fef3c7'
-                                    : att.share_request_status === 'REJECTED'
-                                    ? '#fee2e2'
-                                    : '#f1f5f9',
-                                  color: att.is_customer_shareable && att.is_head_approved
-                                    ? '#15803d'
-                                    : att.share_request_status === 'PENDING'
-                                    ? '#92400e'
-                                    : att.share_request_status === 'REJECTED'
-                                    ? '#991b1b'
-                                    : '#64748b',
-                                  border: att.is_customer_shareable && att.is_head_approved
-                                    ? '1px solid #bbf7d0'
-                                    : att.share_request_status === 'PENDING'
-                                    ? '1px solid #fde68a'
-                                    : att.share_request_status === 'REJECTED'
-                                    ? '1px solid #fca5a5'
-                                    : '1px solid #e2e8f0'
-                                }}
-                                title={
-                                  att.share_request_status === 'REJECTED'
-                                    ? 'Rejected: ' + (att.share_review_rejection_reason || 'By Head Admin')
-                                    : att.share_request_status === 'PENDING'
-                                    ? 'Requested by ' + (att.share_requested_by_name || 'Admin')
-                                    : undefined
-                                }
-                              >
-                                {att.is_customer_shareable && att.is_head_approved
-                                  ? `✓ Shareable (${(att.document_type || 'Approved').replace(/_/g, ' ')})`
-                                  : att.share_request_status === 'PENDING'
-                                  ? `⏳ Pending Head Review (${(att.share_requested_document_type || 'Requested').replace(/_/g, ' ')})`
-                                  : att.share_request_status === 'REJECTED'
-                                  ? '❌ Share Request Rejected'
-                                  : '🔒 Internal Only'}
-                              </span>
-
-                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                <button
-                                  type="button"
-                                  className="btn-outline"
-                                  style={{
-                                    padding: '3px 8px',
-                                    fontSize: '11px',
-                                    borderRadius: '4px',
-                                    fontWeight: 600,
-                                    color: '#0284c7'
-                                  }}
-                                  onClick={() => handlePreviewAttachment(att, displayOrder.order_attachments || [])}
-                                >
-                                  👁️ Preview
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-outline"
-                                  style={{
-                                    padding: '3px 8px',
-                                    fontSize: '11px',
-                                    borderRadius: '4px'
-                                  }}
-                                  disabled={isDownloading}
-                                  onClick={() => handleDownloadAttachment(att)}
-                                  title="Download to device"
-                                >
-                                  {isDownloading ? 'Downloading...' : '📥 Download'}
-                                </button>
-
-                                {/* Head Approval Queue Controls */}
-                                {isSuperadmin && att.share_request_status === 'PENDING' && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="btn-outline"
-                                      style={{
-                                        padding: '3px 8px',
-                                        fontSize: '11px',
-                                        borderRadius: '4px',
-                                        borderColor: '#86efac',
-                                        color: '#16a34a',
-                                        fontWeight: 600
-                                      }}
-                                      onClick={() => handleReviewOrderAttachmentShareRequest(att, 'APPROVED')}
-                                      title="Head Approve Customer Shareability"
-                                    >
-                                      ✅ Approve Request
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn-outline"
-                                      style={{
-                                        padding: '3px 8px',
-                                        fontSize: '11px',
-                                        borderRadius: '4px',
-                                        borderColor: '#fca5a5',
-                                        color: '#dc2626',
-                                        fontWeight: 600
-                                      }}
-                                      onClick={() => handleReviewOrderAttachmentShareRequest(att, 'REJECTED')}
-                                      title="Head Reject Customer Shareability"
-                                    >
-                                      ❌ Reject Request
-                                    </button>
-                                  </>
-                                )}
-
-                                {/* Head Direct Approval / Revocation (when not in pending review queue) */}
-                                {isSuperadmin && att.share_request_status !== 'PENDING' && (
-                                  <button
-                                    type="button"
-                                    className="btn-outline"
-                                    style={{
-                                      padding: '3px 8px',
-                                      fontSize: '11px',
-                                      borderRadius: '4px',
-                                      borderColor: att.is_customer_shareable && att.is_head_approved ? '#fca5a5' : '#86efac',
-                                      color: att.is_customer_shareable && att.is_head_approved ? '#b91c1c' : '#166534'
-                                    }}
-                                    onClick={() => handleToggleOrderAttachmentShareability(att)}
-                                  >
-                                    {att.is_customer_shareable && att.is_head_approved ? 'Revoke Approval' : 'Approve Share'}
-                                  </button>
-                                )}
-
-                                {/* Store Admin Shareability Request (Admin cannot self-approve) */}
-                                {!isSuperadmin && isAdminEmployee && !att.is_customer_shareable && att.share_request_status !== 'PENDING' && (
-                                  <button
-                                    type="button"
-                                    className="btn-outline"
-                                    style={{
-                                      padding: '3px 8px',
-                                      fontSize: '11px',
-                                      borderRadius: '4px',
-                                      borderColor: '#fde68a',
-                                      color: '#92400e',
-                                      fontWeight: 600
-                                    }}
-                                    onClick={() => handleRequestOrderAttachmentShareability(att)}
-                                    title="Submit Customer Shareability Request to Head Admin"
-                                  >
-                                    📝 Request Share
-                                  </button>
-                                )}
-
-                                {/* Only Head-Approved Shareable Documents can Generate Customer Links */}
-                                {(isSuperadmin || isAdminEmployee) && att.is_customer_shareable && att.is_head_approved && (
-                                  <button
-                                    type="button"
-                                    className="btn-outline"
-                                    style={{
-                                      padding: '3px 8px',
-                                      fontSize: '11px',
-                                      borderRadius: '4px',
-                                      borderColor: '#93c5fd',
-                                      color: '#1d4ed8'
-                                    }}
-                                    onClick={() => handleGenerateShareLink(att)}
-                                  >
-                                    🔗 Share Link
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#64748b', fontStyle: 'italic', border: '1px solid #e2e8f0' }}>
-                      No supporting documents attached to this order.
-                    </div>
-                  )}
-                </div>
-
-                {/* Active Customer Share Links */}
-                {Array.isArray(displayOrder.order_attachment_shares) && displayOrder.order_attachment_shares.length > 0 && (
-                  <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
-                      Active Customer Share Links
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {displayOrder.order_attachment_shares.map((share) => {
-                        const isExpired = new Date() >= new Date(share.expires_at)
-                        return (
-                          <div
-                            key={share.id}
-                            style={{
-                              padding: '8px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid #e2e8f0',
-                              background: share.is_revoked || isExpired ? '#f8fafc' : '#f0fdf4',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              fontSize: '12px'
-                            }}
-                          >
-                            <div>
-                              <div style={{ fontWeight: 500, color: share.is_revoked || isExpired ? '#64748b' : '#15803d' }}>
-                                {share.is_revoked ? '❌ Revoked' : isExpired ? '⏳ Expired' : '✓ Active Share Link'}
-                                <span style={{ color: '#64748b', fontWeight: 400, marginLeft: '8px' }}>
-                                  ({share.access_count || 0} downloads)
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                                Created {formatDateTimeParts(share.created_at).date} • Expires {formatDateTimeParts(share.expires_at).date}
-                              </div>
-                            </div>
-                            {(isSuperadmin || isAdminEmployee) && !share.is_revoked && !isExpired && (
-                              <button
-                                type="button"
-                                className="btn-outline"
-                                style={{ padding: '2px 8px', fontSize: '11px', color: '#b91c1c', borderColor: '#fca5a5' }}
-                                onClick={() => handleRevokeShareLink(share)}
-                              >
-                                Revoke Link
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Audit & Workflow Trail */}
-                <div style={{ fontSize: '12px', color: '#64748b', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
-                  <div><strong>Created By:</strong> {selectedOrder.created_by_name || 'Staff'} on {formatDateTimeParts(selectedOrder.created_at).date}</div>
-                  {selectedOrder.completion_requested_at && (
-                    <div style={{ marginTop: '4px' }}>
-                      <strong>Completed By:</strong> {selectedOrder.completed_by_name} ({selectedOrder.completed_by_employee_code || '—'}) on {formatDateTimeParts(selectedOrder.completion_requested_at).date}
-                      <br /><em>Remarks:</em> {selectedOrder.employee_remarks}
-                    </div>
-                  )}
-                  {selectedOrder.completion_approved_at && (
-                    <div style={{ marginTop: '4px', color: '#166534' }}>
-                      <strong>Approved By:</strong> {selectedOrder.approved_by_name} on {formatDateTimeParts(selectedOrder.completion_approved_at).date}
-                      {selectedOrder.head_remarks && <><br /><em>Head Remarks:</em> {selectedOrder.head_remarks}</>}
-                    </div>
-                  )}
-                  {selectedOrder.cancelled_at && (
-                    <div style={{ marginTop: '4px', color: '#b91c1c' }}>
-                      <strong>Cancelled By:</strong> {selectedOrder.cancelled_by_name} on {formatDateTimeParts(selectedOrder.cancelled_at).date}
-                      <br /><em>Reason:</em> {selectedOrder.cancellation_reason}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Sticky Footer Actions */}
-              <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  {isSuperadmin && !['completed', 'cancelled'].includes(selectedOrder.status) && (
-                    <button
-                      type="button"
-                      className="btn-outline"
-                      style={{ color: '#ef4444', borderColor: '#ef4444', minHeight: '44px', padding: '8px 16px', fontWeight: 600 }}
-                      onClick={() => handleOpenActionModal('cancel', selectedOrder)}
-                    >
-                      Cancel Order
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  {/* Customer Communication Action Group */}
-                  {!isInventoryStaff && (
-                    <div
-                      className="customer-communication-actions"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}
-                    >
-                      {/* 1. Circular Customer WhatsApp Button */}
+                      {/* Direct Customer WhatsApp Dispatch */}
                       <button
                         type="button"
-                        id="order-customer-whatsapp-btn"
+                        className="btn-outline btn-sm"
                         onClick={() => handleCustomerWhatsApp(displayOrder)}
                         disabled={!isCustWhatsAppValid}
                         title={
                           isCustWhatsAppValid
-                            ? `WhatsApp Customer Order Details (${custPhone})`
+                            ? `Open WhatsApp to dispatch order to ${custPhone}`
                             : 'No valid customer WhatsApp number registered'
                         }
                         style={{
-                          width: '44px',
-                          height: '44px',
-                          minWidth: '44px',
-                          minHeight: '44px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: isCustWhatsAppValid ? '#25D366' : '#94a3b8',
-                          color: '#ffffff',
+                          padding: '6px 12px',
+                          fontWeight: 600,
+                          color: isCustWhatsAppValid ? '#16a34a' : '#94a3b8',
+                          borderColor: isCustWhatsAppValid ? '#86efac' : '#cbd5e1',
+                          background: '#ffffff',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed',
-                          boxShadow: isCustWhatsAppValid ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
-                          padding: 0,
-                          transition: 'all 0.15s ease'
+                          gap: '6px',
+                          fontSize: '0.84rem',
+                          cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed'
                         }}
-                        aria-label="WhatsApp Customer Order Details"
                       >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z"/>
-                        </svg>
+                        <span>💬</span>
+                        <span>WhatsApp Customer</span>
                       </button>
 
-                      {/* 2. Circular Customer Copy / Notepad Button */}
-                      <button
-                        type="button"
-                        id="order-customer-copy-btn"
-                        onClick={() => handleCustomerCopy(displayOrder)}
-                        title={copyFeedback ? 'Order details copied!' : 'Copy Customer Order Details'}
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          minWidth: '44px',
-                          minHeight: '44px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: copyFeedback ? '#16a34a' : '#0284c7',
-                          color: '#ffffff',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
-                          padding: 0,
-                          transition: 'all 0.15s ease'
-                        }}
-                        aria-label="Copy Customer Order Details"
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                      </button>
+                      {/* Update / Record Payment Action */}
+                      {currentBal > 0 && displayOrder.status !== 'cancelled' && !isInventoryStaff && (
+                        <button
+                          type="button"
+                          className="btn-primary btn-sm"
+                          onClick={() => handleOpenPaymentModal(displayOrder)}
+                          style={{
+                            padding: '6px 14px',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.84rem'
+                          }}
+                        >
+                          <span>💳</span>
+                          <span>Record Payment</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                      {/* 3. Circular Customer Email Button */}
-                      <button
-                        type="button"
-                        id="order-customer-email-btn"
-                        onClick={() => handleCustomerEmail(displayOrder)}
-                        disabled={!isCustEmailValid}
-                        title={
-                          isCustEmailValid
-                            ? `Email Customer Order Details (${custEmail})`
-                            : 'No customer email registered'
-                        }
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          minWidth: '44px',
-                          minHeight: '44px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: isCustEmailValid ? '#ea4335' : '#94a3b8',
-                          color: '#ffffff',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: isCustEmailValid ? 'pointer' : 'not-allowed',
-                          boxShadow: isCustEmailValid ? '0 2px 4px rgba(234, 67, 53, 0.3)' : 'none',
-                          padding: 0,
-                          transition: 'all 0.15s ease'
-                        }}
-                        aria-label="Email Customer Order Details"
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                          <polyline points="22,6 12,13 2,6"></polyline>
-                        </svg>
-                      </button>
+                  {/* Contextual Status Alerts (Matching Enquiries Detail Layout) */}
+                  {/* Soft-Removed / Bin Notice */}
+                  {(displayOrder.is_in_bin || displayOrder.is_removed) && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '8px', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                        <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
+                          🚫 Soft-Removed Record in Bin ({displayOrder.removal_category ? displayOrder.removal_category.replace('_', ' ').toUpperCase() : 'CANCELLED / REMOVED'})
+                        </span>
+                        {isSuperadmin && (
+                          <button
+                            type="button"
+                            className="btn-outline btn-sm"
+                            onClick={(e) => handleRestoreFromBin(displayOrder, e)}
+                            style={{ borderColor: '#0d9488', color: '#0d9488', fontSize: '0.8rem', padding: '3px 8px', background: '#ffffff' }}
+                          >
+                            🔄 Restore to Active
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ color: '#b91c1c', fontSize: '0.82rem', marginTop: '4px' }}>
+                        Removed by <strong>{displayOrder.removed_by_name || 'Admin'}</strong> on {formatDateTimeParts(displayOrder.removed_at).date}
+                      </div>
+                      <div style={{ color: '#7f1d1d', fontSize: '0.85rem', marginTop: '6px' }}>
+                        <strong>Mandatory Reason:</strong> {displayOrder.removal_reason || '—'}
+                      </div>
                     </div>
                   )}
-                  {selectedOrder.status === 'new' && !isInventoryStaff && (
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
-                      onClick={() => handleStartOrder(selectedOrder.id)}
+
+                  {/* Permanent Archive Accountability Audit Card (Completed Orders) */}
+                  {(displayOrder.completion_approved_at || displayOrder.status === 'completed') && (
+                    <div
+                      style={{
+                        background: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '8px',
+                        padding: '14px 16px',
+                        marginBottom: '16px'
+                      }}
                     >
-                      Start Processing
-                    </button>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                        <span style={{ fontWeight: 700, color: '#166534', fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>🔒</span> Permanent Accountability &amp; Audit Trail
+                        </span>
+                        <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                          Completed &amp; Head-Approved
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '0.84rem' }}>
+                        <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Completed By (Staff):
+                          </span>
+                          <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
+                            {displayOrder.completed_by_name || 'Staff Member'}
+                          </strong>
+                          {displayOrder.completed_by_employee_code && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                              Code: {displayOrder.completed_by_employee_code}
+                            </span>
+                          )}
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                            Submitted: {formatDateTimeParts(displayOrder.completion_requested_at).date} {formatDateTimeParts(displayOrder.completion_requested_at).time}
+                          </span>
+                        </div>
+
+                        <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Approved By (Head Person):
+                          </span>
+                          <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
+                            {displayOrder.approved_by_name || 'Store Head Person'}
+                          </strong>
+                          {displayOrder.approved_by_employee_code && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                              Code: {displayOrder.approved_by_employee_code}
+                            </span>
+                          )}
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                            Approved: {formatDateTimeParts(displayOrder.completion_approved_at).date} {formatDateTimeParts(displayOrder.completion_approved_at).time}
+                          </span>
+                        </div>
+                      </div>
+
+                      {displayOrder.employee_remarks && (
+                        <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                            Employee Completion Remarks:
+                          </span>
+                          <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                            {displayOrder.employee_remarks}
+                          </p>
+                        </div>
+                      )}
+
+                      {displayOrder.head_remarks && (
+                        <div style={{ marginTop: '10px', background: '#ffffff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                            Head-Person Approval Remarks:
+                          </span>
+                          <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                            {displayOrder.head_remarks}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Customer Info */}
+                  <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '6px' }}>
+                    <div style={{ fontWeight: 600, marginBottom: '6px' }}>Customer Information</div>
+                    <div><strong>Name:</strong> {selectedOrder.customer_name}</div>
+                    <div><strong>Contact:</strong> {selectedOrder.contact_info}</div>
+                  </div>
+
+                  {/* Items Breakdown */}
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: '8px' }}>Line Items</div>
+                    {/* Desktop Table View */}
+                    <div className="order-details-table-desktop" style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                          <tr>
+                            <th style={{ padding: '8px', textAlign: 'left' }}>Product</th>
+                            <th style={{ padding: '8px', textAlign: 'center' }}>Qty</th>
+                            <th style={{ padding: '8px', textAlign: 'right' }}>Unit Price</th>
+                            <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.isArray(selectedOrder.order_items) && selectedOrder.order_items.length > 0 ? (
+                            selectedOrder.order_items.map((it) => (
+                              <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '8px' }}>
+                                  {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
+                                </td>
+                                <td style={{ padding: '8px', textAlign: 'center' }}>{it.quantity}</td>
+                                <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(it.unit_price).toFixed(2)}</td>
+                                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>₹{Number(it.line_total).toFixed(2)}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="4" style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
+                                No line item details available.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Cards View */}
+                    <div className="order-details-cards-mobile">
+                      {Array.isArray(selectedOrder.order_items) && selectedOrder.order_items.length > 0 ? (
+                        selectedOrder.order_items.map((it) => (
+                          <div key={it.id} className="order-detail-card-mobile">
+                            <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                              {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
+                            </div>
+                            <div className="order-detail-card-mobile-row">
+                              <span style={{ color: '#64748b' }}>Qty: <strong>{it.quantity}</strong> × ₹{Number(it.unit_price).toFixed(2)}</span>
+                              <strong style={{ color: '#0f172a' }}>₹{Number(it.line_total).toFixed(2)}</strong>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
+                          No line item details available.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Financial Summary */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
+                    <div>
+                      <div><strong>Payment Method:</strong> {(displayOrder.payment_method || 'cash').toUpperCase()}</div>
+                      <div><strong>Payment Status:</strong> {(displayOrder.payment_status || 'pending').toUpperCase()}</div>
+                    </div>
+                    <div>
+                      <div><strong>Total Amount:</strong> ₹{Number(displayOrder.total_amount).toFixed(2)}</div>
+                      <div><strong>Amount Paid:</strong> ₹{Number(displayOrder.paid_amount).toFixed(2)}</div>
+                      <div style={{ color: currentBal > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
+                        Balance Due: ₹{currentBal.toFixed(2)}
+                      </div>
+                    </div>
+                    {/* Update Payment Button */}
+                    {currentBal > 0 && displayOrder.status !== 'cancelled' && !isInventoryStaff && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{
+                            padding: '8px 16px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                          onClick={() => handleOpenPaymentModal(displayOrder)}
+                        >
+                          💳 Update Payment
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment History */}
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', color: '#0f172a' }}>
+                      Payment History
+                    </div>
+                    {Array.isArray(displayOrder.order_payments) && displayOrder.order_payments.length > 0 ? (
+                      <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                            <tr>
+                              <th style={{ padding: '8px 10px', textAlign: 'left' }}>Date & Time</th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right' }}>Amount</th>
+                              <th style={{ padding: '8px 10px', textAlign: 'center' }}>Method</th>
+                              <th style={{ padding: '8px 10px', textAlign: 'left' }}>Reference</th>
+                              <th style={{ padding: '8px 10px', textAlign: 'left' }}>Received By</th>
+                              <th style={{ padding: '8px 10px', textAlign: 'left' }}>Remarks</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...displayOrder.order_payments]
+                              .sort((a, b) => new Date(a.received_at || a.created_at) - new Date(b.received_at || b.created_at))
+                              .map((pay) => (
+                                <tr key={pay.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '8px 10px', color: '#475569' }}>
+                                    {formatDateTimeParts(pay.received_at || pay.created_at).date}{' '}
+                                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                      {formatDateTimeParts(pay.received_at || pay.created_at).time}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: '#166534' }}>
+                                    ₹{Number(pay.amount_received).toFixed(2)}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                    <span
+                                      style={{
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        background: '#f1f5f9',
+                                        color: '#334155'
+                                      }}
+                                    >
+                                      {(pay.payment_method || 'cash').toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
+                                    {pay.transaction_reference || '—'}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', color: '#334155' }}>
+                                    {pay.received_by_name || 'Staff'}{' '}
+                                    {pay.received_by_employee_code ? (
+                                      <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                        ({pay.received_by_employee_code})
+                                      </span>
+                                    ) : null}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', color: '#64748b', fontSize: '12px' }}>
+                                    {pay.remarks || '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#64748b', fontStyle: 'italic', border: '1px solid #e2e8f0' }}>
+                        No payment transaction history recorded.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Supporting Documents (Order Attachments) */}
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', color: '#0f172a' }}>
+                      Supporting Documents
+                    </div>
+                    {Array.isArray(displayOrder.order_attachments) && displayOrder.order_attachments.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+                        {displayOrder.order_attachments.map((att) => {
+                          const ext = (att.original_filename || '').split('.').pop().toUpperCase()
+                          const isPdf = ext === 'PDF' || att.mime_type === 'application/pdf'
+                          const isDownloading = downloadingAttachmentId === att.id
+                          return (
+                            <div
+                              key={att.id}
+                              style={{
+                                background: '#ffffff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                padding: '10px 12px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                gap: '8px'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                <span
+                                  style={{
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    background: isPdf ? '#fee2e2' : '#e0f2fe',
+                                    color: isPdf ? '#991b1b' : '#0369a1',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {ext || 'FILE'}
+                                </span>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div
+                                    style={{
+                                      fontSize: '13px',
+                                      fontWeight: 500,
+                                      color: '#0f172a',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                    title={att.original_filename}
+                                  >
+                                    {att.original_filename}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                    {formatFileSize(att.file_size)} • {formatDateTimeParts(att.uploaded_at || att.created_at).date}
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                                <span
+                                  style={{
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                    background: att.is_customer_shareable && att.is_head_approved
+                                      ? '#dcfce7'
+                                      : att.share_request_status === 'PENDING'
+                                        ? '#fef3c7'
+                                        : att.share_request_status === 'REJECTED'
+                                          ? '#fee2e2'
+                                          : '#f1f5f9',
+                                    color: att.is_customer_shareable && att.is_head_approved
+                                      ? '#15803d'
+                                      : att.share_request_status === 'PENDING'
+                                        ? '#92400e'
+                                        : att.share_request_status === 'REJECTED'
+                                          ? '#991b1b'
+                                          : '#64748b',
+                                    border: att.is_customer_shareable && att.is_head_approved
+                                      ? '1px solid #bbf7d0'
+                                      : att.share_request_status === 'PENDING'
+                                        ? '1px solid #fde68a'
+                                        : att.share_request_status === 'REJECTED'
+                                          ? '1px solid #fca5a5'
+                                          : '1px solid #e2e8f0'
+                                  }}
+                                  title={
+                                    att.share_request_status === 'REJECTED'
+                                      ? 'Rejected: ' + (att.share_review_rejection_reason || 'By Head Admin')
+                                      : att.share_request_status === 'PENDING'
+                                        ? 'Requested by ' + (att.share_requested_by_name || 'Admin')
+                                        : undefined
+                                  }
+                                >
+                                  {att.is_customer_shareable && att.is_head_approved
+                                    ? `✓ Shareable (${(att.document_type || 'Approved').replace(/_/g, ' ')})`
+                                    : att.share_request_status === 'PENDING'
+                                      ? `⏳ Pending Head Review (${(att.share_requested_document_type || 'Requested').replace(/_/g, ' ')})`
+                                      : att.share_request_status === 'REJECTED'
+                                        ? '❌ Share Request Rejected'
+                                        : '🔒 Internal Only'}
+                                </span>
+
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    className="btn-outline"
+                                    style={{
+                                      padding: '3px 8px',
+                                      fontSize: '11px',
+                                      borderRadius: '4px',
+                                      fontWeight: 600,
+                                      color: '#0284c7'
+                                    }}
+                                    onClick={() => handlePreviewAttachment(att, displayOrder.order_attachments || [])}
+                                  >
+                                    👁️ Preview
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-outline"
+                                    style={{
+                                      padding: '3px 8px',
+                                      fontSize: '11px',
+                                      borderRadius: '4px'
+                                    }}
+                                    disabled={isDownloading}
+                                    onClick={() => handleDownloadAttachment(att)}
+                                    title="Download to device"
+                                  >
+                                    {isDownloading ? 'Downloading...' : '📥 Download'}
+                                  </button>
+
+                                  {/* Head Approval Queue Controls */}
+                                  {isSuperadmin && att.share_request_status === 'PENDING' && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="btn-outline"
+                                        style={{
+                                          padding: '3px 8px',
+                                          fontSize: '11px',
+                                          borderRadius: '4px',
+                                          borderColor: '#86efac',
+                                          color: '#16a34a',
+                                          fontWeight: 600
+                                        }}
+                                        onClick={() => handleReviewOrderAttachmentShareRequest(att, 'APPROVED')}
+                                        title="Head Approve Customer Shareability"
+                                      >
+                                        ✅ Approve Request
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-outline"
+                                        style={{
+                                          padding: '3px 8px',
+                                          fontSize: '11px',
+                                          borderRadius: '4px',
+                                          borderColor: '#fca5a5',
+                                          color: '#dc2626',
+                                          fontWeight: 600
+                                        }}
+                                        onClick={() => handleReviewOrderAttachmentShareRequest(att, 'REJECTED')}
+                                        title="Head Reject Customer Shareability"
+                                      >
+                                        ❌ Reject Request
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {/* Head Direct Approval / Revocation (when not in pending review queue) */}
+                                  {isSuperadmin && att.share_request_status !== 'PENDING' && (
+                                    <button
+                                      type="button"
+                                      className="btn-outline"
+                                      style={{
+                                        padding: '3px 8px',
+                                        fontSize: '11px',
+                                        borderRadius: '4px',
+                                        borderColor: att.is_customer_shareable && att.is_head_approved ? '#fca5a5' : '#86efac',
+                                        color: att.is_customer_shareable && att.is_head_approved ? '#b91c1c' : '#166534'
+                                      }}
+                                      onClick={() => handleToggleOrderAttachmentShareability(att)}
+                                    >
+                                      {att.is_customer_shareable && att.is_head_approved ? 'Revoke Approval' : 'Approve Share'}
+                                    </button>
+                                  )}
+
+                                  {/* Store Admin Shareability Request (Admin cannot self-approve) */}
+                                  {!isSuperadmin && isAdminEmployee && !att.is_customer_shareable && att.share_request_status !== 'PENDING' && (
+                                    <button
+                                      type="button"
+                                      className="btn-outline"
+                                      style={{
+                                        padding: '3px 8px',
+                                        fontSize: '11px',
+                                        borderRadius: '4px',
+                                        borderColor: '#fde68a',
+                                        color: '#92400e',
+                                        fontWeight: 600
+                                      }}
+                                      onClick={() => handleRequestOrderAttachmentShareability(att)}
+                                      title="Submit Customer Shareability Request to Head Admin"
+                                    >
+                                      📝 Request Share
+                                    </button>
+                                  )}
+
+                                  {/* Only Head-Approved Shareable Documents can Generate Customer Links */}
+                                  {(isSuperadmin || isAdminEmployee) && att.is_customer_shareable && att.is_head_approved && (
+                                    <button
+                                      type="button"
+                                      className="btn-outline"
+                                      style={{
+                                        padding: '3px 8px',
+                                        fontSize: '11px',
+                                        borderRadius: '4px',
+                                        borderColor: '#93c5fd',
+                                        color: '#1d4ed8'
+                                      }}
+                                      onClick={() => handleGenerateShareLink(att)}
+                                    >
+                                      🔗 Share Link
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#64748b', fontStyle: 'italic', border: '1px solid #e2e8f0' }}>
+                        No supporting documents attached to this order.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Active Customer Share Links */}
+                  {Array.isArray(displayOrder.order_attachment_shares) && displayOrder.order_attachment_shares.length > 0 && (
+                    <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                        Active Customer Share Links
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {displayOrder.order_attachment_shares.map((share) => {
+                          const isExpired = new Date() >= new Date(share.expires_at)
+                          return (
+                            <div
+                              key={share.id}
+                              style={{
+                                padding: '8px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #e2e8f0',
+                                background: share.is_revoked || isExpired ? '#f8fafc' : '#f0fdf4',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: '12px'
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontWeight: 500, color: share.is_revoked || isExpired ? '#64748b' : '#15803d' }}>
+                                  {share.is_revoked ? '❌ Revoked' : isExpired ? '⏳ Expired' : '✓ Active Share Link'}
+                                  <span style={{ color: '#64748b', fontWeight: 400, marginLeft: '8px' }}>
+                                    ({share.access_count || 0} downloads)
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                  Created {formatDateTimeParts(share.created_at).date} • Expires {formatDateTimeParts(share.expires_at).date}
+                                </div>
+                              </div>
+                              {(isSuperadmin || isAdminEmployee) && !share.is_revoked && !isExpired && (
+                                <button
+                                  type="button"
+                                  className="btn-outline"
+                                  style={{ padding: '2px 8px', fontSize: '11px', color: '#b91c1c', borderColor: '#fca5a5' }}
+                                  onClick={() => handleRevokeShareLink(share)}
+                                >
+                                  Revoke Link
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
                   )}
 
-                  {['new', 'processing'].includes(selectedOrder.status) && !isInventoryStaff && (
+                  {/* Audit & Workflow Trail */}
+                  <div style={{ fontSize: '12px', color: '#64748b', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+                    <div><strong>Created By:</strong> {selectedOrder.created_by_name || 'Staff'} on {formatDateTimeParts(selectedOrder.created_at).date}</div>
+                    {selectedOrder.completion_requested_at && (
+                      <div style={{ marginTop: '4px' }}>
+                        <strong>Completed By:</strong> {selectedOrder.completed_by_name} ({selectedOrder.completed_by_employee_code || '—'}) on {formatDateTimeParts(selectedOrder.completion_requested_at).date}
+                        <br /><em>Remarks:</em> {selectedOrder.employee_remarks}
+                      </div>
+                    )}
+                    {selectedOrder.completion_approved_at && (
+                      <div style={{ marginTop: '4px', color: '#166534' }}>
+                        <strong>Approved By:</strong> {selectedOrder.approved_by_name} on {formatDateTimeParts(selectedOrder.completion_approved_at).date}
+                        {selectedOrder.head_remarks && <><br /><em>Head Remarks:</em> {selectedOrder.head_remarks}</>}
+                      </div>
+                    )}
+                    {selectedOrder.cancelled_at && (
+                      <div style={{ marginTop: '4px', color: '#b91c1c' }}>
+                        <strong>Cancelled By:</strong> {selectedOrder.cancelled_by_name} on {formatDateTimeParts(selectedOrder.cancelled_at).date}
+                        <br /><em>Reason:</em> {selectedOrder.cancellation_reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sticky Footer Actions */}
+                <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    {isSuperadmin && !['completed', 'cancelled'].includes(selectedOrder.status) && (
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        style={{ color: '#ef4444', borderColor: '#ef4444', minHeight: '44px', padding: '8px 16px', fontWeight: 600 }}
+                        onClick={() => handleOpenActionModal('cancel', selectedOrder)}
+                      >
+                        Cancel Order
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* Customer Communication Action Group */}
+                    {!isInventoryStaff && (
+                      <div
+                        className="customer-communication-actions"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}
+                      >
+                        {/* 1. Circular Customer WhatsApp Button */}
+                        <button
+                          type="button"
+                          id="order-customer-whatsapp-btn"
+                          onClick={() => handleCustomerWhatsApp(displayOrder)}
+                          disabled={!isCustWhatsAppValid}
+                          title={
+                            isCustWhatsAppValid
+                              ? `WhatsApp Customer Order Details (${custPhone})`
+                              : 'No valid customer WhatsApp number registered'
+                          }
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            minWidth: '44px',
+                            minHeight: '44px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: isCustWhatsAppValid ? '#25D366' : '#94a3b8',
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed',
+                            boxShadow: isCustWhatsAppValid ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
+                            padding: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                          aria-label="WhatsApp Customer Order Details"
+                        >
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z" />
+                          </svg>
+                        </button>
+
+                        {/* 2. Circular Customer Copy / Notepad Button */}
+                        <button
+                          type="button"
+                          id="order-customer-copy-btn"
+                          onClick={() => handleCustomerCopy(displayOrder)}
+                          title={copyFeedback ? 'Order details copied!' : 'Copy Customer Order Details'}
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            minWidth: '44px',
+                            minHeight: '44px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: copyFeedback ? '#16a34a' : '#0284c7',
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
+                            padding: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                          aria-label="Copy Customer Order Details"
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                        </button>
+
+                        {/* 3. Circular Customer Email Button */}
+                        <button
+                          type="button"
+                          id="order-customer-email-btn"
+                          onClick={() => handleCustomerEmail(displayOrder)}
+                          disabled={!isCustEmailValid}
+                          title={
+                            isCustEmailValid
+                              ? `Email Customer Order Details (${custEmail})`
+                              : 'No customer email registered'
+                          }
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            minWidth: '44px',
+                            minHeight: '44px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: isCustEmailValid ? '#ea4335' : '#94a3b8',
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: isCustEmailValid ? 'pointer' : 'not-allowed',
+                            boxShadow: isCustEmailValid ? '0 2px 4px rgba(234, 67, 53, 0.3)' : 'none',
+                            padding: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                          aria-label="Email Customer Order Details"
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    {selectedOrder.status === 'new' && !isInventoryStaff && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
+                        onClick={() => handleStartOrder(selectedOrder.id)}
+                      >
+                        Start Processing
+                      </button>
+                    )}
+
+                    {['new', 'processing'].includes(selectedOrder.status) && !isInventoryStaff && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
+                        onClick={() => handleOpenActionModal('submit_completion', selectedOrder)}
+                      >
+                        Submit Completion
+                      </button>
+                    )}
+
+                    {selectedOrder.status === 'completion_requested' && isSuperadmin && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        style={{ background: '#16a34a', minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
+                        disabled={selectedOrder.completion_requested_by === adminUser?.id}
+                        title={
+                          selectedOrder.completion_requested_by === adminUser?.id
+                            ? 'Self-approval is blocked: Another superadministrator must approve.'
+                            : 'Approve completion'
+                        }
+                        onClick={() => handleOpenActionModal('approve', selectedOrder)}
+                      >
+                        ✓ Approve Completion
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      className="btn-primary"
-                      style={{ minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
-                      onClick={() => handleOpenActionModal('submit_completion', selectedOrder)}
+                      className="btn-outline"
+                      style={{ minHeight: '44px', padding: '8px 16px', fontWeight: 600 }}
+                      onClick={handleCloseOrderDetails}
                     >
-                      Submit Completion
+                      Close
                     </button>
-                  )}
-
-                  {selectedOrder.status === 'completion_requested' && isSuperadmin && (
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      style={{ background: '#16a34a', minHeight: '44px', padding: '8px 18px', fontWeight: 600 }}
-                      disabled={selectedOrder.completion_requested_by === adminUser?.id}
-                      title={
-                        selectedOrder.completion_requested_by === adminUser?.id
-                          ? 'Self-approval is blocked: Another superadministrator must approve.'
-                          : 'Approve completion'
-                      }
-                      onClick={() => handleOpenActionModal('approve', selectedOrder)}
-                    >
-                      ✓ Approve Completion
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    className="btn-outline"
-                    style={{ minHeight: '44px', padding: '8px 16px', fontWeight: 600 }}
-                    onClick={handleCloseOrderDetails}
-                  >
-                    Close
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ); })()}
+          );
+        })()}
 
         {/* Action Confirmation Modal */}
         {actionModal.type && (
@@ -2513,8 +2426,8 @@ export default function AdminOrdersPage() {
                   {actionModal.type === 'submit_completion'
                     ? 'Submit Order Completion'
                     : actionModal.type === 'approve'
-                    ? 'Approve Order Completion'
-                    : 'Cancel Sales Order'}
+                      ? 'Approve Order Completion'
+                      : 'Cancel Sales Order'}
                 </h2>
                 <button
                   type="button"
@@ -2539,8 +2452,8 @@ export default function AdminOrdersPage() {
                       {actionModal.type === 'submit_completion'
                         ? 'Employee Handover Remarks *'
                         : actionModal.type === 'approve'
-                        ? 'Head Approval Remarks (Optional)'
-                        : 'Cancellation Reason *'}
+                          ? 'Head Approval Remarks (Optional)'
+                          : 'Cancellation Reason *'}
                     </label>
                     <textarea
                       className="form-input"
@@ -2549,8 +2462,8 @@ export default function AdminOrdersPage() {
                         actionModal.type === 'submit_completion'
                           ? 'e.g. Hardware assembled, bench tested, and handed over to customer with GST invoice.'
                           : actionModal.type === 'approve'
-                          ? 'e.g. Verified payments and hardware serials. Approved for permanent archive.'
-                          : 'e.g. Customer cancelled requirement prior to assembly.'
+                            ? 'e.g. Verified payments and hardware serials. Approved for permanent archive.'
+                            : 'e.g. Customer cancelled requirement prior to assembly.'
                       }
                       value={actionModal.notes}
                       onChange={(e) => setActionModal((prev) => ({ ...prev, notes: e.target.value }))}
@@ -2717,6 +2630,7 @@ export default function AdminOrdersPage() {
                 setIsLiveRegisterOpen(false)
                 setSelectedOrder(ord)
               }}
+              onDeleteOrders={handleDeleteMultipleOrders}
               onRefresh={loadAdminOrders}
               isLoading={isLoadingOrders}
             />
@@ -2967,11 +2881,14 @@ export default function AdminOrdersPage() {
             isOpen={Boolean(editingOrder)}
             order={editingOrder}
             onClose={() => setEditingOrder(null)}
-            onOrderUpdated={() => {
+            onOrderUpdated={(result) => {
               showToast('Order updated successfully.', 'success')
               setEditingOrder(null)
               if (selectedOrder && editingOrder && selectedOrder.id === editingOrder.id) {
-                setSelectedOrder(null)
+                if (loadOrderDetails) {
+                  loadOrderDetails(editingOrder.id).catch(() => { })
+                }
+                setSelectedOrder((prev) => (prev ? { ...prev, ...(result && typeof result === 'object' ? result : {}) } : null))
               }
             }}
           />
@@ -2988,7 +2905,7 @@ export default function AdminOrdersPage() {
               isOpen: false,
               order: null,
               category: 'Customer Cancelled',
-              reason: '',
+              reason: DEFAULT_DELETION_REASONS['Customer Cancelled'],
               error: null,
               isSubmitting: false
             })
@@ -3007,7 +2924,7 @@ export default function AdminOrdersPage() {
                     isOpen: false,
                     order: null,
                     category: 'Customer Cancelled',
-                    reason: '',
+                    reason: DEFAULT_DELETION_REASONS['Customer Cancelled'],
                     error: null,
                     isSubmitting: false
                   })
@@ -3034,7 +2951,7 @@ export default function AdminOrdersPage() {
                   <select
                     className="form-select"
                     value={deletionModal.category}
-                    onChange={(e) => setDeletionModal((prev) => ({ ...prev, category: e.target.value }))}
+                    onChange={(e) => handleDeletionCategoryChange(e.target.value)}
                     disabled={deletionModal.isSubmitting}
                   >
                     <option value="Customer Cancelled">Customer Cancelled</option>
@@ -3073,7 +2990,7 @@ export default function AdminOrdersPage() {
                       isOpen: false,
                       order: null,
                       category: 'Customer Cancelled',
-                      reason: '',
+                      reason: DEFAULT_DELETION_REASONS['Customer Cancelled'],
                       error: null,
                       isSubmitting: false
                     })

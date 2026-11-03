@@ -106,8 +106,25 @@ describe('ARS Computers — Step 5 Customer-Shareable Order Attachments Suite', 
     })
     if (orderErr) throw orderErr
 
-    // Upload dummy PDF into storage bucket 'order-attachments'
-    testDummyPdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF')
+    // Upload valid 1-page PDF into storage bucket 'order-attachments'
+    testDummyPdfBuffer = Buffer.from(
+      '%PDF-1.4\n' +
+      '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
+      '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n' +
+      '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n' +
+      '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n' +
+      '5 0 obj\n<< /Length 44 >>\nstream\n' +
+      'BT\n/F1 14 Tf\n72 720 Td\n(ARS Computers - Invoice) Tj\nET\n' +
+      'endstream\nendobj\n' +
+      'xref\n0 6\n' +
+      '0000000000 65535 f \n' +
+      '0000000009 00000 n \n' +
+      '0000000058 00000 n \n' +
+      '0000000115 00000 n \n' +
+      '0000000224 00000 n \n' +
+      '0000000295 00000 n \n' +
+      'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n390\n%%EOF'
+    )
     testStoragePath = `${testOrderId}/customer_tax_invoice_${crypto.randomUUID()}.pdf`
 
     await serviceClient.storage.from('order-attachments').upload(testStoragePath, testDummyPdfBuffer, {

@@ -6897,7 +6897,7 @@
 
 /* Admin Orders Management: Desktop Table vs Mobile Cards */
 .admin-orders-table-desktop {
-  display: table;
+  display: block;
   width: 100%;
 }
 

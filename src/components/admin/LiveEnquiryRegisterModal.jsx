@@ -50,8 +50,8 @@ export default function LiveEnquiryRegisterModal({
 
   // --- Spreadsheet UI Configuration State ---
   const [density, setDensity] = useState('comfortable') // 'compact' | 'comfortable'
-  const [sortColumn, setSortColumn] = useState('received_date')
-  const [sortDirection, setSortDirection] = useState('desc') // 'asc' | 'desc'
+  const [sortColumn, setSortColumn] = useState('enquiry_ref')
+  const [sortDirection, setSortDirection] = useState('asc') // 'asc' | 'desc'
   const [pageSize, setPageSize] = useState(25)
   const [currentPage, setCurrentPage] = useState(1)
 

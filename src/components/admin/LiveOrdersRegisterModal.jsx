@@ -31,6 +31,7 @@ export default function LiveOrdersRegisterModal({
   onClose,
   orders = [],
   onSelectOrder,
+  onDeleteOrders,
   onRefresh,
   isLoading = false
 }) {
@@ -45,8 +46,8 @@ export default function LiveOrdersRegisterModal({
 
   // --- Spreadsheet UI Configuration State ---
   const [density, setDensity] = useState('comfortable')
-  const [sortColumn, setSortColumn] = useState('order_date')
-  const [sortDirection, setSortDirection] = useState('desc')
+  const [sortColumn, setSortColumn] = useState('order_ref')
+  const [sortDirection, setSortDirection] = useState('asc')
   const [pageSize, setPageSize] = useState(25)
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -292,6 +293,48 @@ export default function LiveOrdersRegisterModal({
     }
   }
 
+  const handleToggleSelectRow = (id, e) => {
+    e.stopPropagation()
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleToggleSelectAll = (e) => {
+    e.stopPropagation()
+    if (paginatedRows.every((r) => selectedRowIds.has(r.id))) {
+      setSelectedRowIds((prev) => {
+        const next = new Set(prev)
+        paginatedRows.forEach((r) => next.delete(r.id))
+        return next
+      })
+    } else {
+      setSelectedRowIds((prev) => {
+        const next = new Set(prev)
+        paginatedRows.forEach((r) => next.add(r.id))
+        return next
+      })
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedRowIds.size === 0) return
+    const count = selectedRowIds.size
+    const confirmed = window.confirm(`Are you sure you want to delete / remove ${count} selected order(s) to Bin?`)
+    if (!confirmed) return
+
+    if (onDeleteOrders) {
+      await onDeleteOrders(Array.from(selectedRowIds))
+      setSelectedRowIds(new Set())
+      showToast(`Removed ${count} selected order(s) to Bin.`)
+    } else {
+      showToast(`Delete action unavailable.`)
+    }
+  }
+
   const toggleColumn = (colId) => {
     if (colId === 'order_ref') return // Fixed column
     setVisibleColumns((prev) => ({ ...prev, [colId]: !prev[colId] }))
@@ -300,43 +343,63 @@ export default function LiveOrdersRegisterModal({
   if (!isOpen) return null
 
   return (
-    <div className="live-register-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+    <div className="live-register-overlay" role="dialog" aria-modal="true" aria-labelledby="live-register-title" onClick={onClose}>
       <div className="live-register-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header Bar */}
         <div className="live-register-header">
-          <div className="live-register-header-left">
-            <div className="live-register-badge">📋 LIVE SPREADSHEET</div>
-            <h2 className="live-register-title">Live Orders Register</h2>
-            <span className="live-register-count-pill">
+          <div className="live-register-title-area">
+            <h2 id="live-register-title" className="live-register-title">
+              📋 Live Orders Register
+            </h2>
+            <span className="live-register-badge">PostgreSQL Authoritative</span>
+            <span className="live-register-count-pill" id="live-register-counts">
               Showing {sortedRows.length} of {allRows.length} Orders
             </span>
           </div>
 
-          <div className="live-register-header-right">
+          <div className="live-register-actions-top">
+            <button
+              type="button"
+              className="live-register-btn"
+              style={{
+                background: selectedRowIds.size > 0 ? '#dc2626' : '#f1f5f9',
+                color: selectedRowIds.size > 0 ? '#ffffff' : '#94a3b8',
+                borderColor: selectedRowIds.size > 0 ? '#b91c1c' : '#cbd5e1',
+                cursor: selectedRowIds.size > 0 ? 'pointer' : 'not-allowed',
+                fontWeight: 600
+              }}
+              onClick={handleDeleteSelected}
+              disabled={selectedRowIds.size === 0}
+              title={selectedRowIds.size > 0 ? `Delete ${selectedRowIds.size} selected order(s) to Bin` : 'Select orders using checkboxes to delete'}
+            >
+              🗑️ Delete Selected {selectedRowIds.size > 0 ? `(${selectedRowIds.size})` : ''}
+            </button>
+
             <button
               type="button"
               id="export-current-view-btn"
-              className="live-register-export-btn"
+              className="live-register-btn live-register-btn-export"
               onClick={handleExportView}
               disabled={isExporting}
             >
-              📥 {isExporting ? 'Generating...' : 'Export Current View'}
+              {isExporting ? 'Generating...' : '📥 Export Current View'}
             </button>
 
             <button
               type="button"
               id="live-register-refresh-btn"
-              className="live-register-refresh-btn"
+              className="live-register-btn live-register-btn-refresh"
               onClick={onRefresh}
               disabled={isLoading}
               title="Refresh register from database"
             >
-              🔄 {isLoading ? 'Loading...' : 'Refresh'}
+              {isLoading ? 'Loading...' : '🔄 Refresh'}
             </button>
 
             <button
               type="button"
-              className="live-register-close-btn"
+              id="live-register-close-btn"
+              className="live-register-btn live-register-btn-close"
               onClick={onClose}
               aria-label="Close live register"
             >
@@ -345,149 +408,86 @@ export default function LiveOrdersRegisterModal({
           </div>
         </div>
 
-        {/* Toolbar & Filter Controls */}
-        <div className="live-register-toolbar">
-          <div className="live-register-search-wrap">
-            <span className="search-icon">🔍</span>
-            <input
-              id="register-search-input"
-              type="text"
-              className="live-register-search-input"
-              placeholder="Search reference, customer, item, payment..."
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-            />
-            {globalSearch && (
-              <button
-                type="button"
-                className="clear-search-btn"
-                onClick={() => setGlobalSearch('')}
-              >
-                ✕
-              </button>
-            )}
-          </div>
+        {/* Toolbars & Filter Controls */}
+        <div className="live-register-toolbars">
+          {/* Row 1: Global Search & Quick Status Filter Chips & Density/Columns */}
+          <div className="live-register-row-top">
+            <div className="live-register-search-wrap">
+              <span className="live-register-search-icon">🔍</span>
+              <input
+                id="register-search-input"
+                type="text"
+                className="live-register-search-input"
+                placeholder="Search reference, customer, item, payment..."
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+              />
+              {globalSearch && (
+                <button
+                  type="button"
+                  className="live-register-search-clear"
+                  onClick={() => setGlobalSearch('')}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
-          {/* Quick Status Filter Tabs */}
-          <div className="live-register-quick-filters">
-            {ORDER_STATUS_QUICK_FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={`quick-filter-chip ${statusQuickFilter === f.id ? 'active' : ''}`}
-                onClick={() => setStatusQuickFilter(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Dropdown Multi-filters */}
-          <div className="live-register-dropdown-filters">
-            <select
-              className="register-filter-select"
-              value={paymentStatusFilter}
-              onChange={(e) => setPaymentStatusFilter(e.target.value)}
-              title="Filter by payment status"
-            >
-              <option value="all">All Payment Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="partial">Partial</option>
-              <option value="paid">Paid</option>
-            </select>
-
-            <select
-              className="register-filter-select"
-              value={paymentMethodFilter}
-              onChange={(e) => setPaymentMethodFilter(e.target.value)}
-              title="Filter by payment method"
-            >
-              <option value="all">All Payment Methods</option>
-              {filterOptions.methods.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+            {/* Quick Status Filter Tabs */}
+            <div className="live-register-status-chips" id="status-quick-filters">
+              {ORDER_STATUS_QUICK_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`live-register-chip ${statusQuickFilter === f.id ? 'active' : ''}`}
+                  onClick={() => setStatusQuickFilter(f.id)}
+                >
+                  {f.label}
+                </button>
               ))}
-            </select>
+            </div>
 
-            <select
-              className="register-filter-select"
-              value={employeeFilter}
-              onChange={(e) => setEmployeeFilter(e.target.value)}
-              title="Filter by completed staff"
-            >
-              <option value="all">All Completed Staff</option>
-              {filterOptions.employees.map((emp) => (
-                <option key={emp} value={emp}>
-                  {emp}
-                </option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Density Toggle */}
+              <div className="live-register-filter-group">
+                <span className="live-register-filter-label">Density:</span>
+                <select
+                  className="live-register-select"
+                  value={density}
+                  onChange={(e) => setDensity(e.target.value)}
+                  title="Table row spacing"
+                >
+                  <option value="comfortable">Spacious</option>
+                  <option value="compact">Compact</option>
+                </select>
+              </div>
 
-            <select
-              className="register-filter-select"
-              value={approvalMonth}
-              onChange={(e) => setApprovalMonth(e.target.value)}
-              title="Filter by approval month"
-            >
-              <option value="all">All Approval Months</option>
-              {MONTH_NAMES.map((name, idx) => (
-                <option key={name} value={idx}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              {/* Columns Selector Popover */}
+              <div className="live-register-columns-dropdown-wrap">
+                <button
+                  type="button"
+                  id="columns-toggle-btn"
+                  className="live-register-btn-secondary"
+                  onClick={() => setIsColumnsPanelOpen(!isColumnsPanelOpen)}
+                >
+                  ⚙️ Columns ({ORDER_REGISTER_COLUMNS.filter((c) => visibleColumns[c.id]).length})
+                </button>
 
-            <select
-              className="register-filter-select"
-              value={approvalYear}
-              onChange={(e) => setApprovalYear(e.target.value)}
-              title="Filter by approval year"
-            >
-              <option value="all">All Years</option>
-              {filterOptions.years.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-
-            {/* Density Toggle */}
-            <button
-              type="button"
-              className="density-toggle-btn"
-              onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}
-              title={`Switch to ${density === 'compact' ? 'comfortable' : 'compact'} row density`}
-            >
-              {density === 'compact' ? '📏 Compact' : '📐 Spacious'}
-            </button>
-
-            {/* Columns Visibility Button */}
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                id="columns-toggle-btn"
-                className="columns-toggle-btn"
-                onClick={() => setIsColumnsPanelOpen(!isColumnsPanelOpen)}
-              >
-                ⚙️ Columns
-              </button>
-
-              {isColumnsPanelOpen && (
-                <div className="columns-visibility-dropdown">
-                  <div className="columns-dropdown-header">
-                    <span>Show / Hide Columns</span>
-                    <button
-                      type="button"
-                      className="close-dropdown-btn"
-                      onClick={() => setIsColumnsPanelOpen(false)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="columns-dropdown-list">
+                {isColumnsPanelOpen && (
+                  <div className="live-register-columns-panel">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.8rem', color: '#1e293b' }}>Show / Hide Columns</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsColumnsPanelOpen(false)}
+                        style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.85rem' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
                     {ORDER_REGISTER_COLUMNS.map((col) => (
-                      <label key={col.id} className="column-checkbox-label">
+                      <label key={col.id} className="live-register-column-item">
                         <input
                           type="checkbox"
                           checked={visibleColumns[col.id]}
@@ -498,38 +498,134 @@ export default function LiveOrdersRegisterModal({
                       </label>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Secondary Dropdown Multi-filters */}
+          <div className="live-register-row-secondary">
+            <div className="live-register-filter-group">
+              <span className="live-register-filter-label">Payment:</span>
+              <select
+                className="live-register-select"
+                value={paymentStatusFilter}
+                onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                title="Filter by payment status"
+              >
+                <option value="all">All Payment Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="partial">Partial</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
+
+            <div className="live-register-filter-group">
+              <span className="live-register-filter-label">Method:</span>
+              <select
+                className="live-register-select"
+                value={paymentMethodFilter}
+                onChange={(e) => setPaymentMethodFilter(e.target.value)}
+                title="Filter by payment method"
+              >
+                <option value="all">All Payment Methods</option>
+                {filterOptions.methods.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="live-register-filter-group">
+              <span className="live-register-filter-label">Staff:</span>
+              <select
+                className="live-register-select"
+                value={employeeFilter}
+                onChange={(e) => setEmployeeFilter(e.target.value)}
+                title="Filter by completed staff"
+              >
+                <option value="all">All Completed Staff</option>
+                {filterOptions.employees.map((emp) => (
+                  <option key={emp} value={emp}>
+                    {emp}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="live-register-filter-group">
+              <span className="live-register-filter-label">Month:</span>
+              <select
+                className="live-register-select"
+                value={approvalMonth}
+                onChange={(e) => setApprovalMonth(e.target.value)}
+                title="Filter by approval month"
+              >
+                <option value="all">All Approval Months</option>
+                {MONTH_NAMES.map((name, idx) => (
+                  <option key={name} value={idx}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="live-register-filter-group">
+              <span className="live-register-filter-label">Year:</span>
+              <select
+                className="live-register-select"
+                value={approvalYear}
+                onChange={(e) => setApprovalYear(e.target.value)}
+                title="Filter by approval year"
+              >
+                <option value="all">All Years</option>
+                {filterOptions.years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
 
         {/* Spreadsheet Table Viewport */}
         <div className={`live-register-viewport ${density}`}>
-          <table className="live-register-table">
+          <table className={`live-register-table ${density}`}>
             <thead>
               <tr>
+                <th
+                  className="live-register-th live-register-th-sticky-check"
+                  style={{ width: '44px', minWidth: '44px', maxWidth: '44px', textAlign: 'center' }}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label="Select all orders on this page"
+                    checked={paginatedRows.length > 0 && paginatedRows.every((r) => selectedRowIds.has(r.id))}
+                    onChange={handleToggleSelectAll}
+                  />
+                </th>
                 {ORDER_REGISTER_COLUMNS.filter((col) => visibleColumns[col.id]).map((col) => (
                   <th
                     key={col.id}
                     style={{
                       width: columnWidths[col.id],
-                      minWidth: col.minWidth,
-                      cursor: col.sortable ? 'pointer' : 'default'
+                      minWidth: col.minWidth
                     }}
-                    className={`${col.fixed ? 'sticky-col' : ''} ${sortColumn === col.id ? 'sorted' : ''}`}
+                    className={`live-register-th ${col.fixed ? 'live-register-th-sticky-ref' : ''} ${col.sortable ? 'live-register-th-clickable' : ''} ${sortColumn === col.id ? 'sorted' : ''}`}
                     onClick={() => handleSort(col.id)}
                   >
-                    <div className="th-content">
+                    <div className="live-register-th-content">
                       <span>{col.label}</span>
                       {col.sortable && (
-                        <span className="sort-indicator">
+                        <span className="live-register-sort-indicator">
                           {sortColumn === col.id ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
                         </span>
                       )}
                     </div>
                     <div
-                      className="col-resizer"
+                      className="live-register-col-resizer"
                       onMouseDown={(e) => handleResizeStart(col.id, e)}
                     />
                   </th>
@@ -540,17 +636,17 @@ export default function LiveOrdersRegisterModal({
               {paginatedRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={ORDER_REGISTER_COLUMNS.filter((c) => visibleColumns[c.id]).length}
-                    style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}
+                    colSpan={ORDER_REGISTER_COLUMNS.filter((c) => visibleColumns[c.id]).length + 1}
+                    className="live-register-empty"
                   >
                     No sales orders match your search and filter criteria.
                   </td>
                 </tr>
               ) : (
-                paginatedRows.map((row) => (
+                paginatedRows.map((row, idx) => (
                   <tr
                     key={row.id}
-                    className={selectedRowIds.has(row.id) ? 'selected-row' : ''}
+                    className={`live-register-tr ${idx % 2 === 1 ? 'zebra' : ''} ${selectedRowIds.has(row.id) ? 'selected' : ''}`}
                     onClick={(e) => {
                       if (e.ctrlKey || e.metaKey) {
                         setSelectedRowIds((prev) => {
@@ -564,7 +660,31 @@ export default function LiveOrdersRegisterModal({
                       if (onSelectOrder) onSelectOrder(row.raw)
                     }}
                   >
-                    {ORDER_REGISTER_COLUMNS.filter((c) => visibleColumns[c.id]).map((col) => {
+                    <td
+                      className="live-register-td live-register-td-sticky-check"
+                      style={{ width: '44px', minWidth: '44px', maxWidth: '44px', textAlign: 'center' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label={`Select order ${row.order_ref}`}
+                        checked={selectedRowIds.has(row.id)}
+                        onChange={(e) => handleToggleSelectRow(row.id, e)}
+                      />
+                    </td>
+                    <td
+                          className="live-register-td live-register-td-sticky-check"
+                          style={{ width: '44px', minWidth: '44px', maxWidth: '44px', textAlign: 'center' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            aria-label={`Select order ${row.order_ref}`}
+                            checked={selectedRowIds.has(row.id)}
+                            onChange={(e) => handleToggleSelectRow(row.id, e)}
+                          />
+                        </td>
+                        {ORDER_REGISTER_COLUMNS.filter((c) => visibleColumns[c.id]).map((col) => {
                       const val = row[col.id]
                       const isRef = col.id === 'order_ref'
                       const isAmount = ['total_amount', 'paid_amount', 'balance_amount'].includes(col.id)
@@ -572,27 +692,45 @@ export default function LiveOrdersRegisterModal({
                       return (
                         <td
                           key={col.id}
-                          className={`${col.fixed ? 'sticky-col' : ''} ${isAmount ? 'align-right' : ''}`}
+                          className={`live-register-td ${col.fixed ? 'live-register-td-sticky-ref' : ''} ${isAmount ? 'align-right' : ''}`}
                           onDoubleClick={(e) => handleCopyCell(val, e)}
                           title="Double-click to copy cell value"
                         >
-                          {isRef ? (
-                            <span className="order-ref-pill">{val}</span>
-                          ) : col.id === 'payment_status' ? (
-                            <span
-                              className={`status-pill ${
-                                val === 'PAID' ? 'status-paid' : val === 'PARTIAL' ? 'status-partial' : 'status-pending'
-                              }`}
-                            >
-                              {val}
+                          <div className="live-register-cell-content">
+                            <span className="live-register-cell-text">
+                              {isRef ? (
+                                <span style={{ fontWeight: 700, color: '#1e40af' }}>{val}</span>
+                              ) : col.id === 'payment_status' ? (
+                                <span
+                                  className={`live-register-status-badge ${
+                                    val === 'PAID' ? 'status-paid' : val === 'PARTIAL' ? 'status-partial' : 'status-pending'
+                                  }`}
+                                  style={{
+                                    backgroundColor: val === 'PAID' ? '#dcfce7' : val === 'PARTIAL' ? '#fef3c7' : '#fee2e2',
+                                    color: val === 'PAID' ? '#15803d' : val === 'PARTIAL' ? '#b45309' : '#b91c1c'
+                                  }}
+                                >
+                                  {val}
+                                </span>
+                              ) : col.id === 'order_status' ? (
+                                <span className={`live-register-status-badge status-${val}`}>
+                                  {val}
+                                </span>
+                              ) : isAmount ? (
+                                <span style={{ fontWeight: 600 }}>₹{val}</span>
+                              ) : (
+                                val
+                              )}
                             </span>
-                          ) : col.id === 'order_status' ? (
-                            <span className={`status-pill status-${val}`}>{val}</span>
-                          ) : isAmount ? (
-                            <span style={{ fontWeight: 600 }}>₹{val}</span>
-                          ) : (
-                            val
-                          )}
+                            <button
+                              type="button"
+                              className="live-register-copy-btn"
+                              onClick={(e) => handleCopyCell(val, e)}
+                              title="Copy cell value"
+                            >
+                              📋
+                            </button>
+                          </div>
                         </td>
                       )
                     })}
@@ -605,12 +743,12 @@ export default function LiveOrdersRegisterModal({
 
         {/* Footer / Pagination */}
         <div className="live-register-footer">
-          <div className="footer-left">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span>
-              Page {currentPage} of {totalPages} ({sortedRows.length} filtered records)
+              Page {safeCurrentPage} of {totalPages} ({sortedRows.length} filtered records)
             </span>
             <select
-              className="page-size-select"
+              className="live-register-select"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
             >
@@ -621,19 +759,19 @@ export default function LiveOrdersRegisterModal({
             </select>
           </div>
 
-          <div className="footer-right">
+          <div className="live-register-pagination-controls">
             <button
               type="button"
-              className="pagination-btn"
-              disabled={currentPage <= 1}
+              className="live-register-page-btn"
+              disabled={safeCurrentPage <= 1}
               onClick={() => setCurrentPage((p) => p - 1)}
             >
               ◀ Previous
             </button>
             <button
               type="button"
-              className="pagination-btn"
-              disabled={currentPage >= totalPages}
+              className="live-register-page-btn"
+              disabled={safeCurrentPage >= totalPages}
               onClick={() => setCurrentPage((p) => p + 1)}
             >
               Next ▶

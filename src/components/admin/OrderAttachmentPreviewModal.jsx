@@ -192,6 +192,10 @@ export default function OrderAttachmentPreviewModal({
     ext === 'pdf' ||
     Boolean(currentAttachment.original_filename?.toLowerCase().endsWith('.pdf'))
 
+  // Check if previewUrl is an SVG data URI (e.g. vector document fallback) vs real binary PDF
+  const isSvgPreview = typeof previewUrl === 'string' && previewUrl.startsWith('data:image/')
+  const isEmbedPdf = isPdf && !isSvgPreview
+
   const formattedSize = currentAttachment.file_size || currentAttachment.file_size_bytes
     ? `${((currentAttachment.file_size || currentAttachment.file_size_bytes) / 1024).toFixed(1)} KB`
     : null
@@ -280,8 +284,8 @@ export default function OrderAttachmentPreviewModal({
 
         {/* Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          {/* Zoom Controls for Photos */}
-          {!isPdf && previewUrl && !loadError && (
+          {/* Zoom Controls for Photos & Vector Documents */}
+          {!isEmbedPdf && previewUrl && !loadError && (
             <div
               style={{
                 display: 'inline-flex',
@@ -547,7 +551,7 @@ export default function OrderAttachmentPreviewModal({
 
           {/* Successful Render */}
           {!isLoading && !loadError && previewUrl && (
-            isPdf ? (
+            isEmbedPdf ? (
               /* PDF In-App Viewer */
               <div
                 style={{
@@ -587,47 +591,42 @@ export default function OrderAttachmentPreviewModal({
                   </a>
                 </div>
 
-                {/* PDF Embedded Object */}
-                <object
-                  data={`${previewUrl}#toolbar=1&navpanes=0`}
-                  type="application/pdf"
-                  style={{ width: '100%', flex: 1, minHeight: '68vh', border: 'none' }}
+                {/* PDF Embedded Frame */}
+                <iframe
+                  src={`${previewUrl}#toolbar=1&navpanes=0`}
+                  title={filename}
+                  style={{ width: '100%', flex: 1, minHeight: '68vh', border: 'none', backgroundColor: '#f8fafc' }}
+                />
+                <div
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#0f172a',
+                    color: '#94a3b8',
+                    fontSize: '11px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderTop: '1px solid #334155'
+                  }}
                 >
-                  <iframe
-                    src={`${previewUrl}#toolbar=1&navpanes=0`}
-                    title={filename}
-                    style={{ width: '100%', height: '100%', border: 'none' }}
-                  />
-                  <div
-                    style={{
-                      padding: '32px 20px',
-                      textAlign: 'center',
-                      backgroundColor: '#0f172a',
-                      color: '#f8fafc'
-                    }}
-                  >
-                    <p style={{ margin: '0 0 14px 0', fontSize: '14px' }}>
-                      Your browser does not support inline PDF rendering.
-                    </p>
-                    <a
-                      href={previewUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'inline-block',
-                        padding: '8px 16px',
-                        backgroundColor: '#2563eb',
-                        color: '#ffffff',
-                        borderRadius: '6px',
-                        textDecoration: 'none',
-                        fontSize: '13px',
-                        fontWeight: 600
-                      }}
+                  <span>💡 Tip: If your browser blocks inline PDF rendering, you can open or download the document directly.</span>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={handleOpenInNewTab}
+                      style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '11px', textDecoration: 'underline' }}
                     >
-                      Open PDF Document
-                    </a>
+                      Open in Tab ↗
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '11px', textDecoration: 'underline' }}
+                    >
+                      Download PDF 📥
+                    </button>
                   </div>
-                </object>
+                </div>
               </div>
             ) : (
               /* Photo / Image In-App Viewer */
