@@ -110,7 +110,7 @@ describe('ARS Computers — Orders & Sales Excel Export & Editability Unit Tests
     assert.equal(dataRow.getCell(5).value, 1)
     assert.equal(dataRow.getCell(6).value, 15000)
     assert.equal(dataRow.getCell(7).value, 15000)
-    assert.equal(dataRow.getCell(8).value, 'PAID')
+    assert.equal(dataRow.getCell(8).value, 'RECEIVED')
 
     // Totals row check
     let foundTotal = false

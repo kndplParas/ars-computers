@@ -516,7 +516,7 @@ export default function LiveOrdersRegisterModal({
                 <option value="all">All Payment Statuses</option>
                 <option value="pending">Pending</option>
                 <option value="partial">Partial</option>
-                <option value="paid">Paid</option>
+                <option value="paid">Received</option>
               </select>
             </div>
 
@@ -703,14 +703,14 @@ export default function LiveOrdersRegisterModal({
                               ) : col.id === 'payment_status' ? (
                                 <span
                                   className={`live-register-status-badge ${
-                                    val === 'PAID' ? 'status-paid' : val === 'PARTIAL' ? 'status-partial' : 'status-pending'
+                                    val === 'PAID' || val === 'RECEIVED' ? 'status-paid' : val === 'PARTIAL' ? 'status-partial' : 'status-pending'
                                   }`}
                                   style={{
-                                    backgroundColor: val === 'PAID' ? '#dcfce7' : val === 'PARTIAL' ? '#fef3c7' : '#fee2e2',
-                                    color: val === 'PAID' ? '#15803d' : val === 'PARTIAL' ? '#b45309' : '#b91c1c'
+                                    backgroundColor: val === 'PAID' || val === 'RECEIVED' ? '#dcfce7' : val === 'PARTIAL' ? '#fef3c7' : '#fee2e2',
+                                    color: val === 'PAID' || val === 'RECEIVED' ? '#15803d' : val === 'PARTIAL' ? '#b45309' : '#b91c1c'
                                   }}
                                 >
-                                  {val}
+                                  {val === 'PAID' ? 'RECEIVED' : val}
                                 </span>
                               ) : col.id === 'order_status' ? (
                                 <span className={`live-register-status-badge status-${val}`}>

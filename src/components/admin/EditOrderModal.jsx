@@ -760,7 +760,7 @@ export default function EditOrderModal({ isOpen, onClose, order, onOrderUpdated 
                 <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
                   <span>Subtotal: ₹{calculatedSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   <span style={{ margin: '0 8px' }}>•</span>
-                  <span>Paid So Far: ₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span>Received So Far: ₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Order Total:</span>

@@ -1100,7 +1100,7 @@ export default function BusinessAnalyticsOverlay({ isOpen, onClose }) {
                             <th>Order Date</th>
                             <th>Status</th>
                             <th className="text-right">Total Amount</th>
-                            <th className="text-right">Paid Amount</th>
+                            <th className="text-right">Received Amount</th>
                             <th className="text-right">Balance Due</th>
                           </tr>
                         </thead>

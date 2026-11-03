@@ -292,7 +292,8 @@ function formatStatusCell(cell, statusText, type = 'payment') {
   cell.alignment = { vertical: 'middle', horizontal: 'center' }
 
   if (type === 'payment') {
-    if (norm === 'PAID') {
+    if (norm === 'PAID' || norm === 'RECEIVED') {
+      cell.value = 'RECEIVED'
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } } // Green
       cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF166534' } }
     } else if (norm === 'PARTIAL') {
@@ -369,7 +370,7 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
     { header: 'Products / Items', key: 'items_summary', width: 42 },
     { header: 'Quantity', key: 'total_qty', width: 12 },
     { header: 'Total Amount (₹)', key: 'total_amount', width: 20 },
-    { header: 'Amount Paid (₹)', key: 'paid_amount', width: 20 },
+    { header: 'Amount Received (₹)', key: 'paid_amount', width: 20 },
     { header: 'Balance (₹)', key: 'balance_amount', width: 18 },
     { header: 'Payment Status', key: 'payment_status', width: 16 },
     { header: 'Order Status', key: 'order_status', width: 16 },
@@ -417,7 +418,7 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
       total_amount: total,
       paid_amount: paid,
       balance_amount: balance,
-      payment_status: paymentStatus.toUpperCase(),
+      payment_status: paymentStatus.toUpperCase() === 'PAID' ? 'RECEIVED' : paymentStatus.toUpperCase(),
       order_status: (order.status || 'new').toUpperCase(),
       assigned_engineer: order.assigned_engineer_name || 'Unassigned',
       delivery_details: delivery.date !== '—' ? delivery.date : (order.employee_remarks || '—')
@@ -518,7 +519,8 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
 
     const customer = order.customer_name || '—'
     const orderRef = order.order_number || order.id || '—'
-    const paymentStatus = (order.payment_status || (Number(order.paid_amount) >= Number(order.total_amount) ? 'paid' : 'partial')).toUpperCase()
+    const rawPaymentStatus = (order.payment_status || (Number(order.paid_amount) >= Number(order.total_amount) ? 'paid' : 'partial')).toUpperCase()
+    const paymentStatus = rawPaymentStatus === 'PAID' ? 'RECEIVED' : rawPaymentStatus
 
     if (Array.isArray(order.order_items) && order.order_items.length > 0) {
       order.order_items.forEach((item) => {
@@ -673,7 +675,7 @@ export async function downloadMonthlySalesExcel(allOrders, targetMonthIndex, tar
     { label: 'Pending & In-Progress Orders', value: pendingOrdersCount, isCurrency: false },
     { label: 'Cancelled Orders', value: cancelledOrdersCount, isCurrency: false },
     { label: 'Total Sales (Completed Sales Revenue)', value: totalSalesRevenue, isCurrency: true },
-    { label: 'Total Paid Amount Collected', value: totalPaidSum, isCurrency: true },
+    { label: 'Total Amount Received (Collected)', value: totalPaidSum, isCurrency: true },
     { label: 'Total Outstanding Pending Payments', value: pendingPaymentsBalance, isCurrency: true },
     { label: 'Total Order Book Value (Pipeline)', value: totalOrdersSum, isCurrency: true }
   ]

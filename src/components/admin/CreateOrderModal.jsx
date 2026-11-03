@@ -259,7 +259,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
     }
 
     if (numPaid > calculatedTotal) {
-      setFormError('Paid amount cannot exceed the order total.')
+      setFormError('Received amount cannot exceed the order total.')
       return
     }
 
@@ -751,13 +751,13 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
 
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <label className="form-label" style={{ margin: 0 }}>Amount Paid (₹)</label>
+                    <label className="form-label" style={{ margin: 0 }}>Amount Received (₹)</label>
                     <button
                       type="button"
                       onClick={handlePayInFull}
                       style={{ fontSize: '12px', background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', textDecoration: 'underline', padding: '4px' }}
                     >
-                      Paid in Full
+                      Received in Full
                     </button>
                   </div>
                   <input
@@ -805,11 +805,11 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                       borderRadius: '999px',
                       fontSize: '12px',
                       fontWeight: 600,
-                      background: derivedPaymentStatus === 'PAID' ? '#dcfce7' : derivedPaymentStatus === 'PARTIAL' ? '#fef3c7' : '#fee2e2',
-                      color: derivedPaymentStatus === 'PAID' ? '#166534' : derivedPaymentStatus === 'PARTIAL' ? '#92400e' : '#991b1b'
+                      background: derivedPaymentStatus === 'PAID' || derivedPaymentStatus === 'RECEIVED' ? '#dcfce7' : derivedPaymentStatus === 'PARTIAL' ? '#fef3c7' : '#fee2e2',
+                      color: derivedPaymentStatus === 'PAID' || derivedPaymentStatus === 'RECEIVED' ? '#166534' : derivedPaymentStatus === 'PARTIAL' ? '#92400e' : '#991b1b'
                     }}
                   >
-                    {derivedPaymentStatus}
+                    {derivedPaymentStatus === 'PAID' ? 'RECEIVED' : derivedPaymentStatus}
                   </span>
                 </div>
               </div>

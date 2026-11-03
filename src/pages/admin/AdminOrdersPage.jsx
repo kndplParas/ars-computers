@@ -278,16 +278,25 @@ export default function AdminOrdersPage() {
     setIsCustomerEmailModalOpen(true)
   }
 
-  // Inline Attachment Preview Handler (LightBox, No Auto-Download)
-  const handlePreviewAttachment = (attachment, allAttachments = []) => {
-    if (!attachment) return
-    const attList = allAttachments.length > 0 ? allAttachments : [attachment]
-    const idx = attList.findIndex((a) => a.id === attachment.id)
-    setAttachmentLightbox({
-      isOpen: true,
-      attachments: attList,
-      initialIndex: idx >= 0 ? idx : 0
-    })
+  // Attachment Preview Handler — Open in New Tab
+  const handleOpenAttachmentInNewTab = async (att) => {
+    if (!att?.storage_path) {
+      showToast('Attachment path not found.', 'error')
+      return
+    }
+    const newWindow = window.open('about:blank', '_blank')
+    try {
+      const url = await getOrderAttachmentPreviewUrl(att.storage_path, att.original_filename)
+      if (url && newWindow) {
+        newWindow.location.href = url
+      } else if (newWindow) {
+        newWindow.close()
+        showToast('Unable to load preview URL for this attachment.', 'error')
+      }
+    } catch (err) {
+      if (newWindow) newWindow.close()
+      showToast('Failed to open preview: ' + (err?.message || 'Error'), 'error')
+    }
   }
 
   const DEFAULT_DELETION_REASONS = {
@@ -1036,7 +1045,7 @@ export default function AdminOrdersPage() {
             <option value="all">All Payments</option>
             <option value="pending">Pending</option>
             <option value="partial">Partial</option>
-            <option value="paid">Paid</option>
+            <option value="paid">Received</option>
           </select>
         </div>
 
@@ -1052,7 +1061,7 @@ export default function AdminOrdersPage() {
                   <th style={{ padding: '12px 14px', minWidth: '150px' }}>Customer</th>
                   <th style={{ padding: '12px 14px', minWidth: '140px' }}>Contact</th>
                   <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: '110px' }}>Total (₹)</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: '110px' }}>Paid (₹)</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: '110px' }}>Received (₹)</th>
                   <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: '100px' }}>Payment</th>
                   <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: '110px' }}>Status</th>
                   <th style={{ padding: '12px 14px', textAlign: 'center', minWidth: '130px', position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-2px 0 5px rgba(0,0,0,0.05)', zIndex: 2 }}>Action</th>
@@ -1115,7 +1124,7 @@ export default function AdminOrdersPage() {
                               color: o.payment_status === 'paid' ? '#166534' : o.payment_status === 'partial' ? '#92400e' : '#991b1b'
                             }}
                           >
-                            {(o.payment_status || 'pending').toUpperCase()}
+                            {o.payment_status === 'paid' ? 'RECEIVED' : (o.payment_status || 'pending').toUpperCase()}
                           </span>
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'center' }}>
@@ -1246,7 +1255,7 @@ export default function AdminOrdersPage() {
                         <strong style={{ fontSize: '0.92rem', color: '#0f172a' }}>₹{Number(o.total_amount).toFixed(2)}</strong>
                       </div>
                       <div>
-                        <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Paid</span>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Received</span>
                         <strong style={{ fontSize: '0.92rem', color: '#15803d' }}>₹{Number(o.paid_amount).toFixed(2)}</strong>
                       </div>
                       <span
@@ -1260,7 +1269,7 @@ export default function AdminOrdersPage() {
                           color: o.payment_status === 'paid' ? '#166534' : o.payment_status === 'partial' ? '#92400e' : '#991b1b'
                         }}
                       >
-                        {(o.payment_status || 'pending').toUpperCase()}
+                        {o.payment_status === 'paid' ? 'RECEIVED' : (o.payment_status || 'pending').toUpperCase()}
                       </span>
                     </div>
 
@@ -1379,7 +1388,7 @@ export default function AdminOrdersPage() {
                           color: displayOrder.payment_status === 'paid' ? '#166534' : displayOrder.payment_status === 'partial' ? '#92400e' : '#991b1b'
                         }}
                       >
-                        PAYMENT: {(displayOrder.payment_status || 'pending').toUpperCase()}
+                        PAYMENT: {displayOrder.payment_status === 'paid' ? 'RECEIVED' : (displayOrder.payment_status || 'pending').toUpperCase()}
                       </span>
                       {(displayOrder.is_in_bin || displayOrder.is_removed) && (
                         <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 600 }}>
@@ -1803,11 +1812,11 @@ export default function AdminOrdersPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
                     <div>
                       <div><strong>Payment Method:</strong> {(displayOrder.payment_method || 'cash').toUpperCase()}</div>
-                      <div><strong>Payment Status:</strong> {(displayOrder.payment_status || 'pending').toUpperCase()}</div>
+                      <div><strong>Payment Status:</strong> {displayOrder.payment_status === 'paid' ? 'RECEIVED' : (displayOrder.payment_status || 'pending').toUpperCase()}</div>
                     </div>
                     <div>
                       <div><strong>Total Amount:</strong> ₹{Number(displayOrder.total_amount).toFixed(2)}</div>
-                      <div><strong>Amount Paid:</strong> ₹{Number(displayOrder.paid_amount).toFixed(2)}</div>
+                      <div><strong>Amount Received:</strong> ₹{Number(displayOrder.paid_amount).toFixed(2)}</div>
                       <div style={{ color: currentBal > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
                         Balance Due: ₹{currentBal.toFixed(2)}
                       </div>
@@ -1932,7 +1941,14 @@ export default function AdminOrdersPage() {
                                 gap: '8px'
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                              <div
+                                style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}
+                                onClick={() => handleOpenAttachmentInNewTab(att)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenAttachmentInNewTab(att) }}
+                                title="Click to open preview in new browser tab"
+                              >
                                 <span
                                   style={{
                                     padding: '2px 6px',
@@ -1950,8 +1966,8 @@ export default function AdminOrdersPage() {
                                   <div
                                     style={{
                                       fontSize: '13px',
-                                      fontWeight: 500,
-                                      color: '#0f172a',
+                                      fontWeight: 600,
+                                      color: '#0284c7',
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap'
@@ -1961,7 +1977,7 @@ export default function AdminOrdersPage() {
                                     {att.original_filename}
                                   </div>
                                   <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                    {formatFileSize(att.file_size)} • {formatDateTimeParts(att.uploaded_at || att.created_at).date}
+                                    {formatFileSize(att.file_size)} • {formatDateTimeParts(att.uploaded_at || att.created_at).date} • <span style={{ color: '#0284c7', fontWeight: 600 }}>Open in Tab ↗</span>
                                   </div>
                                 </div>
                               </div>
@@ -2020,11 +2036,15 @@ export default function AdminOrdersPage() {
                                       fontSize: '11px',
                                       borderRadius: '4px',
                                       fontWeight: 600,
-                                      color: '#0284c7'
+                                      color: '#0284c7',
+                                      background: '#f0f9ff',
+                                      borderColor: '#bae6fd',
+                                      cursor: 'pointer'
                                     }}
-                                    onClick={() => handlePreviewAttachment(att, displayOrder.order_attachments || [])}
+                                    onClick={() => handleOpenAttachmentInNewTab(att)}
+                                    title="Open preview in new browser tab"
                                   >
-                                    👁️ Preview
+                                    ↗ Open in Tab
                                   </button>
                                   <button
                                     type="button"
@@ -2690,7 +2710,7 @@ export default function AdminOrdersPage() {
                       <strong>₹{Number(paymentModal.order.total_amount).toFixed(2)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                      <span style={{ color: '#64748b' }}>Already Paid:</span>
+                      <span style={{ color: '#64748b' }}>Already Received:</span>
                       <strong>₹{Number(paymentModal.order.paid_amount).toFixed(2)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: '1px solid #e2e8f0', paddingTop: '4px' }}>
