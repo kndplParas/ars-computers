@@ -4944,10 +4944,14 @@
   display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 12px 14px;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  color: inherit;
+  text-decoration: none;
   cursor: pointer;
   text-align: left;
   transition: all 0.2s ease;
@@ -4956,6 +4960,13 @@
 .shortcut-item:hover {
   border-color: var(--primary);
   background: #f0f7ff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+
+.shortcut-item:focus-visible,
+.recent-enquiry-row-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .shortcut-icon {
@@ -4994,6 +5005,46 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+}
+
+.recent-enquiry-row-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.recent-enquiry-row-link:hover {
+  border-color: var(--primary);
+  background: #f0f7ff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+
+.recent-enquiry-row-link:hover .enquiry-sender strong {
+  color: var(--primary);
+}
+
+.recent-enquiry-row-link:active {
+  transform: translateY(1px);
+}
+
+.dashboard-loading-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dashboard-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .enquiry-sender {

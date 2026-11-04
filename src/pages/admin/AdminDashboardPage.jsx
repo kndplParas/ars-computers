@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
@@ -13,10 +13,60 @@ import { useAdminData } from '../../context/adminDataContext'
  *   Total Products, Active Products, Low-Stock Alerts, Inbound Enquiries
  * - Role-aware gating: confidential customer enquiries are hidden from
  *   inventory_staff, replaced by inventory fulfillment metrics and watchlist
- * - Quick Action management shortcuts filtered by user's database role
- * - Live Supabase database indicator
+ * - Fully clickable management module cards filtered by database role
+ * - Fully clickable recent enquiry cards that deep-link to the enquiry modal
+ * - Live Supabase database indicator + realtime/focus refresh reporting
  * ============================================================================
  */
+
+const ENQUIRY_ROLES = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account']
+const OPERATIONAL_ROLES = [...ENQUIRY_ROLES]
+const ALL_STAFF_ROLES = [...OPERATIONAL_ROLES, 'inventory_staff']
+
+const MODULE_DEFINITIONS = [
+  {
+    key: 'products',
+    to: '/admin/products',
+    icon: '📦',
+    title: 'Product Management',
+    roles: ALL_STAFF_ROLES
+  },
+  {
+    key: 'inventory',
+    to: '/admin/inventory',
+    icon: '⚡',
+    title: 'Inventory & Stock Levels',
+    roles: ['superadmin', 'inventory_staff']
+  },
+  {
+    key: 'enquiries',
+    to: '/admin/enquiries',
+    icon: '💬',
+    title: 'Customer Enquiries',
+    roles: ENQUIRY_ROLES
+  },
+  {
+    key: 'categories',
+    to: '/admin/categories',
+    icon: '📁',
+    title: 'Category Taxonomy',
+    roles: ENQUIRY_ROLES
+  },
+  {
+    key: 'orders',
+    to: '/admin/orders',
+    icon: '🛒',
+    title: 'Orders & Sales',
+    roles: ALL_STAFF_ROLES
+  },
+  {
+    key: 'staff',
+    to: '/admin/staff',
+    icon: '👥',
+    title: 'Staff Management',
+    roles: ['superadmin']
+  }
+]
 
 function formatEnquiryDate(isoString) {
   if (!isoString) return 'Recent'
@@ -33,6 +83,10 @@ function formatEnquiryDate(isoString) {
   }
 }
 
+function formatCount(value, isLoading) {
+  return isLoading ? '…' : value
+}
+
 function AdminDashboardPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -44,23 +98,33 @@ function AdminDashboardPage() {
     enquiries,
     categories,
     products,
+    orders,
+    staff,
     isLiveDatabase,
-    loadAdminCatalog,
-    loadAdminEnquiries
+    isLoadingProducts,
+    isLoadingCategories,
+    isLoadingEnquiries,
+    isLoadingOrders,
+    isLoadingStaff,
+    isLoadingServiceRequests,
+    databaseError,
+    enquiriesError,
+    ordersError,
+    staffError,
+    serviceRequestsError,
+    realtimeStatus,
+    refreshDashboardData
   } = useAdminData()
 
   const userRole = adminUser?.role || 'inventory_staff'
-  const isSuperadminOrAdmin = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(userRole)
-
-  // Load operational dashboard datasets on mount
-  useEffect(() => {
-    if (loadAdminCatalog) {
-      loadAdminCatalog({ page: 1, limit: 50 })
-    }
-    if (isSuperadminOrAdmin && loadAdminEnquiries) {
-      loadAdminEnquiries()
-    }
-  }, [loadAdminCatalog, loadAdminEnquiries, isSuperadminOrAdmin])
+  const isSuperadminOrAdmin = ENQUIRY_ROLES.includes(userRole)
+  const isDashboardLoading =
+    isLoadingProducts ||
+    isLoadingCategories ||
+    (isSuperadminOrAdmin && isLoadingEnquiries) ||
+    isLoadingOrders ||
+    (userRole === 'superadmin' && isLoadingStaff) ||
+    isLoadingServiceRequests
 
   // Gracefully handle legacy query-parameter links by redirecting to dedicated routes
   useEffect(() => {
@@ -78,12 +142,40 @@ function AdminDashboardPage() {
     }
   }, [tabParam, navigate, isSuperadminOrAdmin])
 
-  const recentEnquiries = isSuperadminOrAdmin ? enquiries.slice(0, 4) : []
+  const recentEnquiries = isSuperadminOrAdmin
+    ? enquiries.filter((enq) => !enq.is_removed).slice(0, 4)
+    : []
 
   // Low stock items watchlist for inventory staff
   const lowStockProducts = products
     .filter((p) => p.is_active !== false && Number(p.stock_quantity) <= Number(p.min_stock_alert))
     .slice(0, 4)
+
+  const visibleModules = MODULE_DEFINITIONS.filter((module) => module.roles.includes(userRole))
+
+  const moduleDescriptions = {
+    products: `Review ${formatCount(metrics.products.total, isLoadingProducts)} catalog items, hardware specs, and activation toggles`,
+    inventory: `Audit unit availability (${formatCount(metrics.products.inStock, isLoadingProducts)} in stock, ${formatCount(metrics.products.lowStock, isLoadingProducts)} low stock warnings)`,
+    enquiries: `Track ${formatCount(metrics.enquiries.total, isLoadingEnquiries)} inbound quote submissions (${formatCount(metrics.enquiries.newCount, isLoadingEnquiries)} awaiting review)`,
+    categories: `Manage ${formatCount(categories.length, isLoadingCategories)} core hardware categories, taxonomy, and display order`,
+    orders: `Review ${formatCount(orders.length, isLoadingOrders)} sales orders, payment records, and fulfilment status`,
+    staff: `Manage ${formatCount(staff.length, isLoadingStaff)} staff accounts, roles, and approval permissions`
+  }
+
+  const dashboardError = [
+    databaseError,
+    isSuperadminOrAdmin ? enquiriesError : null,
+    ordersError,
+    userRole === 'superadmin' ? staffError : null,
+    serviceRequestsError
+  ].filter(Boolean)[0]
+
+  const handleEnquiryCardClick = (event) => {
+    // Never let an action control inside a card trigger card navigation.
+    if (event.target.closest('button, input, select, textarea, [data-card-action]')) {
+      event.preventDefault()
+    }
+  }
 
   return (
     <AdminLayout activeTab="dashboard">
@@ -106,7 +198,7 @@ function AdminDashboardPage() {
               >
                 + Manage Products
               </button>
-            ) : ['admin', 'technical', 'engineer', 'hr', 'account'].includes(userRole) ? (
+            ) : OPERATIONAL_ROLES.includes(userRole) ? (
               <button
                 type="button"
                 className="btn-primary btn-sm"
@@ -140,6 +232,10 @@ function AdminDashboardPage() {
             </span>
             <p>
               <strong>PostgreSQL Database Connected:</strong> Real-time product inventory, catalog data, and authenticated role policies are active.
+              {' '}
+              {realtimeStatus === 'connected'
+                ? 'Live auto-refresh is connected.'
+                : 'Dashboard data refreshes on navigation, successful actions, and window focus.'}
             </p>
           </div>
         ) : (
@@ -151,30 +247,58 @@ function AdminDashboardPage() {
           </div>
         )}
 
+        {dashboardError && (
+          <div
+            className="admin-banner-disclaimer"
+            style={{
+              borderColor: 'rgba(239, 68, 68, 0.4)',
+              background: 'rgba(254, 242, 242, 0.9)'
+            }}
+            role="alert"
+          >
+            <span className="banner-badge" style={{ background: '#dc2626', color: '#fff' }}>
+              ⚠️ Data Sync Issue
+            </span>
+            <p>
+              <strong>Some dashboard data could not be refreshed:</strong> {dashboardError}
+              {' '}
+              <button
+                type="button"
+                className="btn-text-action"
+                onClick={() => refreshDashboardData?.({ force: true })}
+              >
+                Retry now
+              </button>
+            </p>
+          </div>
+        )}
+
         {/* Summary Metric Cards Grid */}
         <div className="admin-summary-grid">
           {/* Card 1: Total Catalog Products */}
-          <div className="admin-stat-card">
+          <div className="admin-stat-card" aria-busy={isLoadingProducts}>
             <div className="stat-card-icon blue">📦</div>
             <div className="stat-card-content">
               <span className="stat-label">Total Catalog Products</span>
               <div className="stat-number-wrap">
-                <span className="stat-number">{metrics.products.total}</span>
+                <span className="stat-number">{formatCount(metrics.products.total, isLoadingProducts)}</span>
                 <span className="stat-badge">{isLiveDatabase ? 'Supabase' : 'Local Store'}</span>
               </div>
-              <span className="stat-subtext">Across {categories.length} hardware categories</span>
+              <span className="stat-subtext">Across {formatCount(categories.length, isLoadingCategories)} hardware categories</span>
             </div>
           </div>
 
           {/* Card 2: Active on Website */}
-          <div className="admin-stat-card">
+          <div className="admin-stat-card" aria-busy={isLoadingProducts}>
             <div className="stat-card-icon green">✓</div>
             <div className="stat-card-content">
               <span className="stat-label">Active on Website</span>
               <div className="stat-number-wrap">
-                <span className="stat-number">{metrics.products.active}</span>
+                <span className="stat-number">{formatCount(metrics.products.active, isLoadingProducts)}</span>
                 <span className="stat-badge green">
-                  {Math.round((metrics.products.active / (metrics.products.total || 1)) * 100)}% Live
+                  {isLoadingProducts
+                    ? 'Loading'
+                    : `${Math.round((metrics.products.active / (metrics.products.total || 1)) * 100)}% Live`}
                 </span>
               </div>
               <span className="stat-subtext">Visible to public customer catalog</span>
@@ -182,18 +306,20 @@ function AdminDashboardPage() {
           </div>
 
           {/* Card 3: Low-Stock Alerts */}
-          <div className="admin-stat-card">
+          <div className="admin-stat-card" aria-busy={isLoadingProducts}>
             <div className="stat-card-icon amber">⚠️</div>
             <div className="stat-card-content">
               <span className="stat-label">Low-Stock Alerts</span>
               <div className="stat-number-wrap">
-                <span className="stat-number">{metrics.products.lowStock}</span>
+                <span className="stat-number">{formatCount(metrics.products.lowStock, isLoadingProducts)}</span>
                 <span className={`stat-badge ${metrics.products.lowStock > 0 ? 'amber' : 'green'}`}>
-                  {metrics.products.lowStock > 0 ? 'Restock Needed' : 'Healthy'}
+                  {isLoadingProducts ? 'Loading' : metrics.products.lowStock > 0 ? 'Restock Needed' : 'Healthy'}
                 </span>
               </div>
               <span className="stat-subtext">
-                {metrics.products.lowStock > 0
+                {isLoadingProducts
+                  ? 'Checking inventory thresholds…'
+                  : metrics.products.lowStock > 0
                   ? `${metrics.products.lowStock} item(s) at or below alert threshold`
                   : 'No inventory critical warnings'}
               </span>
@@ -202,28 +328,30 @@ function AdminDashboardPage() {
 
           {/* Card 4: Inbound Enquiries (Admin only) or Stock Health (Staff) */}
           {isSuperadminOrAdmin ? (
-            <div className="admin-stat-card">
+            <div className="admin-stat-card" aria-busy={isLoadingEnquiries}>
               <div className="stat-card-icon purple">💬</div>
               <div className="stat-card-content">
                 <span className="stat-label">Inbound Enquiries</span>
                 <div className="stat-number-wrap">
-                  <span className="stat-number">{metrics.enquiries.total}</span>
+                  <span className="stat-number">{formatCount(metrics.enquiries.total, isLoadingEnquiries)}</span>
                   <span className="stat-badge purple">
-                    {metrics.enquiries.newCount} New / {metrics.enquiries.inProgress} Active
+                    {isLoadingEnquiries
+                      ? 'Loading'
+                      : `${metrics.enquiries.newCount} New / ${metrics.enquiries.inProgress} Active`}
                   </span>
                 </div>
                 <span className="stat-subtext">Customer quote and service requests</span>
               </div>
             </div>
           ) : (
-            <div className="admin-stat-card">
+            <div className="admin-stat-card" aria-busy={isLoadingProducts}>
               <div className="stat-card-icon purple">📊</div>
               <div className="stat-card-content">
                 <span className="stat-label">In-Stock Catalog</span>
                 <div className="stat-number-wrap">
-                  <span className="stat-number">{metrics.products.inStock}</span>
+                  <span className="stat-number">{formatCount(metrics.products.inStock, isLoadingProducts)}</span>
                   <span className="stat-badge purple">
-                    {metrics.products.outOfStock} Out of Stock
+                    {isLoadingProducts ? 'Loading' : `${metrics.products.outOfStock} Out of Stock`}
                   </span>
                 </div>
                 <span className="stat-subtext">Units available for customer fulfillment</span>
@@ -238,67 +366,25 @@ function AdminDashboardPage() {
           <div className="admin-panel-card">
             <div className="panel-card-header">
               <h3>Management Modules</h3>
-              <span className="panel-hint">Quick Navigation</span>
+              <span className="panel-hint">Open any card</span>
             </div>
 
-            <div className="admin-shortcut-list">
-              {isSuperadminOrAdmin && (
-                <button
-                  type="button"
+            <div className="admin-shortcut-list" aria-busy={isDashboardLoading}>
+              {visibleModules.map((module) => (
+                <Link
+                  key={module.key}
+                  to={module.to}
                   className="shortcut-item"
-                  onClick={() => navigate('/admin/products')}
+                  aria-label={`Open ${module.title}`}
                 >
-                  <span className="shortcut-icon">📦</span>
+                  <span className="shortcut-icon" aria-hidden="true">{module.icon}</span>
                   <div className="shortcut-info">
-                    <strong>Product Management</strong>
-                    <span>Review {metrics.products.total} catalog items, hardware specs, and activation toggles</span>
+                    <strong>{module.title}</strong>
+                    <span>{moduleDescriptions[module.key]}</span>
                   </div>
-                  <span className="shortcut-arrow">→</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                className="shortcut-item"
-                onClick={() => navigate('/admin/inventory')}
-              >
-                <span className="shortcut-icon">⚡</span>
-                <div className="shortcut-info">
-                  <strong>Inventory &amp; Stock Levels</strong>
-                  <span>Audit unit availability ({metrics.products.inStock} in stock, {metrics.products.lowStock} low stock warnings)</span>
-                </div>
-                <span className="shortcut-arrow">→</span>
-              </button>
-
-              {isSuperadminOrAdmin && (
-                <>
-                  <button
-                    type="button"
-                    className="shortcut-item"
-                    onClick={() => navigate('/admin/enquiries')}
-                  >
-                    <span className="shortcut-icon">💬</span>
-                    <div className="shortcut-info">
-                      <strong>Customer Enquiries</strong>
-                      <span>Track {metrics.enquiries.total} inbound quote submissions ({metrics.enquiries.newCount} awaiting review)</span>
-                    </div>
-                    <span className="shortcut-arrow">→</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="shortcut-item"
-                    onClick={() => navigate('/admin/categories')}
-                  >
-                    <span className="shortcut-icon">📁</span>
-                    <div className="shortcut-info">
-                      <strong>Category Taxonomy</strong>
-                      <span>Manage {categories.length} core hardware categories, taxonomy, and display order</span>
-                    </div>
-                    <span className="shortcut-arrow">→</span>
-                  </button>
-                </>
-              )}
+                  <span className="shortcut-arrow" aria-hidden="true">→</span>
+                </Link>
+              ))}
             </div>
           </div>
 
@@ -312,18 +398,35 @@ function AdminDashboardPage() {
                   className="btn-text-action"
                   onClick={() => navigate('/admin/enquiries')}
                 >
-                  View All ({enquiries.length}) →
+                  View All ({metrics.enquiries.total}) →
                 </button>
               </div>
 
-              <div className="recent-enquiries-list">
-                {recentEnquiries.length === 0 ? (
+              <div className="recent-enquiries-list" aria-busy={isLoadingEnquiries}>
+                {isLoadingEnquiries && recentEnquiries.length === 0 ? (
+                  <div className="dashboard-loading-list" role="status">
+                    <span className="dashboard-visually-hidden">Loading recent enquiries…</span>
+                    {[1, 2].map((i) => (
+                      <div key={i} className="recent-enquiry-row" aria-hidden="true">
+                        <div className="skeleton-line" style={{ width: '45%', height: '14px', marginBottom: '10px' }} />
+                        <div className="skeleton-line" style={{ width: '85%', height: '12px', marginBottom: '8px' }} />
+                        <div className="skeleton-line" style={{ width: '60%', height: '12px' }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : recentEnquiries.length === 0 ? (
                   <div className="empty-state-wrap" style={{ padding: '24px 0' }}>
                     <p style={{ color: 'var(--text-muted)' }}>No inbound enquiries recorded yet.</p>
                   </div>
                 ) : (
                   recentEnquiries.map((enq) => (
-                    <div key={enq.id} className="recent-enquiry-row">
+                    <Link
+                      key={enq.id}
+                      to={`/admin/enquiries?enquiry=${encodeURIComponent(enq.id)}`}
+                      className="recent-enquiry-row recent-enquiry-row-link"
+                      onClick={handleEnquiryCardClick}
+                      aria-label={`Open enquiry from ${enq.customer_name || enq.name || 'Anonymous Client'}`}
+                    >
                       <div className="enquiry-main-info">
                         <div className="enquiry-sender">
                           <strong>{enq.customer_name || enq.name || 'Anonymous Client'}</strong>
@@ -345,12 +448,12 @@ function AdminDashboardPage() {
                           <span className="category-tag-chip">
                             {enq.category_label || enq.category_interest || enq.service_requested || 'General'}
                           </span>
-                          <span className={`status-pill ${enq.status}`}>
-                            {enq.status.replace('_', ' ')}
+                          <span className={`status-pill ${enq.status || 'new'}`}>
+                            {(enq.status || 'new').replace(/_/g, ' ')}
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>
@@ -368,8 +471,18 @@ function AdminDashboardPage() {
                 </button>
               </div>
 
-              <div className="recent-enquiries-list">
-                {lowStockProducts.length === 0 ? (
+              <div className="recent-enquiries-list" aria-busy={isLoadingProducts}>
+                {isLoadingProducts && lowStockProducts.length === 0 ? (
+                  <div className="dashboard-loading-list" role="status">
+                    <span className="dashboard-visually-hidden">Loading low stock items…</span>
+                    {[1, 2].map((i) => (
+                      <div key={i} className="recent-enquiry-row" aria-hidden="true">
+                        <div className="skeleton-line" style={{ width: '50%', height: '14px', marginBottom: '10px' }} />
+                        <div className="skeleton-line" style={{ width: '80%', height: '12px' }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : lowStockProducts.length === 0 ? (
                   <div className="empty-state-wrap" style={{ padding: '24px 0' }}>
                     <p style={{ color: 'var(--text-muted)' }}>All catalog stock levels are healthy.</p>
                   </div>
@@ -393,7 +506,7 @@ function AdminDashboardPage() {
                         </span>
                         <div className="enquiry-tags">
                           <span className={`status-pill ${prod.availability_status}`}>
-                            {(prod.availability_status || 'unknown').replace('_', ' ')}
+                            {(prod.availability_status || 'unknown').replace(/_/g, ' ')}
                           </span>
                         </div>
                       </div>
@@ -410,4 +523,3 @@ function AdminDashboardPage() {
 }
 
 export default AdminDashboardPage
-

@@ -386,7 +386,7 @@ const dashboardCode = fs.readFileSync(dashboardPath, 'utf8')
 
 assert(
   dashboardCode.includes('isSuperadminOrAdmin') &&
-  dashboardCode.includes('recentEnquiries = isSuperadminOrAdmin ? enquiries.slice(0, 4) : []'),
+  /const recentEnquiries\s*=\s*isSuperadminOrAdmin\s*\?[\s\S]{0,200}?:\s*\[\]/.test(dashboardCode),
   'AdminDashboardPage suppresses confidential enquiries for unauthorized staff roles'
 )
 

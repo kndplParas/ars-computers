@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from 'react'
+import { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ENQUIRY_STATUSES } from '../../data/mockEnquiries'
 import { useAdminData } from '../../context/adminDataContext'
@@ -101,6 +102,8 @@ export default function AdminEnquiriesPage() {
   const { adminUser } = useAdminAuth()
   const isSuperadmin = adminUser?.role === 'superadmin'
   const isEmployee = ['admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const handledDeepLinkRef = useRef(null)
 
   const {
     enquiries,
@@ -464,6 +467,12 @@ export default function AdminEnquiriesPage() {
     }
   }
 
+  const handleOpenDetailsRef = useRef(handleOpenDetails)
+
+  useEffect(() => {
+    handleOpenDetailsRef.current = handleOpenDetails
+  })
+
   const handleCloseDetails = () => {
     setSelectedEnquiry(null)
     setEditingNotes('')
@@ -476,6 +485,42 @@ export default function AdminEnquiriesPage() {
     setVoidProofTarget(null)
     setPreviewProof(null)
   }
+
+  // Dashboard deep-link support: /admin/enquiries?enquiry=<id> opens the
+  // existing enquiry details modal, preserving all workflow and permission logic.
+  const deepLinkEnquiryId = searchParams.get('enquiry') || searchParams.get('enquiryId')
+
+  useEffect(() => {
+    if (!deepLinkEnquiryId) {
+      handledDeepLinkRef.current = null
+      return
+    }
+    if (handledDeepLinkRef.current === deepLinkEnquiryId) return
+
+    const target = enquiries.find(
+      (item) => item.id === deepLinkEnquiryId || item.enquiry_number === deepLinkEnquiryId
+    )
+
+    const clearDeepLinkParam = () => {
+      const next = new URLSearchParams(searchParams)
+      next.delete('enquiry')
+      next.delete('enquiryId')
+      setSearchParams(next, { replace: true })
+    }
+
+    if (!target) {
+      // Wait for the enquiry list to load before treating the deep link as stale.
+      if (!isLoadingEnquiries && enquiries.length > 0) {
+        handledDeepLinkRef.current = deepLinkEnquiryId
+        clearDeepLinkParam()
+      }
+      return
+    }
+
+    handledDeepLinkRef.current = deepLinkEnquiryId
+    handleOpenDetailsRef.current(target)
+    clearDeepLinkParam()
+  }, [deepLinkEnquiryId, enquiries, isLoadingEnquiries, searchParams, setSearchParams])
 
   // --- Step 2 Proof Action Handlers ---
   const handlePreviewProof = async (proof) => {
@@ -1349,69 +1394,6 @@ export default function AdminEnquiriesPage() {
                 {isLoadingEnquiries ? 'Refreshing...' : '🔄 Refresh Enquiries'}
               </button>
             )}
-          </div>
-        </div>
-
-        {/* 1. Summary Cards Row */}
-        <div className="enquiries-stats-row">
-          <div className="product-stat-card">
-            <span className="stat-label">Total Leads</span>
-            <span className="stat-number">{metrics.total}</span>
-            <span className="stat-subtext">Active Inbound Requests</span>
-          </div>
-
-          <div className="product-stat-card active-card">
-            <span className="stat-label">New Submissions</span>
-            <span className="stat-number text-primary">{metrics.newCount}</span>
-            <span className="stat-subtext">Awaiting Initial Review</span>
-          </div>
-
-          <div className="product-stat-card warning-card">
-            <span className="stat-label">In Progress</span>
-            <span className="stat-number text-warning">{metrics.inProgress}</span>
-            <span className="stat-subtext">Under Active Survey</span>
-          </div>
-
-          <div
-            className="product-stat-card"
-            style={{
-              borderColor: metrics.pendingCompletion > 0 ? '#7c3aed' : undefined,
-              background: metrics.pendingCompletion > 0 ? '#f5f3ff' : undefined
-            }}
-          >
-            <span className="stat-label">Pending Completion</span>
-            <span className="stat-number" style={{ color: metrics.pendingCompletion > 0 ? '#7c3aed' : '#64748b' }}>
-              {metrics.pendingCompletion}
-            </span>
-            <span className="stat-subtext">Work Approval Queue</span>
-          </div>
-
-          <div
-            className="product-stat-card"
-            style={{
-              borderColor: metrics.pendingRejection > 0 ? '#f59e0b' : undefined,
-              background: metrics.pendingRejection > 0 ? '#fffbeb' : undefined
-            }}
-          >
-            <span className="stat-label">Pending Rejection</span>
-            <span className="stat-number" style={{ color: metrics.pendingRejection > 0 ? '#b45309' : '#64748b' }}>
-              {metrics.pendingRejection}
-            </span>
-            <span className="stat-subtext">Rejection Review Queue</span>
-          </div>
-
-          <div
-            className="product-stat-card"
-            style={{
-              borderColor: metrics.binCount > 0 ? '#94a3b8' : undefined,
-              background: metrics.binCount > 0 ? '#f8fafc' : undefined
-            }}
-          >
-            <span className="stat-label">Bin (Soft-Deleted)</span>
-            <span className="stat-number" style={{ color: metrics.binCount > 0 ? '#475569' : '#94a3b8' }}>
-              {metrics.binCount}
-            </span>
-            <span className="stat-subtext">7-Day Retention Purge</span>
           </div>
         </div>
 

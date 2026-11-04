@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AdminDataContext } from './adminDataContext'
 import { useAdminAuth } from './adminAuthContext'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -36,6 +37,7 @@ function safeLoad(key, fallback) {
 
 export function AdminDataProvider({ children }) {
   const { adminUser, isAuthenticated } = useAdminAuth()
+  const location = useLocation()
 
   // Determine whether to use Live Supabase database or Local Demo State
   const isLiveDatabase = Boolean(isSupabaseConfigured && isAuthenticated && adminUser)
@@ -152,6 +154,7 @@ export function AdminDataProvider({ children }) {
   const [serviceRequestsError, setServiceRequestsError] = useState(null)
   const [ordersError, setOrdersError] = useState(null)
   const [isPermissionDenied, setIsPermissionDenied] = useState(false)
+  const [realtimeStatus, setRealtimeStatus] = useState('disabled')
 
   const [pagination, setPagination] = useState({
     page: 1,
@@ -159,6 +162,16 @@ export function AdminDataProvider({ children }) {
     hasMore: false,
     totalLoaded: 0
   })
+
+  // Realtime sync + refresh deduplication refs
+  const realtimeDebounceRef = useRef(new Map())
+  const lastDashboardRefreshRef = useRef(0)
+  const paginationRef = useRef(pagination)
+  const previousPathRef = useRef(null)
+
+  useEffect(() => {
+    paginationRef.current = pagination
+  }, [pagination])
 
   // --- Fetch Categories from Database ---
   const loadAdminCategories = useCallback(async () => {
@@ -410,9 +423,62 @@ export function AdminDataProvider({ children }) {
     }
   }, [isLiveDatabase])
 
+  // --- Unified dashboard refresh (throttled + role-aware) ---
+  // Used on dashboard navigation, focus/visibility recovery, and retry actions.
+  // Individual mutators and realtime handlers refresh their own datasets, so this
+  // intentionally avoids firing on every render or duplicate event.
+  const refreshDashboardData = useCallback(
+    async ({ force = false } = {}) => {
+      if (!isLiveDatabase) return
+
+      const now = Date.now()
+      if (!force && now - lastDashboardRefreshRef.current < 8000) {
+        return
+      }
+      lastDashboardRefreshRef.current = now
+
+      const role = adminUser?.role
+      const tasks = [
+        loadAdminCategories(),
+        // Dashboard metrics always use the first catalog page so counts are not
+        // affected by pagination left behind on the Products management screen.
+        loadAdminProducts({ page: 1, limit: 50 })
+      ]
+
+      if (['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
+        tasks.push(loadAdminEnquiries())
+      }
+      if (ALL_STAFF_ROLES.includes(role)) {
+        tasks.push(loadAdminServiceRequests())
+        tasks.push(loadAdminOrders())
+      }
+      if (role === 'superadmin') {
+        tasks.push(loadAdminStaff())
+      }
+
+      await Promise.allSettled(tasks)
+    },
+    [
+      isLiveDatabase,
+      adminUser,
+      loadAdminCategories,
+      loadAdminProducts,
+      loadAdminEnquiries,
+      loadAdminServiceRequests,
+      loadAdminOrders,
+      loadAdminStaff
+    ]
+  )
+
   // Load database catalog on mount or when auth state transitions to authenticated
   useEffect(() => {
     let ignore = false
+
+    // Claim the dashboard refresh window synchronously so a dashboard route
+    // navigation effect cannot duplicate this initial dataset load.
+    if (isLiveDatabase) {
+      lastDashboardRefreshRef.current = Date.now()
+    }
 
     const init = async () => {
       // Yield to microtask queue to avoid synchronous cascading renders during effect mount
@@ -461,6 +527,150 @@ export function AdminDataProvider({ children }) {
       ignore = true
     }
   }, [isLiveDatabase, adminUser, loadAdminCategories, loadAdminProducts, loadAdminEnquiries, loadAdminStaff, loadAdminServiceRequests, loadAdminOrders])
+
+  // Refresh dashboard data whenever the user navigates back to the dashboard.
+  // The very first load is handled by the auth/mount effect above. A login
+  // redirect also uses the throttled path so it cannot duplicate that load.
+  useEffect(() => {
+    const path = location.pathname.replace(/\/+$/, '') || '/'
+    const previousPath = previousPathRef.current
+    previousPathRef.current = path
+
+    const isDashboard = path === '/admin' || path === '/admin/dashboard'
+    const wasDashboard =
+      previousPath === '/admin' || previousPath === '/admin/dashboard'
+
+    if (!isLiveDatabase || !isDashboard || previousPath === null || wasDashboard) {
+      return
+    }
+
+    refreshDashboardData({ force: previousPath !== '/admin/login' })
+  }, [isLiveDatabase, location.pathname, refreshDashboardData])
+
+  // --- Supabase Realtime live dashboard sync ---
+  // A single channel refreshes each authorized dataset when its table changes.
+  // Event bursts are debounced per table to avoid duplicate database requests.
+  useEffect(() => {
+    if (!isLiveDatabase || !supabase || !adminUser) {
+      return undefined
+    }
+
+    const role = adminUser.role
+    const canViewEnquiries = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)
+    const canViewOrders = ALL_STAFF_ROLES.includes(role)
+    const isSuperadmin = role === 'superadmin'
+    const debounceTimers = realtimeDebounceRef.current
+
+    const refreshProducts = () =>
+      loadAdminProducts({
+        page: paginationRef.current.page,
+        limit: paginationRef.current.limit
+      })
+
+    const tableHandlers = {
+      products: refreshProducts,
+      categories: async () => {
+        await loadAdminCategories()
+        await refreshProducts()
+      }
+    }
+
+    if (canViewEnquiries) {
+      tableHandlers.enquiries = () => loadAdminEnquiries()
+    }
+    if (canViewOrders) {
+      tableHandlers.service_requests = () => loadAdminServiceRequests()
+      tableHandlers.orders = () => loadAdminOrders()
+      tableHandlers.order_items = () => loadAdminOrders()
+      tableHandlers.order_payments = () => loadAdminOrders()
+    }
+    if (isSuperadmin) {
+      tableHandlers.admin_users = () => loadAdminStaff()
+    }
+
+    const channel = supabase.channel(`admin-dashboard-sync-${adminUser.id || 'staff'}`)
+    Object.entries(tableHandlers).forEach(([table, refresh]) => {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table },
+        () => {
+          const pending = debounceTimers.get(table)
+          if (pending) clearTimeout(pending)
+
+          const timer = setTimeout(() => {
+            debounceTimers.delete(table)
+            Promise.resolve(refresh()).catch((err) => {
+              console.warn(`[AdminDataProvider] Realtime refresh failed for "${table}":`, err)
+            })
+          }, 400)
+          debounceTimers.set(table, timer)
+        }
+      )
+    })
+
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        setRealtimeStatus('connected')
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        setRealtimeStatus('error')
+      } else if (status === 'CLOSED') {
+        setRealtimeStatus('disabled')
+      }
+    })
+
+    return () => {
+      debounceTimers.forEach((timer) => clearTimeout(timer))
+      debounceTimers.clear()
+      if (supabase) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [
+    isLiveDatabase,
+    adminUser,
+    loadAdminCategories,
+    loadAdminProducts,
+    loadAdminEnquiries,
+    loadAdminStaff,
+    loadAdminServiceRequests,
+    loadAdminOrders
+  ])
+
+  // Fallback recovery: refresh once when the tab regains focus. The shared
+  // throttle prevents duplicate requests when realtime is already connected.
+  // Only runs on the dashboard route so focused management screens (e.g. a
+  // paginated Products page) keep their current page and filters intact.
+  useEffect(() => {
+    if (!isLiveDatabase) return undefined
+
+    const isDashboardRoute = () => {
+      const path = window.location.pathname.replace(/\/+$/, '')
+      return path === '/admin' || path === '/admin/dashboard'
+    }
+
+    const refreshIfOnDashboard = () => {
+      if (isDashboardRoute()) {
+        refreshDashboardData()
+      }
+    }
+
+    const handleFocus = () => {
+      refreshIfOnDashboard()
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshIfOnDashboard()
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [isLiveDatabase, refreshDashboardData])
 
   // Active displayed datasets (STRICT: If live is active, use live records or empty on error)
   const products = isLiveDatabase ? liveProducts : demoProducts
@@ -3615,7 +3825,9 @@ export function AdminDataProvider({ children }) {
     serviceRequestsError,
     ordersError,
     isPermissionDenied,
+    realtimeStatus: isLiveDatabase ? realtimeStatus : 'disabled',
     pagination,
+    refreshDashboardData,
     loadAdminCatalog: loadAdminProducts,
     loadAdminCategories,
     loadAdminEnquiries,
