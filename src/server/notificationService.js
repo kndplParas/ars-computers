@@ -3,11 +3,15 @@
  *
  * Runs exclusively in the Cloudflare Worker / trusted server environment.
  * - Reads the pending notification outbox from Supabase using the service role.
- * - Resolves the existing registered main/admin email server-side.
- * - Sends new-enquiry and employee-assignment notifications through Resend
- *   (or an optional Cloudflare send_email binding).
- * - Uses the outbox unique event key as the provider idempotency key.
- * - Never exposes API keys, SMTP credentials, or secrets to the frontend.
+ * - Resolves recipients server-side from the existing public.admin_users table.
+ *   - new enquiry: every active staff member with a valid registered email.
+ *   - assignment/reassignment: the newly assigned active employee plus every
+ *     active Superadmin (the previous assignee is excluded on reassignment).
+ * - Deduplicates recipients case-insensitively and skips inactive/invalid rows.
+ * - Sends one email per recipient through Resend (or an optional Cloudflare
+ *   send_email binding) with a per-recipient idempotency key.
+ * - Never exposes API keys, SMTP credentials, recipient lists, or secrets to
+ *   the frontend.
  * - Never lets an email failure break enquiry submission or assignment.
  */
 
@@ -16,6 +20,8 @@ const DEFAULT_BATCH_LIMIT = 10
 const DEFAULT_MAX_AGE_HOURS = 24
 const MAX_ATTEMPTS = 5
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
+const EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+const MAX_EMAIL_LENGTH = 254
 
 export class NotificationConfigurationError extends Error {
   constructor(message) {
@@ -27,6 +33,54 @@ export class NotificationConfigurationError extends Error {
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+/**
+ * Normalizes a registered email for comparison and delivery. Recipient
+ * deduplication is case-insensitive, so this is the canonical form.
+ */
+export function normalizeEmail(email) {
+  return String(email ?? '').trim().toLowerCase()
+}
+
+/**
+ * Validates an address against the same practical shape enforced by the
+ * public.admin_users.email constraint. Empty, malformed, and over-long
+ * values are never used as recipients.
+ */
+export function isValidEmail(email) {
+  const normalized = normalizeEmail(email)
+  return (
+    normalized.length > 0 &&
+    normalized.length <= MAX_EMAIL_LENGTH &&
+    EMAIL_PATTERN.test(normalized)
+  )
+}
+
+/**
+ * Filters out inactive, missing, invalid, and duplicate recipients. The first
+ * occurrence wins, which preserves the caller's ordering.
+ */
+export function dedupeRecipients(recipients = []) {
+  const seen = new Set()
+  const result = []
+
+  for (const recipient of Array.isArray(recipients) ? recipients : []) {
+    if (!recipient || recipient.is_active === false) continue
+
+    const email = normalizeEmail(recipient.email)
+    if (!isValidEmail(email) || seen.has(email)) continue
+
+    seen.add(email)
+    result.push({
+      ...recipient,
+      email,
+      fullName: String(recipient.full_name || recipient.fullName || ''),
+      role: String(recipient.role || '')
+    })
+  }
+
+  return result
 }
 
 export function getNotificationConfig(env = {}) {
@@ -173,6 +227,7 @@ export function buildNewEnquiryEmail({ payload = {}, appBaseUrl = DEFAULT_APP_BA
   const text = [
     'A new customer enquiry requires review.',
     '',
+    'Notification type: New website enquiry',
     `Enquiry reference: ${reference}`,
     `Customer name: ${customerName}`,
     `Contact number / email: ${payload.contact_info || 'Not provided'}`,
@@ -191,6 +246,7 @@ export function buildNewEnquiryEmail({ payload = {}, appBaseUrl = DEFAULT_APP_BA
     heading: 'New enquiry requires review',
     intro: 'A new customer enquiry has been submitted through the website and is waiting for review in the Admin Portal.',
     details: [
+      { label: 'Notification type', value: 'New website enquiry' },
       { label: 'Enquiry reference', value: reference },
       { label: 'Customer name', value: customerName },
       { label: 'Contact number / email', value: payload.contact_info || 'Not provided' },
@@ -328,40 +384,104 @@ async function readErrorMessage(response) {
   }
 }
 
-export async function resolveNotificationRecipient(config, fetchImpl = fetch) {
-  const roles = ['superadmin', 'admin']
+/**
+ * Reads every active staff account from public.admin_users using the service
+ * role. The query is server-side only and never reaches the browser.
+ */
+export async function fetchActiveStaff(config, fetchImpl = fetch) {
+  const params = new URLSearchParams({
+    select: 'id,email,full_name,role,is_active',
+    is_active: 'eq.true',
+    order: 'created_at.asc'
+  })
 
-  for (const role of roles) {
-    const url =
-      `${config.supabaseUrl}/rest/v1/admin_users` +
-      '?select=email,full_name,role' +
-      '&is_active=eq.true' +
-      `&role=eq.${encodeURIComponent(role)}` +
-      '&order=created_at.asc' +
-      '&limit=1'
+  const response = await fetchImpl(
+    `${config.supabaseUrl}/rest/v1/admin_users?${params.toString()}`,
+    { method: 'GET', headers: serviceRoleHeaders(config) }
+  )
 
-    const response = await fetchImpl(url, {
-      method: 'GET',
-      headers: serviceRoleHeaders(config)
-    })
+  if (!response.ok) {
+    throw new NotificationConfigurationError(
+      `Unable to resolve active staff email addresses (HTTP ${response.status}).`
+    )
+  }
 
-    if (!response.ok) {
-      throw new NotificationConfigurationError(
-        `Unable to resolve the registered admin email (HTTP ${response.status}).`
-      )
-    }
+  const rows = await response.json()
+  return Array.isArray(rows) ? rows.filter((row) => row && row.is_active !== false) : []
+}
 
-    const rows = await response.json()
-    if (Array.isArray(rows) && rows.length > 0 && rows[0]?.email) {
-      return {
-        email: String(rows[0].email),
-        fullName: String(rows[0].full_name || ''),
-        role: String(rows[0].role || role)
-      }
+/**
+ * Pure recipient selection for an outbox event.
+ *
+ * - new_enquiry: all active staff with a valid, deduplicated email.
+ * - enquiry_assigned: newly assigned active employee + all active Superadmins.
+ * - enquiry_reassigned: same, but the previous assignee is excluded unless
+ *   they are also the new assignee.
+ */
+export function selectNotificationRecipients({ eventType, payload = {}, staff = [] }) {
+  const activeStaff = dedupeRecipients(staff)
+
+  if (eventType === 'new_enquiry') {
+    return activeStaff
+  }
+
+  if (eventType !== 'enquiry_assigned' && eventType !== 'enquiry_reassigned') {
+    throw new NotificationConfigurationError(
+      `Unsupported notification event type: ${String(eventType || 'unknown')}`
+    )
+  }
+
+  const byId = new Map(activeStaff.map((person) => [String(person.id), person]))
+  const selected = []
+
+  const newEmployee = byId.get(String(payload.new_employee_id || ''))
+  if (newEmployee) selected.push(newEmployee)
+
+  for (const person of activeStaff) {
+    if (person.role === 'superadmin') selected.push(person)
+  }
+
+  let recipients = dedupeRecipients(selected)
+
+  if (eventType === 'enquiry_reassigned') {
+    const previousId = String(payload.previous_employee_id || '')
+    const newId = String(payload.new_employee_id || '')
+
+    if (previousId && previousId !== newId) {
+      recipients = recipients.filter((person) => String(person.id) !== previousId)
     }
   }
 
-  return null
+  return recipients
+}
+
+/**
+ * Used only by the protected test route. It intentionally returns a single
+ * primary administrator so a test can never become a bulk email to all staff.
+ */
+export async function resolvePrimaryRecipient(config, fetchImpl = fetch) {
+  const staff = dedupeRecipients(await fetchActiveStaff(config, fetchImpl))
+
+  return (
+    staff.find((person) => person.role === 'superadmin') ||
+    staff.find((person) => person.role === 'admin') ||
+    null
+  )
+}
+
+/**
+ * Builds a deterministic provider idempotency key per event + recipient.
+ * Sending one request per recipient is deliberate: staff addresses are not
+ * exposed to each other, and a failure for one recipient cannot block others.
+ */
+export async function buildRecipientIdempotencyKey(eventKey, email) {
+  const input = new TextEncoder().encode(`${String(eventKey)}:${normalizeEmail(email)}`)
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', input)
+  const hash = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+
+  return `notify:${hash}`
 }
 
 export async function sendNotificationEmail(
@@ -431,7 +551,7 @@ export async function sendNotificationEmail(
 
 async function listPendingRows(config, fetchImpl) {
   const params = new URLSearchParams({
-    select: 'id,event_key,event_type,enquiry_id,payload,attempts,status',
+    select: 'id,event_key,event_type,enquiry_id,payload,attempts,status,delivered_to',
     status: 'in.(pending,failed)',
     attempts: `lt.${MAX_ATTEMPTS}`,
     order: 'created_at.asc',
@@ -458,7 +578,7 @@ async function claimRow(config, fetchImpl, row, nowIso) {
     id: `eq.${row.id}`,
     status: 'in.(pending,failed)',
     attempts: `eq.${row.attempts ?? 0}`,
-    select: 'id,event_key,event_type,enquiry_id,payload,attempts,status'
+    select: 'id,event_key,event_type,enquiry_id,payload,attempts,status,delivered_to'
   })
 
   const response = await fetchImpl(
@@ -538,7 +658,7 @@ async function expireOldPending(config, fetchImpl, now) {
       headers: serviceRoleHeaders(config),
       body: JSON.stringify({
         status: 'skipped',
-        last_error: 'Expired before the email provider was configured.',
+        last_error: 'Expired before delivery could be completed.',
         processed_at: now.toISOString()
       })
     }
@@ -561,7 +681,15 @@ export async function processNotificationOutbox(env = {}, deps = {}) {
         ? deps.now()
         : new Date()
   const config = getNotificationConfig(env)
-  const summary = { configured: config.configured, processed: 0, sent: 0, failed: 0, skipped: 0 }
+  const summary = {
+    configured: config.configured,
+    processed: 0,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    emailsSent: 0,
+    emailsFailed: 0
+  }
 
   if (!config.configured) {
     logger.warn?.(
@@ -570,18 +698,13 @@ export async function processNotificationOutbox(env = {}, deps = {}) {
     return summary
   }
 
-  let recipient = null
+  // One staff lookup per run keeps recipient resolution consistent and avoids
+  // a database round-trip for every event. Rows stay pending if this fails.
+  let staff = []
   try {
-    recipient = await resolveNotificationRecipient(config, fetchImpl)
+    staff = await fetchActiveStaff(config, fetchImpl)
   } catch (error) {
-    logger.error?.('[email-notifications] Recipient lookup failed:', error?.message || error)
-    return summary
-  }
-
-  if (!recipient) {
-    logger.error?.(
-      '[email-notifications] No active superadmin/admin recipient was found. Outbox rows remain pending.'
-    )
+    logger.error?.('[email-notifications] Active staff lookup failed:', error?.message || error)
     return summary
   }
 
@@ -630,54 +753,143 @@ export async function processNotificationOutbox(env = {}, deps = {}) {
       continue
     }
 
+    let recipients = []
     try {
-      const result = await sendNotificationEmail(
-        config,
-        {
-          to: recipient.email,
-          subject: email.subject,
-          text: email.text,
-          html: email.html,
-          idempotencyKey: claimed.event_key
-        },
-        fetchImpl
-      )
-
-      await updateRow(config, fetchImpl, claimed.id, {
-        status: 'sent',
-        processed_at: now.toISOString(),
-        last_error: null
-      })
-
-      summary.sent += 1
-      logger.info?.('[email-notifications] Notification sent.', {
+      recipients = selectNotificationRecipients({
         eventType: claimed.event_type,
-        eventKey: claimed.event_key,
-        provider: result.provider,
-        recipient: maskEmail(recipient.email)
+        payload: claimed.payload || {},
+        staff
       })
     } catch (error) {
       summary.failed += 1
-      const safeMessage = String(error?.message || 'Email delivery failed.')
-        .replaceAll(String(recipient.email), maskEmail(recipient.email))
-        .slice(0, 1000)
-
       try {
         await updateRow(config, fetchImpl, claimed.id, {
           status: 'failed',
-          last_error: safeMessage,
+          last_error: String(error?.message || 'Unable to resolve notification recipients.').slice(0, 1000),
           processed_at: now.toISOString()
         })
       } catch {
         // The row remains claimed for a later cleanup/retry.
       }
+      continue
+    }
 
-      logger.error?.('[email-notifications] Notification delivery failed.', {
+    const delivered = new Set(
+      (Array.isArray(claimed.delivered_to) ? claimed.delivered_to : [])
+        .map(normalizeEmail)
+        .filter(isValidEmail)
+    )
+    const pendingRecipients = recipients.filter((person) => !delivered.has(person.email))
+
+    if (recipients.length === 0) {
+      summary.skipped += 1
+      try {
+        await updateRow(config, fetchImpl, claimed.id, {
+          status: 'skipped',
+          last_error: 'No active staff recipient with a valid registered email address.',
+          processed_at: now.toISOString()
+        })
+      } catch {
+        // The row remains claimed for a later cleanup/retry.
+      }
+      logger.warn?.('[email-notifications] Notification skipped: no valid active recipients.', {
         eventType: claimed.event_type,
-        eventKey: claimed.event_key,
-        recipient: maskEmail(recipient.email),
-        error: safeMessage
+        eventKey: claimed.event_key
       })
+      continue
+    }
+
+    if (pendingRecipients.length === 0) {
+      summary.sent += 1
+      try {
+        await updateRow(config, fetchImpl, claimed.id, {
+          status: 'sent',
+          last_error: null,
+          processed_at: now.toISOString(),
+          delivered_to: [...delivered]
+        })
+      } catch (error) {
+        logger.warn?.('[email-notifications] Final status update failed:', error?.message || error)
+      }
+      continue
+    }
+
+    const failureMessages = []
+
+    for (const recipient of pendingRecipients) {
+      try {
+        const result = await sendNotificationEmail(
+          config,
+          {
+            to: recipient.email,
+            subject: email.subject,
+            text: email.text,
+            html: email.html,
+            idempotencyKey: await buildRecipientIdempotencyKey(claimed.event_key, recipient.email)
+          },
+          fetchImpl
+        )
+
+        delivered.add(recipient.email)
+        summary.emailsSent += 1
+
+        // Checkpoint each successful recipient so a retry never re-sends them.
+        try {
+          await updateRow(config, fetchImpl, claimed.id, { delivered_to: [...delivered] })
+        } catch (error) {
+          logger.warn?.('[email-notifications] Delivered checkpoint failed:', error?.message || error)
+        }
+
+        logger.info?.('[email-notifications] Notification sent.', {
+          eventType: claimed.event_type,
+          eventKey: claimed.event_key,
+          provider: result.provider,
+          recipient: maskEmail(recipient.email)
+        })
+      } catch (error) {
+        summary.emailsFailed += 1
+        const safeMessage = String(error?.message || 'Email delivery failed.')
+          .replaceAll(String(recipient.email), maskEmail(recipient.email))
+          .slice(0, 500)
+
+        failureMessages.push(`${maskEmail(recipient.email)}: ${safeMessage}`)
+        logger.error?.('[email-notifications] Notification delivery failed.', {
+          eventType: claimed.event_type,
+          eventKey: claimed.event_key,
+          recipient: maskEmail(recipient.email),
+          error: safeMessage
+        })
+      }
+    }
+
+    if (failureMessages.length === 0) {
+      summary.sent += 1
+      try {
+        await updateRow(config, fetchImpl, claimed.id, {
+          status: 'sent',
+          last_error: null,
+          processed_at: now.toISOString(),
+          delivered_to: [...delivered]
+        })
+      } catch (error) {
+        logger.warn?.('[email-notifications] Final status update failed:', error?.message || error)
+      }
+    } else {
+      summary.failed += 1
+      const lastError =
+        `Delivery failed for ${failureMessages.length} of ${recipients.length} recipients. ` +
+        failureMessages.join(' | ')
+
+      try {
+        await updateRow(config, fetchImpl, claimed.id, {
+          status: 'failed',
+          last_error: lastError.slice(0, 1000),
+          processed_at: now.toISOString(),
+          delivered_to: [...delivered]
+        })
+      } catch {
+        // The row remains claimed for a later cleanup/retry.
+      }
     }
   }
 
@@ -694,7 +906,7 @@ export async function sendTestNotification(env = {}, deps = {}) {
     )
   }
 
-  const recipient = await resolveNotificationRecipient(config, fetchImpl)
+  const recipient = await resolvePrimaryRecipient(config, fetchImpl)
   if (!recipient) {
     throw new NotificationConfigurationError(
       'No active superadmin or admin email is registered in admin_users.'
@@ -713,6 +925,7 @@ export async function sendTestNotification(env = {}, deps = {}) {
     '',
     `Sent at: ${formatIstDateTime(now.toISOString())}`,
     `Recipient role: ${recipient.role}`,
+    'Recipients: primary administrator only (this test never emails all staff)',
     '',
     'If you received this email, the Cloudflare Worker notification pipeline is configured correctly.'
   ].join('\n')
@@ -722,7 +935,8 @@ export async function sendTestNotification(env = {}, deps = {}) {
     intro: 'This is a safe test notification from the ARS Computers Admin Portal.',
     details: [
       { label: 'Sent at', value: formatIstDateTime(now.toISOString()) },
-      { label: 'Recipient role', value: recipient.role }
+      { label: 'Recipient role', value: recipient.role },
+      { label: 'Recipients', value: 'Primary administrator only (never all staff)' }
     ],
     message: '',
     actionUrl: `${config.appBaseUrl}/admin/dashboard`,
