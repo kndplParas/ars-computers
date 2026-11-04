@@ -60,6 +60,7 @@ The platform handles real-world business verticals including:
   - Immutable activity trail, supervisor notes, and audit tracking.
   - Protected 7-day Bin lifecycle for archived inquiries with automatic expiration guards.
 - **Staff Administration**: Superadmin panel for managing employee accounts, updating access roles, and managing account statuses.
+- **Automated Enquiry Notifications**: Server-side email alerts for new customer enquiries and employee assignments/reassignments, delivered through the Cloudflare Worker notification outbox. See [`docs/EMAIL_NOTIFICATIONS.md`](docs/EMAIL_NOTIFICATIONS.md).
 
 ### Role-Based Access Control (RBAC)
 - **Superadmin**: Full administrative authority, staff account provisioning, role updates, product/category mutations, rejection approvals, bin purge/restoration, and audit trail inspection. Guarded against accidental self-demotion or removing the last active superadmin.

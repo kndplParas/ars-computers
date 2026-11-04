@@ -12,13 +12,12 @@ The admin dashboard subscribes to changes on these public tables:
 - `order_payments`
 
 Supabase only broadcasts change events for tables that belong to the
-`supabase_realtime` publication. The repository does not apply this database
-change automatically. Run the SQL below once in the Supabase SQL editor for the
-target project, after reviewing it with the project owner.
+`supabase_realtime` publication. This is applied by the additive migration
+`supabase/migrations/20261104000025_enable_dashboard_realtime.sql`.
 
-> Do not run this against production without explicit approval. The dashboard
-> still refreshes on navigation, successful actions, and window focus when
-> Realtime is unavailable.
+The SQL below is the same idempotent change, provided for reference or for a
+manual re-check. The dashboard still refreshes on navigation, successful
+actions, and window focus if Realtime is unavailable.
 
 ```sql
 do $$

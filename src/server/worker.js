@@ -3,16 +3,83 @@
  *
  * Runs on Cloudflare Workers edge runtime with static assets.
  * - Handles customer attachment download proxy at /api/share/attachment/:token.
+ * - Processes the enquiry email notification outbox on a cron schedule.
+ * - Exposes token-protected notification processing/test routes.
  * - Supports GET and HEAD methods (HEAD preserves all status codes and headers with null body).
  * - Rejects unsupported HTTP verbs with HTTP 405 Method Not Allowed.
  * - Safely delegates all other requests (SPA routes, static assets, any other API paths) to Cloudflare Static Assets.
  */
 
 import { handleCustomerAttachmentDownload } from './shareAttachmentHandler.js'
+import {
+  NotificationConfigurationError,
+  processNotificationOutbox,
+  sendTestNotification
+} from './notificationService.js'
+
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, private'
+    }
+  })
+}
+
+function safeTokenEqual(provided, expected) {
+  if (typeof provided !== 'string' || typeof expected !== 'string') return false
+  if (provided.length !== expected.length) return false
+
+  let mismatch = 0
+  for (let index = 0; index < provided.length; index += 1) {
+    mismatch |= provided.charCodeAt(index) ^ expected.charCodeAt(index)
+  }
+  return mismatch === 0
+}
+
+function isAuthorizedNotificationRequest(request, env) {
+  const expected = env.NOTIFICATION_PROCESS_TOKEN
+  if (!expected) return { allowed: false, hidden: true }
+  const provided = request.headers.get('x-notification-token') || ''
+  return { allowed: safeTokenEqual(provided, expected), hidden: false }
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
+
+    // Route: notification outbox processing / safe test (token protected)
+    if (url.pathname === '/api/notifications/process' || url.pathname === '/api/notifications/test') {
+      if (request.method !== 'POST') {
+        return jsonResponse({ success: false, error: 'Method not allowed.' }, 405)
+      }
+
+      const authorization = isAuthorizedNotificationRequest(request, env)
+      if (authorization.hidden) {
+        return jsonResponse({ success: false, error: 'Not found.' }, 404)
+      }
+      if (!authorization.allowed) {
+        return jsonResponse({ success: false, error: 'Unauthorized.' }, 401)
+      }
+
+      try {
+        if (url.pathname === '/api/notifications/test') {
+          const result = await sendTestNotification(env)
+          return jsonResponse(result)
+        }
+
+        const summary = await processNotificationOutbox(env)
+        return jsonResponse({ success: true, ...summary })
+      } catch (error) {
+        const message =
+          error instanceof NotificationConfigurationError
+            ? error.message
+            : 'Notification processing failed. Check the Worker logs.'
+        console.error('[email-notifications] Manual notification route failed:', error?.message || error)
+        return jsonResponse({ success: false, error: message }, 503)
+      }
+    }
 
     // Route: /api/share/attachment/:token
     if (url.pathname.startsWith('/api/share/attachment/')) {
@@ -70,5 +137,20 @@ export default {
 
     // Delegate all other requests (static assets, client-side SPA routing, other paths) to ASSETS binding
     return env.ASSETS.fetch(request)
+  },
+
+  async scheduled(_event, env, ctx) {
+    const task = processNotificationOutbox(env).catch((error) => {
+      console.error(
+        '[email-notifications] Scheduled notification processing failed:',
+        error?.message || error
+      )
+    })
+
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(task)
+    } else {
+      await task
+    }
   }
 }
