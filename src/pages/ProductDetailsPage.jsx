@@ -7,6 +7,7 @@ import {
 } from '../lib/catalog'
 import { PRODUCT_IMAGE_CAPTIONS } from '../data/productImages'
 import { getSpecTable } from '../data/specSchemas'
+import { ARS_SALES_DISPLAY_NUMBER, ARS_SALES_TEL_HREF } from '../lib/contact'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import WhatsAppButton from '../components/WhatsAppButton'
@@ -408,8 +409,10 @@ export default function ProductDetailsPage() {
                       {isSelected(product) ? '✓ Added to enquiry' : '+ Add to enquiry'}
                     </button>
                     <a
-                      href="tel:+919810000000"
+                      href={ARS_SALES_TEL_HREF}
                       className="btn-outline btn-lg phone-cta"
+                      aria-label={`Call ARS Computers at ${ARS_SALES_DISPLAY_NUMBER}`}
+                      title={`Call ARS Computers at ${ARS_SALES_DISPLAY_NUMBER}`}
                     >
                       📞 Call Sales Desk
                     </a>
