@@ -4,6 +4,7 @@ import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
 import { supabase } from '../../lib/supabase'
 import { VALID_AVAILABILITY_STATUSES } from '../../data/productTemplate'
+import { getSpecTemplate, normalizeSpecKey, resolveSpecCategory } from '../../data/specSchemas'
 
 /**
  * ============================================================================
@@ -103,6 +104,12 @@ export default function AdminProductsPage() {
       is_generic: false,
       spec_summary: '',
       spec_attributes_text: '',
+      description: '',
+      key_features_text: '',
+      compatibility: '',
+      box_contents: '',
+      specs_verified: 'configuration_dependent',
+      spec_source: '',
       price: '',
       cost_price: '',
       stock_quantity: 0,
@@ -138,7 +145,8 @@ export default function AdminProductsPage() {
       (p.brand && p.brand.toLowerCase().includes(q)) ||
       (p.model && p.model.toLowerCase().includes(q)) ||
       (p.sku && p.sku.toLowerCase().includes(q)) ||
-      (p.spec_summary && p.spec_summary.toLowerCase().includes(q))
+      (p.spec_summary && p.spec_summary.toLowerCase().includes(q)) ||
+      (p.description && p.description.toLowerCase().includes(q))
 
     const matchesCategory =
       categoryFilter === 'all' ||
@@ -208,6 +216,16 @@ export default function AdminProductsPage() {
               .map(([k, v]) => `${k}: ${v}`)
               .join('\n')
           : '',
+      description: product.description || '',
+      key_features_text: Array.isArray(product.key_features)
+        ? product.key_features.join('\n')
+        : '',
+      compatibility: product.compatibility || '',
+      box_contents: product.box_contents || '',
+      specs_verified: ['verified', 'partially_verified', 'configuration_dependent'].includes(product.specs_verified)
+        ? product.specs_verified
+        : 'configuration_dependent',
+      spec_source: product.spec_source || '',
       price: product.price !== null && product.price !== undefined ? product.price : '',
       cost_price:
         product.cost_price !== null && product.cost_price !== undefined
@@ -244,6 +262,16 @@ export default function AdminProductsPage() {
               .map(([k, v]) => `${k}: ${v}`)
               .join('\n')
           : '',
+      description: product.description || '',
+      key_features_text: Array.isArray(product.key_features)
+        ? product.key_features.join('\n')
+        : '',
+      compatibility: product.compatibility || '',
+      box_contents: product.box_contents || '',
+      specs_verified: ['verified', 'partially_verified', 'configuration_dependent'].includes(product.specs_verified)
+        ? product.specs_verified
+        : 'configuration_dependent',
+      spec_source: product.spec_source || '',
       price: product.price !== null && product.price !== undefined ? product.price : '',
       cost_price:
         product.cost_price !== null && product.cost_price !== undefined
@@ -405,6 +433,18 @@ export default function AdminProductsPage() {
       }
     }
 
+    if (!formData.description.trim()) {
+      errors.description = 'A product-specific description is required.'
+    }
+
+    if (!formData.key_features_text.trim()) {
+      errors.key_features_text = 'Enter at least one key feature or highlight.'
+    }
+
+    if (!formData.compatibility.trim()) {
+      errors.compatibility = 'Compatibility and usage guidance is required.'
+    }
+
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -423,15 +463,23 @@ export default function AdminProductsPage() {
       return
     }
 
-    // Parse attributes text into JSON object
+    const matchedCategory = categories.find(
+      (c) => c.slug === formData.category_id || c.id === formData.category_id || c.dbId === formData.category_id
+    )
+    const categoryTitle = matchedCategory ? (matchedCategory.title || matchedCategory.name) : 'Hardware'
+    const resolvedCategoryId = matchedCategory?.dbId || matchedCategory?.id || formData.category_id
+    const specCategoryKey = resolveSpecCategory(matchedCategory?.slug || matchedCategory?.id || formData.category_id)
+
+    // Parse attributes text into JSON object (labels or keys are normalized to canonical keys)
     const specAttributes = {}
     if (formData.spec_attributes_text.trim()) {
       const lines = formData.spec_attributes_text.split('\n')
       lines.forEach((line) => {
         const colonIdx = line.indexOf(':')
         if (colonIdx > 0) {
-          const key = line.slice(0, colonIdx).trim()
+          const rawKey = line.slice(0, colonIdx).trim()
           const val = line.slice(colonIdx + 1).trim()
+          const key = normalizeSpecKey(rawKey, specCategoryKey)
           if (key && val) {
             specAttributes[key] = val
           }
@@ -439,11 +487,10 @@ export default function AdminProductsPage() {
       })
     }
 
-    const matchedCategory = categories.find(
-      (c) => c.slug === formData.category_id || c.id === formData.category_id || c.dbId === formData.category_id
-    )
-    const categoryTitle = matchedCategory ? (matchedCategory.title || matchedCategory.name) : 'Hardware'
-    const resolvedCategoryId = matchedCategory?.dbId || matchedCategory?.id || formData.category_id
+    const keyFeatures = formData.key_features_text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
 
     const processedPayload = {
       name: formData.name.trim(),
@@ -454,6 +501,14 @@ export default function AdminProductsPage() {
       is_generic: Boolean(formData.is_generic),
       spec_summary: formData.spec_summary.trim() || null,
       spec_attributes: specAttributes,
+      description: formData.description.trim() || null,
+      key_features: keyFeatures,
+      compatibility: formData.compatibility.trim() || null,
+      box_contents: formData.box_contents.trim() || null,
+      specs_verified: ['verified', 'partially_verified', 'configuration_dependent'].includes(formData.specs_verified)
+        ? formData.specs_verified
+        : 'configuration_dependent',
+      spec_source: formData.spec_source.trim() || null,
       price:
         formData.price !== '' && formData.price !== null && !isNaN(Number(formData.price))
           ? Number(formData.price)
@@ -1499,6 +1554,111 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
+              {/* Product Content: Overview & Features */}
+              <div className="form-group">
+                <label htmlFor="form-prod-description" className="form-label">
+                  Product Overview / Description *
+                </label>
+                <textarea
+                  id="form-prod-description"
+                  rows="4"
+                  className={`form-textarea ${formErrors.description ? 'input-error' : ''}`}
+                  placeholder="Write a product-specific overview: what it is, who it suits and the configuration that is confirmed at order."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                ></textarea>
+                {formErrors.description && (
+                  <span className="form-field-error">{formErrors.description}</span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="form-prod-key-features" className="form-label">
+                  Key Features &amp; Highlights * <span className="form-field-hint-inline">One per line</span>
+                </label>
+                <textarea
+                  id="form-prod-key-features"
+                  rows="6"
+                  className={`form-textarea ${formErrors.key_features_text ? 'input-error' : ''}`}
+                  placeholder={
+                    'Dell Latitude commercial business laptop family\nDurable chassis intended for daily office and field use\nSolid-state storage for fast boot and application loading'
+                  }
+                  value={formData.key_features_text}
+                  onChange={(e) => setFormData({ ...formData, key_features_text: e.target.value })}
+                ></textarea>
+                {formErrors.key_features_text && (
+                  <span className="form-field-error">{formErrors.key_features_text}</span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="form-prod-compatibility" className="form-label">
+                  Compatibility &amp; Usage Guidance *
+                </label>
+                <textarea
+                  id="form-prod-compatibility"
+                  rows="3"
+                  className={`form-textarea ${formErrors.compatibility ? 'input-error' : ''}`}
+                  placeholder="Software, peripherals, recorders or networks this product works with, plus anything that must be confirmed with sales."
+                  value={formData.compatibility}
+                  onChange={(e) => setFormData({ ...formData, compatibility: e.target.value })}
+                ></textarea>
+                {formErrors.compatibility && (
+                  <span className="form-field-error">{formErrors.compatibility}</span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="form-prod-box-contents" className="form-label">
+                  Box Contents &amp; Warranty Notes
+                </label>
+                <textarea
+                  id="form-prod-box-contents"
+                  rows="2"
+                  className="form-textarea"
+                  placeholder="What is in the box where verified; otherwise state that the bundle is confirmed at order."
+                  value={formData.box_contents}
+                  onChange={(e) => setFormData({ ...formData, box_contents: e.target.value })}
+                ></textarea>
+              </div>
+
+              {/* Verification & Source */}
+              <div className="form-row-2col">
+                <div className="form-group">
+                  <label htmlFor="form-prod-specs-verified" className="form-label">
+                    Specification Verification
+                  </label>
+                  <select
+                    id="form-prod-specs-verified"
+                    className="form-select"
+                    value={formData.specs_verified}
+                    onChange={(e) => setFormData({ ...formData, specs_verified: e.target.value })}
+                  >
+                    <option value="verified">Verified — Manufacturer-backed</option>
+                    <option value="partially_verified">Partially Verified — Series-level confirmed</option>
+                    <option value="configuration_dependent">Configuration Dependent — Confirm at sale</option>
+                  </select>
+                  <span className="form-field-hint">
+                    Configuration-dependent values must not be presented as fixed specifications.
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="form-prod-spec-source" className="form-label">
+                    Verification Source Note
+                  </label>
+                  <input
+                    id="form-prod-spec-source"
+                    type="text"
+                    className="form-input"
+                    maxLength={300}
+                    placeholder="e.g. Manufacturer documentation or confirmed by ARS Computers sales"
+                    value={formData.spec_source}
+                    onChange={(e) => setFormData({ ...formData, spec_source: e.target.value })}
+                  />
+                </div>
+              </div>
+
               {/* Specifications */}
               <div className="form-group">
                 <label htmlFor="form-prod-summary" className="form-label">
@@ -1515,19 +1675,44 @@ export default function AdminProductsPage() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="form-prod-detailed-specs" className="form-label">
-                  Detailed Specifications (Key: Value format, one per line)
-                </label>
+                <div className="form-label-row">
+                  <label htmlFor="form-prod-detailed-specs" className="form-label">
+                    Detailed Specifications (Key: Value format, one per line)
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-outline btn-sm"
+                    onClick={() => {
+                      if (formData.spec_attributes_text.trim()) {
+                        showNotification('Clear the existing specifications before inserting the template.', 'warning')
+                        return
+                      }
+                      const template = getSpecTemplate(resolveSpecCategory(formData.category_id))
+                      if (!template) {
+                        showNotification('No category template is available for this category.', 'warning')
+                        return
+                      }
+                      setFormData({ ...formData, spec_attributes_text: template })
+                    }}
+                  >
+                    Insert Category Template
+                  </button>
+                </div>
                 <textarea
                   id="form-prod-detailed-specs"
-                  rows="3"
+                  rows="14"
                   className="form-textarea"
-                  placeholder="Processor: Intel Core i5 13th Gen&#10;RAM: 16GB DDR4&#10;Display: 14-inch Full HD Anti-Glare"
+                  placeholder={
+                    'Processor: Intel Core i5 13th Gen\nRAM: 16GB DDR4\nStorage: 512GB NVMe SSD\nDisplay: 14-inch Full HD Anti-Glare\nWarranty: Confirm at order'
+                  }
                   value={formData.spec_attributes_text}
                   onChange={(e) =>
                     setFormData({ ...formData, spec_attributes_text: e.target.value })
                   }
                 ></textarea>
+                <span className="form-field-hint">
+                  Human-readable labels are matched to known fields automatically (e.g. &ldquo;Installed RAM&rdquo; becomes <code>ram</code>). Unrecognised labels are saved under Additional Specifications.
+                </span>
               </div>
 
               {/* Warranty & HSN Code */}

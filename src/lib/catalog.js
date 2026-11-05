@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase.js'
 import { CATEGORIES } from '../data/categories.js'
 import { PRODUCT_IMAGES } from '../data/productImages.js'
+import { getProductContent } from '../data/productContent.js'
 
 /**
  * Strictly approved public product columns for customer catalog browsing.
@@ -27,6 +28,12 @@ export const APPROVED_PUBLIC_PRODUCT_COLUMNS = [
   'warranty_text',
   'hsn_code',
   'availability_status',
+  'description',
+  'key_features',
+  'compatibility',
+  'box_contents',
+  'specs_verified',
+  'spec_source',
   'created_at',
   'updated_at'
 ].join(', ')
@@ -77,6 +84,86 @@ let cachedCatalog = null
 let cacheTimestamp = 0
 let inFlightPromise = null
 
+function isNonBlankText(value) {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isNonBlankObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0
+}
+
+function isNonBlankArray(value) {
+  return Array.isArray(value) && value.length > 0
+}
+
+function asCleanString(value) {
+  return isNonBlankText(value) ? value.trim() : null
+}
+
+function asCleanArray(value) {
+  if (!Array.isArray(value)) return null
+  const cleaned = value.map((item) => (typeof item === 'string' ? item.trim() : '')).filter((item) => item.length > 0)
+  return cleaned.length > 0 ? cleaned : null
+}
+
+function asCleanObject(value) {
+  return isNonBlankObject(value) ? value : null
+}
+
+const SPEC_VERIFICATIONS = new Set(['verified', 'partially_verified', 'configuration_dependent'])
+
+function normalizeVerification(value) {
+  const key = String(value || '').trim().toLowerCase()
+  return SPEC_VERIFICATIONS.has(key) ? key : null
+}
+
+/**
+ * Merge database-provided product content with the authored catalogue content.
+ * Precedence: live database (admin-edited) > authored content > static fallback.
+ * Nothing is fabricated when a source has no value.
+ */
+export function mergeProductContentFields(raw = {}) {
+  const slug = typeof raw.slug === 'string' ? raw.slug.trim().toLowerCase() : ''
+  const content = getProductContent(slug) || {}
+
+  const dbDescription = asCleanString(raw.description)
+  const contentDescription = asCleanString(content.description)
+  const staticDescription = asCleanString(raw.staticDescription)
+  const description = dbDescription || contentDescription || staticDescription || ''
+
+  const dbKeyFeatures = asCleanArray(raw.key_features || raw.keyFeatures)
+  const contentKeyFeatures = asCleanArray(content.keyFeatures)
+  const keyFeatures = dbKeyFeatures || contentKeyFeatures || []
+
+  const dbCompatibility = asCleanString(raw.compatibility)
+  const contentCompatibility = asCleanString(content.compatibility)
+  const compatibility = dbCompatibility || contentCompatibility || ''
+
+  const dbBoxContents = asCleanString(raw.box_contents || raw.boxContents)
+  const contentBoxContents = asCleanString(content.boxContents)
+  const boxContents = dbBoxContents || contentBoxContents || ''
+
+  const dbSpecs = asCleanObject(raw.spec_attributes || raw.specAttributes)
+  const contentSpecs = asCleanObject(content.specs)
+  const specAttributes = dbSpecs || contentSpecs || {}
+
+  const dbVerification = normalizeVerification(raw.specs_verified || raw.specsVerified)
+  const contentVerification = normalizeVerification(content.specsVerified)
+  const specsVerified = dbVerification || contentVerification || 'configuration_dependent'
+
+  const specSource = asCleanString(raw.spec_source || raw.specSource) || asCleanString(content.specSource) || null
+
+  return {
+    description,
+    keyFeatures,
+    compatibility,
+    boxContents,
+    specsVerified,
+    specSource,
+    specAttributes
+  }
+}
+
 /**
  * Normalizes static fallback categories to have consistent product attributes.
  */
@@ -93,30 +180,39 @@ export function normalizeStaticCategories(categories) {
       description: cat.description || '',
       icon: cat.icon || '💻',
       badge: cat.badge || 'Popular',
-      products: (cat.products || []).map((p) => ({
-        id: p.slug,
-        name: p.name,
-        rawName: p.name,
-        spec: p.spec,
-        specSummary: p.spec,
-        description: p.description || '',
-        specAttributes: p.specAttributes || {},
-        brand: p.brand || null,
-        model: p.model || null,
-        sku: p.sku || null,
-        price: p.price ?? null,
-        stock: p.stock ?? 0,
-        isFeatured: p.isFeatured || false,
-        isGeneric: p.isGeneric ?? true,
-        warrantyText: p.warrantyText || null,
-        hsnCode: p.hsnCode || null,
-        availabilityStatus: p.availabilityStatus || 'on_demand',
-        slug: p.slug,
-        categoryId: catSlug,
-        categoryTitle: cat.title,
-        categoryIcon: cat.icon || '💻',
-        images: Array.isArray(p.images) && p.images.length > 0 ? p.images : []
-      }))
+      products: (cat.products || []).map((p) => {
+        const merged = mergeProductContentFields({ ...p, staticDescription: p.description })
+
+        return {
+          id: p.slug,
+          name: p.name,
+          rawName: p.name,
+          spec: p.spec,
+          specSummary: p.spec,
+          description: merged.description,
+          specAttributes: merged.specAttributes,
+          keyFeatures: merged.keyFeatures,
+          compatibility: merged.compatibility,
+          boxContents: merged.boxContents,
+          specsVerified: merged.specsVerified,
+          specSource: merged.specSource,
+          brand: p.brand || null,
+          model: p.model || null,
+          sku: p.sku || null,
+          price: p.price ?? null,
+          stock: p.stock ?? 0,
+          isFeatured: p.isFeatured || false,
+          isGeneric: p.isGeneric ?? true,
+          warrantyText: p.warrantyText || null,
+          hsnCode: p.hsnCode || null,
+          availabilityStatus: p.availabilityStatus || 'on_demand',
+          slug: p.slug,
+          categoryId: catSlug,
+          categoryTitle: cat.title,
+          categoryIcon: cat.icon || '💻',
+          images: Array.isArray(p.images) && p.images.length > 0 ? p.images : []
+        }
+      })
     }
   })
 }
@@ -391,7 +487,7 @@ export async function fetchPublicCatalog({ forceRefresh = false } = {}) {
             const productImages = Array.isArray(p.images) && p.images.length > 0
               ? p.images
               : (PRODUCT_IMAGES[p.slug] || [])
-            const productDesc = p.description || ''
+            const merged = mergeProductContentFields(p)
 
             return {
               id: p.id,
@@ -399,8 +495,13 @@ export async function fetchPublicCatalog({ forceRefresh = false } = {}) {
               rawName: p.name,
               spec: p.spec_summary || (p.model ? `Model: ${p.model}` : 'Genuine Hardware with Warranty'),
               specSummary: p.spec_summary || null,
-              description: productDesc,
-              specAttributes: p.spec_attributes || {},
+              description: merged.description,
+              specAttributes: merged.specAttributes,
+              keyFeatures: merged.keyFeatures,
+              compatibility: merged.compatibility,
+              boxContents: merged.boxContents,
+              specsVerified: merged.specsVerified,
+              specSource: merged.specSource,
               brand: p.brand || null,
               model: p.model || null,
               sku: p.sku || null,

@@ -6515,6 +6515,22 @@
   color: var(--text-main);
 }
 
+.form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.form-field-hint-inline {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted, #64748b);
+  margin-left: 6px;
+}
+
 .form-input,
 .form-select,
 .form-textarea {
@@ -11661,5 +11677,306 @@
   }
   .business-header-right {
     justify-content: space-between;
+  }
+}
+
+/* ==========================================================================
+   Product Details — Description, Verification & Specification Tables
+   ========================================================================== */
+.product-overview-card,
+.product-key-features,
+.product-spec-card,
+.product-compatibility-card,
+.product-support-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.product-overview-card .specs-section-title,
+.product-key-features .specs-section-title,
+.product-spec-card .specs-section-title,
+.product-compatibility-card .specs-section-title,
+.product-support-card .specs-section-title {
+  margin: 0 0 10px;
+}
+
+.overview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.overview-header .specs-section-title {
+  margin-bottom: 0;
+}
+
+.spec-verification-badge {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 280px;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.spec-verification-badge .verification-icon {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.spec-verification-badge strong {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.spec-verification-badge small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.spec-verification-badge.verified {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.spec-verification-badge.partial {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.spec-verification-badge.dependent {
+  background: #eff6fe;
+  border-color: #bfdbfe;
+  color: #1e40af;
+}
+
+.config-summary-callout {
+  margin-top: 14px;
+  background: var(--bg-ice);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 16px;
+}
+
+.config-summary-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #1e40af;
+  margin-bottom: 4px;
+}
+
+.config-summary-callout p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.key-features-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.key-features-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.feature-check {
+  color: #15803d;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.spec-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.spec-card-header .specs-section-title {
+  margin-bottom: 0;
+}
+
+.spec-group-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-full);
+  padding: 2px 10px;
+}
+
+.spec-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.spec-group {
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  background: #fcfcfd;
+}
+
+.spec-group-title {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--primary);
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+}
+
+.spec-list {
+  margin: 0;
+  padding: 0;
+}
+
+.spec-line {
+  display: grid;
+  grid-template-columns: 44% 1fr;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px dashed #e2e8f0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.spec-line:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.spec-line-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.spec-line-value {
+  color: var(--text-main);
+  margin: 0;
+  word-break: break-word;
+}
+
+.spec-source-note {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #475569;
+  background: #f8fafc;
+  border-left: 3px solid #cbd5e1;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 8px 12px;
+}
+
+.product-compatibility-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+.support-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.support-item {
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.support-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.support-item p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+@media (max-width: 768px) {
+  .product-overview-card,
+  .product-key-features,
+  .product-spec-card,
+  .product-compatibility-card,
+  .product-support-card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .spec-verification-badge {
+    max-width: none;
+    width: 100%;
+  }
+
+  .spec-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .spec-list {
+    font-size: 12.5px;
+  }
+
+  .spec-line {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 8px 0;
+  }
+
+  .key-features-list {
+    grid-template-columns: 1fr;
   }
 }

@@ -6,12 +6,34 @@ import {
   getInstantProductBySlug
 } from '../lib/catalog'
 import { PRODUCT_IMAGE_CAPTIONS } from '../data/productImages'
+import { getSpecTable } from '../data/specSchemas'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import WhatsAppButton from '../components/WhatsAppButton'
 import WhatsAppSelectionBar from '../components/WhatsAppSelectionBar'
 import { useProductSelection } from '../lib/useProductSelection'
 import '../App.css'
+
+const SPEC_VERIFICATION_META = {
+  verified: {
+    icon: '✓',
+    label: 'Manufacturer specifications',
+    description: 'Values are backed by manufacturer documentation.',
+    tone: 'verified'
+  },
+  partially_verified: {
+    icon: '◐',
+    label: 'Partially verified',
+    description: 'Core values are confirmed; some model-specific details may vary.',
+    tone: 'partial'
+  },
+  configuration_dependent: {
+    icon: '?',
+    label: 'Configuration dependent — confirm with sales',
+    description: 'Values depend on the selected stock or build and must be confirmed before ordering.',
+    tone: 'dependent'
+  }
+}
 
 export default function ProductDetailsPage() {
   const { slug } = useParams()
@@ -122,6 +144,11 @@ export default function ProductDetailsPage() {
       isMounted = false
     }
   }, [slug])
+
+  const specTable = getSpecTable(category || product?.categoryId, product?.specAttributes)
+  const verification = product
+    ? SPEC_VERIFICATION_META[product.specsVerified] || SPEC_VERIFICATION_META.configuration_dependent
+    : null
 
   return (
     <div className="app-container">
@@ -391,62 +418,105 @@ export default function ProductDetailsPage() {
                     Opens WhatsApp with this product&apos;s details prefilled. No order is
                     confirmed and no payment is collected on this website.
                   </p>
-                  {/* Product Overview & Description */}
-                  {product.description && (
-                    <div className="product-description-card">
+                  {/* Product Overview & Key Features */}
+                  <div className="product-overview-card">
+                    <div className="overview-header">
                       <h3 className="specs-section-title">Product Overview</h3>
+                      {verification && (
+                        <div
+                          className={`spec-verification-badge ${verification.tone}`}
+                          title={verification.description}
+                        >
+                          <span className="verification-icon" aria-hidden="true">{verification.icon}</span>
+                          <span className="verification-text">
+                            <strong>{verification.label}</strong>
+                            <small>{verification.description}</small>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {product.description ? (
                       <p className="product-description-text">{product.description}</p>
+                    ) : (
+                      <p className="product-description-text muted">Product description is being updated by the admin.</p>
+                    )}
+                    {product.spec && (
+                      <div className="config-summary-callout">
+                        <span className="config-summary-label">Configuration Summary</span>
+                        <p>{product.spec}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {Array.isArray(product.keyFeatures) && product.keyFeatures.length > 0 && (
+                    <div className="product-key-features">
+                      <h3 className="specs-section-title">Key Features &amp; Highlights</h3>
+                      <ul className="key-features-list">
+                        {product.keyFeatures.map((feature, idx) => (
+                          <li key={idx}>
+                            <span className="feature-check" aria-hidden="true">✓</span>
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
-                  {/* Key Specifications Grid */}
-                  <div className="product-specs-section">
-                    <h3 className="specs-section-title">Hardware Specifications</h3>
-                    <div className="specs-grid">
-                      <div className="spec-row">
-                        <span className="spec-label">Configuration Summary</span>
-                        <span className="spec-value highlight">{product.spec}</span>
+
+                  {/* Organised Technical Specifications */}
+                  {specTable.sections.length > 0 && (
+                    <div className="product-spec-card">
+                      <div className="spec-card-header">
+                        <h3 className="specs-section-title">{specTable.label}</h3>
+                        <span className="spec-group-count">{specTable.sections.length} section{specTable.sections.length === 1 ? '' : 's'}</span>
                       </div>
-
-                      {product.brand && (
-                        <div className="spec-row">
-                          <span className="spec-label">Manufacturer / Brand</span>
-                          <span className="spec-value">{product.brand}</span>
-                        </div>
-                      )}
-
-                      {product.model && (
-                        <div className="spec-row">
-                          <span className="spec-label">Model Series</span>
-                          <span className="spec-value">{product.model}</span>
-                        </div>
-                      )}
-
-                      <div className="spec-row">
-                        <span className="spec-label">Warranty</span>
-                        <span className="spec-value">
-                          {product.warrantyText || 'Standard policy applies / Inquire for model terms'}
-                        </span>
+                      <div className="spec-groups">
+                        {specTable.sections.map((section) => (
+                          <section className="spec-group" key={section.title}>
+                            <h4 className="spec-group-title">{section.title}</h4>
+                            <dl className="spec-list">
+                              {section.rows.map((row) => (
+                                <div className="spec-line" key={row.key}>
+                                  <dt className="spec-line-label">{row.label}</dt>
+                                  <dd className="spec-line-value">{row.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </section>
+                        ))}
                       </div>
+                      {product.specSource && (
+                        <p className="spec-source-note">
+                          <strong>Verification source:</strong> {product.specSource}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
+                  {/* Compatibility & Usage */}
+                  {product.compatibility && (
+                    <div className="product-compatibility-card">
+                      <h3 className="specs-section-title">Compatibility &amp; Usage</h3>
+                      <p>{product.compatibility}</p>
+                    </div>
+                  )}
+
+                  {/* Warranty & Box Contents */}
+                  <div className="product-support-card">
+                    <h3 className="specs-section-title">Warranty &amp; What&apos;s in the Box</h3>
+                    <div className="support-grid">
+                      <div className="support-item">
+                        <span className="support-label">Warranty</span>
+                        <p>{product.warrantyText || 'Not specified by manufacturer — confirmed by ARS Computers at order.'}</p>
+                      </div>
+                      <div className="support-item">
+                        <span className="support-label">Box Contents</span>
+                        <p>{product.boxContents || 'Box contents are confirmed at order.'}</p>
+                      </div>
                       {product.hsnCode && (
-                        <div className="spec-row">
-                          <span className="spec-label">HSN Code</span>
-                          <span className="spec-value">{product.hsnCode}</span>
+                        <div className="support-item">
+                          <span className="support-label">HSN Code</span>
+                          <p>{product.hsnCode}</p>
                         </div>
-                      )}
-
-                      <div className="spec-row">
-                        <span className="spec-label">Installation &amp; Setup</span>
-                        <span className="spec-value">Certified Engineering Setup Available</span>
-                      </div>
-
-                      {product.specAttributes && Object.keys(product.specAttributes).length > 0 && (
-                        Object.entries(product.specAttributes).map(([key, val]) => (
-                          <div key={key} className="spec-row">
-                            <span className="spec-label">{key.replace(/_/g, ' ')}</span>
-                            <span className="spec-value">{String(val)}</span>
-                          </div>
-                        ))
                       )}
                     </div>
                   </div>
