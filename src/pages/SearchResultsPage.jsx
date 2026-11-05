@@ -215,7 +215,7 @@ export default function SearchResultsPage() {
                               navigate(`/products/${item.slug}`)
                             }}
                           >
-                            View Specifications →
+                            View Specifications &amp; Request Quote →
                           </button>
 
                           <button
