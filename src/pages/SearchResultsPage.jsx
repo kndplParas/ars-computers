@@ -16,7 +16,7 @@ export default function SearchResultsPage() {
 
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const { selected, isSelected, toggle, clear, isFull, maxSelection } = useProductSelection()
+  const { selected, clear } = useProductSelection()
 
   useEffect(() => {
     let isMounted = true
@@ -201,43 +201,21 @@ export default function SearchResultsPage() {
                       <p className="product-card-spec">{item.spec || item.specSummary}</p>
 
                       <div className="product-card-actions">
+                        <button
+                          type="button"
+                          className="btn-primary w-full text-center"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/products/${item.slug}`)
+                          }}
+                        >
+                          View Details
+                        </button>
+
                         <WhatsAppButton
                           product={item}
                           className="whatsapp-card-btn"
                         />
-
-                        <div className="product-card-secondary-actions">
-                          <button
-                            type="button"
-                            className="btn-product-quote product-view-details-btn"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              navigate(`/products/${item.slug}`)
-                            }}
-                          >
-                            View Specifications &amp; Request Quote →
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`product-select-btn ${isSelected(item) ? 'selected' : ''}`}
-                            aria-pressed={isSelected(item)}
-                            disabled={!isSelected(item) && isFull}
-                            title={
-                              !isSelected(item) && isFull
-                                ? `You can send up to ${maxSelection} products in one WhatsApp enquiry.`
-                                : isSelected(item)
-                                  ? 'Remove this product from the WhatsApp enquiry'
-                                  : 'Add this product to a combined WhatsApp enquiry'
-                            }
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              toggle(item)
-                            }}
-                          >
-                            {isSelected(item) ? '✓ Added to enquiry' : '+ Add to enquiry'}
-                          </button>
-                        </div>
                       </div>
                     </div>
                   </article>

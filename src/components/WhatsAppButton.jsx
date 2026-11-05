@@ -33,7 +33,7 @@ export default function WhatsAppButton({
   products = null,
   category = null,
   baseUrl = null,
-  label = 'Buy on WhatsApp',
+  label = 'Buy',
   className = '',
   showIcon = true,
   onClick = null

@@ -477,7 +477,7 @@ describe('URL encoding', () => {
 })
 
 describe('Website integration', () => {
-  test('category and search product cards render the WhatsApp CTA and selection tray', () => {
+  test('product cards render only View Details and Buy, with the selection tray', () => {
     for (const filePath of [CATEGORY_PAGE_PATH, SEARCH_PAGE_PATH]) {
       const source = read(filePath)
       assert.match(source, /import WhatsAppButton from '\.\.\/components\/WhatsAppButton'/)
@@ -485,22 +485,32 @@ describe('Website integration', () => {
       assert.match(source, /useProductSelection/)
       assert.match(source, /<WhatsAppButton[\s\S]*?product=\{item\}/)
       assert.match(source, /<WhatsAppSelectionBar selected=\{selected\}/)
+      assert.match(source, /View Details[\s\S]*?<WhatsAppButton/)
+      assert.doesNotMatch(source, /Add to enquiry|Added to enquiry/)
+      assert.doesNotMatch(source, /Request Quote|Request a Quote|Request Quotation|Custom Order/)
+      assert.doesNotMatch(source, /quote-pill|btn-product-quote|product-select-btn/)
     }
   })
 
-  test('product details page has the prominent CTA, disclaimer, and related-product links', () => {
+  test('product details page has Buy, multi-product selection, disclaimer, and related links', () => {
     const source = read(DETAILS_PAGE_PATH)
 
     assert.match(source, /import WhatsAppButton from '\.\.\/components\/WhatsAppButton'/)
-    assert.match(source, /<WhatsAppButton[\s\S]*?product=\{product\}[\s\S]*?category=\{category\}/)
-    assert.match(source, /label="Buy on WhatsApp"/)
+    assert.match(source, /<WhatsAppButton[\s\S]*?product=\{product\}[\s\S]*?category=\{category\}[\s\S]*?label="Buy"/)
+    assert.match(source, /Add to enquiry/)
+    assert.match(source, /<WhatsAppSelectionBar selected=\{selected\}/)
     assert.match(source, /No order is[\s\S]*?confirmed[\s\S]*?no payment is collected/)
-    assert.match(source, /<WhatsAppButton[\s\S]*?product=\{item\}[\s\S]*?label="WhatsApp"/)
+    assert.match(source, /<WhatsAppButton[\s\S]*?product=\{item\}[\s\S]*?label="Buy"/)
+    assert.doesNotMatch(source, /Buy on WhatsApp/)
+    assert.doesNotMatch(source, /Request Quote|Request a Quote|Request Quotation|Custom Order/)
+    assert.doesNotMatch(source, /product-quote-section|quoteFormRef|handleQuoteSubmit/)
   })
 
-  test('the reusable button opens a new tab with safe link attributes', () => {
+  test('the reusable button is labelled Buy and opens a new tab safely', () => {
     const source = read(BUTTON_PATH)
 
+    assert.match(source, /label = 'Buy'/)
+    assert.doesNotMatch(source, /Buy on WhatsApp/)
     assert.match(source, /buildProductWhatsAppUrl/)
     assert.match(source, /buildMultiProductWhatsAppUrl/)
     assert.match(source, /target="_blank"/)

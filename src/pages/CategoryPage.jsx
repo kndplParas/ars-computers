@@ -29,7 +29,7 @@ export default function CategoryPage() {
   const [isLoading, setIsLoading] = useState(() => !initialData?.category)
   const [error, setError] = useState(null)
   const [isRetrying, setIsRetrying] = useState(false)
-  const { selected, isSelected, toggle, clear, isFull, maxSelection } = useProductSelection()
+  const { selected, clear } = useProductSelection()
 
   // Retry handler for user clicks
   const handleRetry = async () => {
@@ -301,63 +301,38 @@ export default function CategoryPage() {
 
                             <p className="product-card-spec">{item.spec}</p>
 
-                            <div className="product-card-pricing-row">
-                              <div className="product-card-price-wrap">
-                                {typeof item.price === 'number' && item.price > 0 ? (
-                                  <>
+                            {((typeof item.price === 'number' && item.price > 0) ||
+                              (typeof item.stock === 'number' && item.stock > 0)) && (
+                              <div className="product-card-pricing-row">
+                                {typeof item.price === 'number' && item.price > 0 && (
+                                  <div className="product-card-price-wrap">
                                     <span className="price-label">Price</span>
                                     <span className="price-val">₹{Number(item.price).toLocaleString('en-IN')}</span>
-                                  </>
-                                ) : (
-                                  <span className="quote-pill">Request a Quote</span>
+                                  </div>
                                 )}
-                              </div>
 
-                              <div className="product-card-stock-wrap">
-                                {typeof item.stock === 'number' && item.stock > 0 ? (
-                                  <span className="stock-pill in-stock">✓ In Stock</span>
-                                ) : (
-                                  <span className="stock-pill on-demand">Custom Order</span>
+                                {typeof item.stock === 'number' && item.stock > 0 && (
+                                  <div className="product-card-stock-wrap">
+                                    <span className="stock-pill in-stock">✓ In Stock</span>
+                                  </div>
                                 )}
                               </div>
-                            </div>
+                            )}
 
                             <div className="product-card-actions">
+                              <Link
+                                to={`/products/${item.slug}`}
+                                className="btn-primary w-full text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                View Details
+                              </Link>
+
                               <WhatsAppButton
                                 product={item}
                                 category={category}
                                 className="whatsapp-card-btn"
                               />
-
-                              <div className="product-card-secondary-actions">
-                                <Link
-                                  to={`/products/${item.slug}`}
-                                  className="btn-primary w-full text-center product-view-details-btn"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  View Details &amp; Specifications →
-                                </Link>
-
-                                <button
-                                  type="button"
-                                  className={`product-select-btn ${isSelected(item) ? 'selected' : ''}`}
-                                  aria-pressed={isSelected(item)}
-                                  disabled={!isSelected(item) && isFull}
-                                  title={
-                                    !isSelected(item) && isFull
-                                      ? `You can send up to ${maxSelection} products in one WhatsApp enquiry.`
-                                      : isSelected(item)
-                                        ? 'Remove this product from the WhatsApp enquiry'
-                                        : 'Add this product to a combined WhatsApp enquiry'
-                                  }
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggle(item, category)
-                                  }}
-                                >
-                                  {isSelected(item) ? '✓ Added to enquiry' : '+ Add to enquiry'}
-                                </button>
-                              </div>
                             </div>
                           </div>
                         </article>

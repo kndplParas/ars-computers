@@ -19,15 +19,20 @@ URL-encoded `text` query parameter.
 
 | Page | Behaviour |
 | --- | --- |
-| Category product cards | **Buy on WhatsApp** plus **Add to enquiry** on every active product in Computers & Laptops, CCTV, Printers, Biometric, and Accessories. |
-| Search result cards | **Buy on WhatsApp** plus **Add to enquiry** on every matching product. |
-| Product details page | Prominent **Buy on WhatsApp** CTA with a no-order/no-payment note. |
-| Related products | A compact **WhatsApp** link on each related product. |
-| Selection tray | Appears after selecting products and sends one combined WhatsApp message. |
+| Category product cards | **View Details** and **Buy** only, on every active product in Computers & Laptops, CCTV, Printers, Biometric, and Accessories. |
+| Search result cards | **View Details** and **Buy** only, on every matching product. |
+| Product details page | Prominent **Buy** CTA, **Add to enquiry** for multi-product selection, and a no-order/no-payment note. |
+| Related products | **View Details** plus a compact **Buy** link on each related product. |
+| Selection tray | Appears after selecting products on a details page and sends one combined WhatsApp message. |
 
 All pages read their product data from the existing Supabase/static catalogue.
 New products added through the admin catalogue automatically receive the same
 buttons; no per-product configuration is required.
+
+Product cards no longer show **Request Quote**, **Request a Quote**,
+**Custom Order**, or **Add to enquiry** actions. Product-specific quotation
+forms and quote callouts were removed; separate Contact and Service & Repair
+workflows are unchanged.
 
 ## Message content
 
@@ -59,9 +64,10 @@ an order is confirmed or that payment was completed.
 
 ## Multiple products
 
-There is no cart or checkout. Product cards expose **Add to enquiry**, which
-stores a lightweight selection in `sessionStorage` for the current browser
-session. Selecting products displays a tray with:
+There is no cart or checkout. Product cards show only **View Details** and
+**Buy**. To build a combined enquiry, open a product details page and use
+**Add to enquiry**; this stores a lightweight selection in `sessionStorage` for
+the current browser session. Selecting products displays a tray with:
 
 - the selected product count and a short name preview,
 - **Clear**,
@@ -102,9 +108,9 @@ products are ignored, and the selection is not an order or booking.
 | `src/components/WhatsAppButton.jsx` | Reusable CTA with inline WhatsApp icon, safe new-tab link, and accessible label. |
 | `src/components/WhatsAppSelectionBar.jsx` | Floating multi-product tray with the no-order disclaimer. |
 | `src/lib/useProductSelection.js` | Session-scoped selection state, deduplication, and 20-product cap. |
-| `src/pages/CategoryPage.jsx` | Category card CTAs and selection tray. |
-| `src/pages/SearchResultsPage.jsx` | Search result CTAs and selection tray. |
-| `src/pages/ProductDetailsPage.jsx` | Details CTA, disclaimer, and related-product links. |
+| `src/pages/CategoryPage.jsx` | Category card **View Details**/**Buy** actions and selection tray. |
+| `src/pages/SearchResultsPage.jsx` | Search result **View Details**/**Buy** actions and selection tray. |
+| `src/pages/ProductDetailsPage.jsx` | Details **Buy** CTA, multi-product **Add to enquiry**, disclaimer, and related-product links. |
 | `src/App.css` | WhatsApp-green buttons, CTA layout, related links, and responsive tray. |
 
 No database migration, RLS change, staff-account change, customer-record change,

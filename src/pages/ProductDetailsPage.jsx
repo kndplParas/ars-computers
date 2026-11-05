@@ -1,21 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   fetchProductBySlug,
   fetchCategoryBySlug,
   getInstantProductBySlug
 } from '../lib/catalog'
-import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { PRODUCT_IMAGE_CAPTIONS } from '../data/productImages'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import WhatsAppButton from '../components/WhatsAppButton'
+import WhatsAppSelectionBar from '../components/WhatsAppSelectionBar'
+import { useProductSelection } from '../lib/useProductSelection'
 import '../App.css'
 
 export default function ProductDetailsPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
-  const quoteFormRef = useRef(null)
 
   // Synchronous instant initialization from cache or verified static catalog
   const initialData = getInstantProductBySlug(slug)
@@ -28,26 +28,13 @@ export default function ProductDetailsPage() {
   const [isRetrying, setIsRetrying] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [prevSlug, setPrevSlug] = useState(slug)
+  const { selected, isSelected, toggle, clear, isFull, maxSelection } = useProductSelection()
 
   // Reset gallery selection when navigating to a new product
   if (prevSlug !== slug) {
     setPrevSlug(slug)
     setActiveImageIndex(0)
   }
-
-  // Product-specific enquiry state
-  const [formData, setFormData] = useState({
-    name: '',
-    contact_info: '',
-    message: initialData?.product
-      ? `I would like to request an official quotation and stock availability for: ${initialData.product.name}. Please share pricing and warranty terms.`
-      : ''
-  })
-  const [formStatus, setFormStatus] = useState({
-    loading: false,
-    success: false,
-    error: null
-  })
 
   // Retry handler for user clicks
   const handleRetry = async () => {
@@ -135,90 +122,6 @@ export default function ProductDetailsPage() {
       isMounted = false
     }
   }, [slug])
-
-  const scrollToQuoteForm = () => {
-    if (quoteFormRef.current) {
-      quoteFormRef.current.scrollIntoView({ behavior: 'smooth' })
-      const nameInput = document.getElementById('product-quote-name')
-      if (nameInput) {
-        setTimeout(() => nameInput.focus(), 300)
-      }
-    }
-  }
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
-
-  const handleQuoteSubmit = async (e) => {
-    e.preventDefault()
-
-    if (formStatus.loading) return // Prevent accidental double submission
-
-    const name = formData.name.trim()
-    const contactInfo = formData.contact_info.trim()
-    const message = formData.message.trim()
-
-    if (name.length < 2) {
-      setFormStatus({ loading: false, success: false, error: 'Please enter your full name (at least 2 characters).' })
-      return
-    }
-    if (contactInfo.length < 5) {
-      setFormStatus({ loading: false, success: false, error: 'Please enter a valid phone number or email (at least 5 characters).' })
-      return
-    }
-    if (message.length < 5) {
-      setFormStatus({ loading: false, success: false, error: 'Please specify your requirements (at least 5 characters).' })
-      return
-    }
-
-    setFormStatus({ loading: true, success: false, error: null })
-
-    const categoryInterest = category?.slug || category?.id || product?.categoryId || 'general'
-    const fullMessage = `[Product Inquiry: ${product?.name} (Slug: ${slug})] ${message}`
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        // Strict 8-second timeout on enquiry submission to avoid hanging
-        const submitPromise = supabase.from('enquiries').insert([
-          {
-            name,
-            contact_info: contactInfo,
-            category_interest: categoryInterest,
-            message: fullMessage,
-            status: 'new'
-          }
-        ])
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Submission timed out')), 8000)
-        )
-
-        const { error: insertErr } = await Promise.race([submitPromise, timeoutPromise])
-
-        if (insertErr) {
-          throw insertErr
-        }
-      } else {
-        // Graceful local handling when offline or unconfigured
-        await new Promise(resolve => setTimeout(resolve, 400))
-      }
-
-      setFormStatus({ loading: false, success: true, error: null })
-      setFormData({
-        name: '',
-        contact_info: '',
-        message: ''
-      })
-    } catch (err) {
-      setFormStatus({
-        loading: false,
-        success: false,
-        error: err?.message || 'Unable to submit your quote request. Please call our desk directly.'
-      })
-    }
-  }
 
   return (
     <div className="app-container">
@@ -415,24 +318,17 @@ export default function ProductDetailsPage() {
 
                   {/* Pricing and Stock Bar */}
                   <div className="product-pricing-card">
-                    <div className="pricing-col">
-                      <span className="pricing-label">Official Pricing</span>
-                      <div className="pricing-value-wrap">
-                        {typeof product.price === 'number' && product.price > 0 ? (
-                          <>
-                            <span className="pricing-main-val">
-                              ₹{Number(product.price).toLocaleString('en-IN')}
-                            </span>
-                            <span className="pricing-tax-note">+ GST (Input Credit Available)</span>
-                          </>
-                        ) : (
-                          <div className="pricing-quote-callout">
-                            <span className="quote-callout-pill">Competitive B2B / Retail Quote</span>
-                            <span className="quote-callout-sub">Custom quotes provided based on quantity &amp; configuration</span>
-                          </div>
-                        )}
+                    {typeof product.price === 'number' && product.price > 0 && (
+                      <div className="pricing-col">
+                        <span className="pricing-label">Official Pricing</span>
+                        <div className="pricing-value-wrap">
+                          <span className="pricing-main-val">
+                            ₹{Number(product.price).toLocaleString('en-IN')}
+                          </span>
+                          <span className="pricing-tax-note">+ GST (Input Credit Available)</span>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="stock-col">
                       <span className="pricing-label">Availability</span>
@@ -444,7 +340,7 @@ export default function ProductDetailsPage() {
                       ) : product.availabilityStatus === 'out_of_stock' ? (
                         <div className="stock-status-pill out-of-stock">
                           <span className="stock-dot"></span>
-                          <span>Out of Stock / Inquire for Restock</span>
+                          <span>Out of Stock</span>
                         </div>
                       ) : product.availabilityStatus === 'discontinued' ? (
                         <div className="stock-status-pill discontinued">
@@ -454,7 +350,7 @@ export default function ProductDetailsPage() {
                       ) : (
                         <div className="stock-status-pill on-demand">
                           <span className="stock-dot"></span>
-                          <span>Available on Order / Custom Solution</span>
+                          <span>Contact us for availability</span>
                         </div>
                       )}
                     </div>
@@ -465,14 +361,24 @@ export default function ProductDetailsPage() {
                     <WhatsAppButton
                       product={product}
                       category={category}
-                      label="Buy on WhatsApp"
+                      label="Buy"
                       className="whatsapp-detail-btn"
                     />
                     <button
-                      className="btn-primary btn-lg"
-                      onClick={scrollToQuoteForm}
+                      type="button"
+                      className={`product-select-btn product-detail-select-btn ${isSelected(product) ? 'selected' : ''}`}
+                      aria-pressed={isSelected(product)}
+                      disabled={!isSelected(product) && isFull}
+                      title={
+                        !isSelected(product) && isFull
+                          ? `You can send up to ${maxSelection} products in one WhatsApp enquiry.`
+                          : isSelected(product)
+                            ? 'Remove this product from the WhatsApp enquiry'
+                            : 'Add this product to a combined WhatsApp enquiry'
+                      }
+                      onClick={() => toggle(product, category)}
                     >
-                      Request Quotation &amp; Best Price →
+                      {isSelected(product) ? '✓ Added to enquiry' : '+ Add to enquiry'}
                     </button>
                     <a
                       href="tel:+919810000000"
@@ -547,100 +453,6 @@ export default function ProductDetailsPage() {
                 </div>
               </section>
 
-              {/* Dedicated Product Quote Form */}
-              <section className="product-quote-section" ref={quoteFormRef} id="quote-form">
-                <div className="quote-form-container">
-                  <div className="quote-form-header">
-                    <span className="section-tag">Instant Sales Enquiry</span>
-                    <h3 className="section-title">Request Quotation for {product.name}</h3>
-                    <p className="section-subtitle">
-                      Need custom hardware specifications, bulk order corporate discounts, or on-site deployment? Fill out the details below and our sales desk will reach out within 1 business hour.
-                    </p>
-                  </div>
-
-                  {formStatus.success ? (
-                    <div className="quote-success-banner">
-                      <div className="success-icon">✓</div>
-                      <h4>Quotation Request Received!</h4>
-                      <p>
-                        Thank you for your interest in <strong>{product.name}</strong>. Our engineering desk has received your request and will contact you promptly with itemized pricing and availability.
-                      </p>
-                      <button
-                        className="btn-outline"
-                        onClick={() => setFormStatus({ loading: false, success: false, error: null })}
-                      >
-                        Submit Another Request
-                      </button>
-                    </div>
-                  ) : (
-                    <form className="product-quote-form" onSubmit={handleQuoteSubmit}>
-                      {formStatus.error && (
-                        <div className="form-error-alert" role="alert">
-                          ⚠️ {formStatus.error}
-                        </div>
-                      )}
-
-                      <div className="form-grid-2">
-                        <div className="form-group">
-                          <label htmlFor="product-quote-name">
-                            Your Name / Company Name <span className="req">*</span>
-                          </label>
-                          <input
-                            id="product-quote-name"
-                            name="name"
-                            type="text"
-                            required
-                            placeholder="e.g. Rahul Sharma / ABC Logistics"
-                            value={formData.name}
-                            onChange={handleInputChange}
-                            disabled={formStatus.loading}
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label htmlFor="product-quote-contact">
-                            Phone Number or Email <span className="req">*</span>
-                          </label>
-                          <input
-                            id="product-quote-contact"
-                            name="contact_info"
-                            type="text"
-                            required
-                            placeholder="e.g. 9812345678 or sales@company.com"
-                            value={formData.contact_info}
-                            onChange={handleInputChange}
-                            disabled={formStatus.loading}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="form-group">
-                        <label htmlFor="product-quote-message">
-                          Requirements / Quantity / Notes <span className="req">*</span>
-                        </label>
-                        <textarea
-                          id="product-quote-message"
-                          name="message"
-                          rows="4"
-                          required
-                          value={formData.message}
-                          onChange={handleInputChange}
-                          disabled={formStatus.loading}
-                        ></textarea>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="btn-primary btn-lg w-full"
-                        disabled={formStatus.loading}
-                      >
-                        {formStatus.loading ? 'Transmitting Request...' : 'Submit Official Quote Request →'}
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </section>
-
               {/* Related Products from this Category */}
               {relatedProducts.length > 0 && (
                 <section className="related-products-section">
@@ -668,11 +480,11 @@ export default function ProductDetailsPage() {
                         <h4 className="related-card-title">{item.name}</h4>
                         <p className="related-card-spec">{item.spec}</p>
                         <div className="related-card-footer">
-                          <span className="related-card-action">View Specs &amp; Quote →</span>
+                          <span className="related-card-action">View Details →</span>
                           <WhatsAppButton
                             product={item}
                             category={category}
-                            label="WhatsApp"
+                            label="Buy"
                             className="whatsapp-related-btn"
                           />
                         </div>
@@ -685,6 +497,8 @@ export default function ProductDetailsPage() {
           )
         )}
       </main>
+
+      <WhatsAppSelectionBar selected={selected} onClear={clear} />
 
       <SiteFooter />
     </div>
