@@ -9,6 +9,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { PRODUCT_IMAGE_CAPTIONS } from '../data/productImages'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import WhatsAppButton from '../components/WhatsAppButton'
 import '../App.css'
 
 export default function ProductDetailsPage() {
@@ -461,6 +462,12 @@ export default function ProductDetailsPage() {
 
                   {/* Primary CTA Buttons */}
                   <div className="product-cta-bar">
+                    <WhatsAppButton
+                      product={product}
+                      category={category}
+                      label="Buy on WhatsApp"
+                      className="whatsapp-detail-btn"
+                    />
                     <button
                       className="btn-primary btn-lg"
                       onClick={scrollToQuoteForm}
@@ -474,6 +481,10 @@ export default function ProductDetailsPage() {
                       📞 Call Sales Desk
                     </a>
                   </div>
+                  <p className="whatsapp-cta-note">
+                    Opens WhatsApp with this product&apos;s details prefilled. No order is
+                    confirmed and no payment is collected on this website.
+                  </p>
                   {/* Product Overview & Description */}
                   {product.description && (
                     <div className="product-description-card">
@@ -658,6 +669,12 @@ export default function ProductDetailsPage() {
                         <p className="related-card-spec">{item.spec}</p>
                         <div className="related-card-footer">
                           <span className="related-card-action">View Specs &amp; Quote →</span>
+                          <WhatsAppButton
+                            product={item}
+                            category={category}
+                            label="WhatsApp"
+                            className="whatsapp-related-btn"
+                          />
                         </div>
                       </div>
                     ))}

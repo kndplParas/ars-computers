@@ -3,6 +3,9 @@ import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { fetchPublicCatalog, searchActiveCatalog } from '../lib/catalog'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import WhatsAppButton from '../components/WhatsAppButton'
+import WhatsAppSelectionBar from '../components/WhatsAppSelectionBar'
+import { useProductSelection } from '../lib/useProductSelection'
 import '../App.css'
 
 export default function SearchResultsPage() {
@@ -13,6 +16,7 @@ export default function SearchResultsPage() {
 
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const { selected, isSelected, toggle, clear, isFull, maxSelection } = useProductSelection()
 
   useEffect(() => {
     let isMounted = true
@@ -196,17 +200,44 @@ export default function SearchResultsPage() {
                       <h3 className="product-card-title">{item.rawName || item.name}</h3>
                       <p className="product-card-spec">{item.spec || item.specSummary}</p>
 
-                      <div className="product-card-footer">
-                        <button
-                          type="button"
-                          className="btn-product-quote"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            navigate(`/products/${item.slug}`)
-                          }}
-                        >
-                          View Specifications &amp; Request Quote →
-                        </button>
+                      <div className="product-card-actions">
+                        <WhatsAppButton
+                          product={item}
+                          className="whatsapp-card-btn"
+                        />
+
+                        <div className="product-card-secondary-actions">
+                          <button
+                            type="button"
+                            className="btn-product-quote product-view-details-btn"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigate(`/products/${item.slug}`)
+                            }}
+                          >
+                            View Specifications →
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`product-select-btn ${isSelected(item) ? 'selected' : ''}`}
+                            aria-pressed={isSelected(item)}
+                            disabled={!isSelected(item) && isFull}
+                            title={
+                              !isSelected(item) && isFull
+                                ? `You can send up to ${maxSelection} products in one WhatsApp enquiry.`
+                                : isSelected(item)
+                                  ? 'Remove this product from the WhatsApp enquiry'
+                                  : 'Add this product to a combined WhatsApp enquiry'
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggle(item)
+                            }}
+                          >
+                            {isSelected(item) ? '✓ Added to enquiry' : '+ Add to enquiry'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -216,6 +247,8 @@ export default function SearchResultsPage() {
           </div>
         </section>
       </main>
+
+      <WhatsAppSelectionBar selected={selected} onClear={clear} />
 
       <SiteFooter />
     </div>

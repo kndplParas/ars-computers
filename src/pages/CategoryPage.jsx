@@ -9,6 +9,9 @@ import {
 } from '../lib/catalog'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import WhatsAppButton from '../components/WhatsAppButton'
+import WhatsAppSelectionBar from '../components/WhatsAppSelectionBar'
+import { useProductSelection } from '../lib/useProductSelection'
 import '../App.css'
 
 export default function CategoryPage() {
@@ -26,6 +29,7 @@ export default function CategoryPage() {
   const [isLoading, setIsLoading] = useState(() => !initialData?.category)
   const [error, setError] = useState(null)
   const [isRetrying, setIsRetrying] = useState(false)
+  const { selected, isSelected, toggle, clear, isFull, maxSelection } = useProductSelection()
 
   // Retry handler for user clicks
   const handleRetry = async () => {
@@ -319,13 +323,41 @@ export default function CategoryPage() {
                             </div>
 
                             <div className="product-card-actions">
-                              <Link
-                                to={`/products/${item.slug}`}
-                                className="btn-primary w-full text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View Details &amp; Specifications →
-                              </Link>
+                              <WhatsAppButton
+                                product={item}
+                                category={category}
+                                className="whatsapp-card-btn"
+                              />
+
+                              <div className="product-card-secondary-actions">
+                                <Link
+                                  to={`/products/${item.slug}`}
+                                  className="btn-primary w-full text-center product-view-details-btn"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  View Details &amp; Specifications →
+                                </Link>
+
+                                <button
+                                  type="button"
+                                  className={`product-select-btn ${isSelected(item) ? 'selected' : ''}`}
+                                  aria-pressed={isSelected(item)}
+                                  disabled={!isSelected(item) && isFull}
+                                  title={
+                                    !isSelected(item) && isFull
+                                      ? `You can send up to ${maxSelection} products in one WhatsApp enquiry.`
+                                      : isSelected(item)
+                                        ? 'Remove this product from the WhatsApp enquiry'
+                                        : 'Add this product to a combined WhatsApp enquiry'
+                                  }
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggle(item, category)
+                                  }}
+                                >
+                                  {isSelected(item) ? '✓ Added to enquiry' : '+ Add to enquiry'}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </article>
@@ -362,6 +394,8 @@ export default function CategoryPage() {
           )
         )}
       </main>
+
+      <WhatsAppSelectionBar selected={selected} onClear={clear} />
 
       <SiteFooter />
     </div>
