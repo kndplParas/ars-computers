@@ -1022,6 +1022,76 @@ export function AdminDataProvider({ children }) {
     [isLiveDatabase, adminUser]
   )
 
+  // Customer-facing tracking status (separate from the internal Head-approved workflow)
+  const updateCustomerTrackingStatus = useCallback(
+    async (enquiryId, trackingStatus) => {
+      const allowedTrackingStatuses = ['received', 'in_progress', 'needs_info', 'completed']
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
+        throw new Error('Access denied: Authorized staff privileges required to update enquiry tracking.')
+      }
+      if (!allowedTrackingStatuses.includes(trackingStatus)) {
+        throw new Error('Invalid customer tracking status.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('update_customer_tracking_status', {
+          p_enquiry_id: enquiryId,
+          p_tracking_status: trackingStatus
+        })
+
+        if (error) throw error
+
+        setLiveEnquiries((prev) =>
+          prev.map((item) =>
+            item.id === enquiryId
+              ? {
+                  ...item,
+                  customer_tracking_status: trackingStatus,
+                  customer_tracking_updated_at: data?.customer_tracking_updated_at || new Date().toISOString(),
+                  customer_tracking_updated_by_name: data?.customer_tracking_updated_by_name || null,
+                  customer_tracking_updated_by_code: data?.customer_tracking_updated_by_code || null
+                }
+              : item
+          )
+        )
+        return data
+      }
+
+      setDemoEnquiries((prev) =>
+        prev.map((item) =>
+          item.id === enquiryId
+            ? { ...item, customer_tracking_status: trackingStatus, customer_tracking_updated_at: new Date().toISOString() }
+            : item
+        )
+      )
+      return { id: enquiryId, customer_tracking_status: trackingStatus }
+    },
+    [isLiveDatabase, adminUser]
+  )
+
+  const fetchCustomerTrackingHistory = useCallback(
+    async (enquiryId) => {
+      if (!isLiveDatabase || !supabase || !enquiryId) return []
+
+      const { data, error } = await supabase
+        .from('enquiry_tracking_history')
+        .select('id, enquiry_id, previous_status, tracking_status, updated_by, updated_by_name, updated_by_employee_code, created_at')
+        .eq('enquiry_id', enquiryId)
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      if (error) {
+        console.warn('Failed to load customer tracking history:', error.message)
+        return []
+      }
+
+      return data || []
+    },
+    [isLiveDatabase]
+  )
+
   // 3. Request Rejection with Mandatory Reason (Admin & Superadmin)
   const requestEnquiryRejection = useCallback(
     async (enquiryId, reason) => {
@@ -3859,6 +3929,8 @@ export function AdminDataProvider({ children }) {
     deleteEnquiry,
     addEnquiryNote,
     updateEnquiryProgress,
+    updateCustomerTrackingStatus,
+    fetchCustomerTrackingHistory,
     requestEnquiryRejection,
     reviewEnquiryRejection,
     submitEnquiryCompletion,

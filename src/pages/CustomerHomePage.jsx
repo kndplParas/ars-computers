@@ -5,6 +5,7 @@ import { fetchPublicCatalog, getInstantCatalog } from '../lib/catalog'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import CustomerServiceRequestForm from '../components/CustomerServiceRequestForm'
+import EnquiryTrackingCard from '../components/EnquiryTrackingCard'
 import '../App.css'
 
 
@@ -67,6 +68,7 @@ function CustomerHomePage() {
     success: false,
     error: null
   })
+  const [submittedEnquiryId, setSubmittedEnquiryId] = useState(null)
 
   // Fetch active catalog from Supabase (with unconfigured demo fallback)
   useEffect(() => {
@@ -235,29 +237,30 @@ function CustomerHomePage() {
 
     try {
       if (isSupabaseConfigured && supabase) {
-        // Direct public insert into enquiries table with 8-second timeout
-        const submitPromise = supabase.from('enquiries').insert([
-          {
-            name,
-            contact_info: contactInfo,
-            category_interest: formData.category_interest,
-            message,
-            status: 'new'
-          }
-        ])
+        // Secure RPC validates and inserts, then returns the generated enquiry reference.
+        const submitPromise = supabase.rpc('create_customer_enquiry', {
+          p_name: name,
+          p_contact_info: contactInfo,
+          p_category_interest: formData.category_interest,
+          p_message: message
+        })
 
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Submission timed out')), 8000)
         )
 
-        const { error: insertErr } = await Promise.race([submitPromise, timeoutPromise])
+        const { data, error: insertErr } = await Promise.race([submitPromise, timeoutPromise])
 
         if (insertErr) {
           throw insertErr
         }
+
+        const payload = Array.isArray(data) ? data[0] : data
+        setSubmittedEnquiryId(payload?.enquiry_number || null)
       } else {
         // Graceful local handling when offline or unconfigured
         await new Promise(resolve => setTimeout(resolve, 400))
+        setSubmittedEnquiryId(null)
       }
 
       // Record successful submission timestamp for client throttling
@@ -505,39 +508,31 @@ function CustomerHomePage() {
       {/* 4. SERVICES SECTION */}
       <section id="services" className="services-section">
         <div className="section-container">
-          <div className="section-header-centered">
-            <span className="section-tag">Professional Services &amp; Repairs</span>
-            <h3 className="section-title">Installation, Maintenance &amp; After-Sales Support</h3>
-            <p className="section-subtitle">
-              Comprehensive hardware diagnostics, CCTV surveillance engineering, and technical repair services delivered by certified engineers with guaranteed workmanship.
-            </p>
-
-            {/* Service View Switcher Tabs */}
-            <div className="service-mode-tabs" role="tablist" aria-label="Service Section View">
-              <button
-                type="button"
-                role="tab"
-                id="service-tab-offerings"
-                aria-selected={serviceTab === 'offerings'}
-                aria-controls="service-panel-offerings"
-                className={`service-mode-tab-btn ${serviceTab === 'offerings' ? 'active' : ''}`}
-                onClick={() => setServiceTab('offerings')}
-              >
-                <span>⚙️ Service Capabilities &amp; AMC</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="service-tab-request"
-                aria-selected={serviceTab === 'request'}
-                aria-controls="service-panel-request"
-                className={`service-mode-tab-btn ${serviceTab === 'request' ? 'active' : ''}`}
-                onClick={() => setServiceTab('request')}
-              >
-                <span>🛠️ Raise a Service / Repair Request</span>
-                <span className="service-tab-badge">Instant Ticket</span>
-              </button>
+          <div className="section-header-centered services-hero-layout">
+            <div className="services-introduction">
+              <span className="section-tag">Professional Services &amp; Repairs</span>
+              <h3 className="section-title">Installation, Maintenance &amp; After-Sales Support</h3>
+              <p className="section-subtitle">
+                Comprehensive hardware diagnostics, CCTV surveillance engineering, and technical repair services delivered by certified engineers with guaranteed workmanship.
+              </p>
+              <div className="services-intro-actions">
+                <button
+                  type="button"
+                  className="btn-outline services-capabilities-btn"
+                  onClick={() => setServiceTab('offerings')}
+                >
+                  ⚙️ Service Capabilities &amp; AMC
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary services-raise-request-btn"
+                  onClick={handleServiceEnquiryHeroClick}
+                >
+                  🛠️ Raise a Service / Repair Request
+                </button>
+              </div>
             </div>
+            <EnquiryTrackingCard />
           </div>
 
           {serviceTab === 'offerings' ? (
@@ -756,10 +751,20 @@ function CustomerHomePage() {
                   <span className="success-icon">✓</span>
                   <strong>Thank You!</strong>
                   <p>Your inquiry has been received. Our team will contact you shortly.</p>
+                  {submittedEnquiryId && (
+                    <div className="submission-reference-box">
+                      <span>Your Enquiry ID</span>
+                      <strong>{submittedEnquiryId}</strong>
+                      <small>Use this ID and the mobile number used on this form to track your enquiry on the Services page.</small>
+                    </div>
+                  )}
                   <button
                     className="btn-outline clear-filter-btn"
                     style={{ marginTop: '16px' }}
-                    onClick={() => setFormStatus({ loading: false, success: false, error: null })}
+                    onClick={() => {
+                      setSubmittedEnquiryId(null)
+                      setFormStatus({ loading: false, success: false, error: null })
+                    }}
                   >
                     Send Another Inquiry
                   </button>

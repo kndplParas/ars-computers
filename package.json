@@ -12,8 +12,9 @@
     "test:responsive": "node test/admin-enquiries-responsive.test.js",
     "test:notifications": "node --test test/email-notifications.test.js",
     "test:whatsapp": "node --test test/whatsapp-purchase.test.js",
+ "test:tracking": "node test/enquiry-tracking.test.js",
     "preview": "vite preview",
-    "check:deploy": "npm run lint && npm run test:security && npm run test:product-content && npm run test:responsive && npm run test:notifications && npm run test:whatsapp && npm run build && npx wrangler deploy --dry-run"
+    "check:deploy": "npm run lint && npm run test:security && npm run test:product-content && npm run test:responsive && npm run test:notifications && npm run test:whatsapp && npm run test:tracking && npm run build && npx wrangler deploy --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

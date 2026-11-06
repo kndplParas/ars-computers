@@ -276,22 +276,21 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
         : cleanMobile
 
       const enquiryPayload = {
-        name: cleanName,
-        contact_info: contactInfo,
-        category_interest: `Service: ${formData.product_category}`.slice(0, 50),
-        message: formattedMessage,
-        status: 'new'
+        p_name: cleanName,
+        p_contact_info: contactInfo,
+        p_category_interest: `Service: ${formData.product_category}`.slice(0, 50),
+        p_message: formattedMessage
       }
 
-      // Live Supabase submission targeting public.enquiries
+      // Live Supabase submission targeting public.enquiries through a secured RPC.
       if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase
-          .from('enquiries')
-          .insert([enquiryPayload])
+        const { data, error } = await supabase.rpc('create_customer_enquiry', enquiryPayload)
 
         if (error) {
           throw new Error(error.message || 'Unable to register service enquiry in live database.')
         }
+
+        const rpcPayload = Array.isArray(data) ? data[0] : data
 
         try {
           sessionStorage.setItem('ars_last_service_request_submitted_at', String(Date.now()))
@@ -300,6 +299,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
         setSubmittedTicket({
           ...payload,
           ticket_number: generatedTicketNumber,
+          enquiry_number: rpcPayload?.enquiry_number || null,
           created_at: new Date().toISOString()
         })
       } else {
@@ -356,8 +356,9 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
   }
 
   const handleCopyTicket = () => {
-    if (submittedTicket?.ticket_number) {
-      navigator.clipboard.writeText(submittedTicket.ticket_number)
+    const reference = submittedTicket?.enquiry_number || submittedTicket?.ticket_number
+    if (reference) {
+      navigator.clipboard.writeText(reference)
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
     }
@@ -375,21 +376,24 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
         </p>
 
         <div className="ticket-number-display-box">
-          <span className="ticket-label">OFFICIAL SERVICE TICKET NUMBER</span>
+          <span className="ticket-label">OFFICIAL ENQUIRY ID</span>
           <div className="ticket-code-row">
-            <span className="ticket-code">{submittedTicket.ticket_number}</span>
+            <span className="ticket-code">{submittedTicket.enquiry_number || submittedTicket.ticket_number}</span>
             <button
               type="button"
               className="copy-ticket-btn"
               onClick={handleCopyTicket}
-              title="Copy Ticket Number to Clipboard"
+              title="Copy Enquiry ID to Clipboard"
             >
               {copied ? '✓ Copied' : '📋 Copy ID'}
             </button>
           </div>
           <p className="ticket-help-text">
-            Keep this reference code handy for updates, warranty validation, and technician visit coordination.
+            Keep this ID handy to track your request on the Services page using the registered mobile number.
           </p>
+          {submittedTicket.enquiry_number && submittedTicket.ticket_number && (
+            <p className="service-reference-note">Service reference: {submittedTicket.ticket_number}</p>
+          )}
         </div>
 
         <div className="ticket-summary-grid">

@@ -115,6 +115,8 @@ export default function AdminEnquiriesPage() {
     updateEnquiryNotes,
     addEnquiryNote,
     updateEnquiryProgress,
+    updateCustomerTrackingStatus,
+    fetchCustomerTrackingHistory,
     requestEnquiryRejection,
     reviewEnquiryRejection,
     submitEnquiryCompletion,
@@ -191,6 +193,11 @@ export default function AdminEnquiriesPage() {
   const [selfVisitDate, setSelfVisitDate] = useState('')
   const [selfExpectedArrival, setSelfExpectedArrival] = useState('')
   const [selfVisitNote, setSelfVisitNote] = useState('')
+
+  // Customer Tracking (customer-facing, separate from internal approval workflow)
+  const [customerTrackingHistory, setCustomerTrackingHistory] = useState([])
+  const [trackingDraft, setTrackingDraft] = useState('received')
+  const [isUpdatingCustomerTracking, setIsUpdatingCustomerTracking] = useState(false)
 
   // Phase 2 Activity Timeline & Rejection States
   const [enquiryActivities, setEnquiryActivities] = useState([])
@@ -447,6 +454,7 @@ export default function AdminEnquiriesPage() {
 
   const handleOpenDetails = async (enquiry) => {
     setSelectedEnquiry(enquiry)
+    setTrackingDraft(enquiry.customer_tracking_status || 'received')
     setEditingNotes(enquiry.admin_notes || '')
     setNewNoteText('')
     setReviewNotesInput('')
@@ -459,9 +467,17 @@ export default function AdminEnquiriesPage() {
       } else {
         setEnquiryActivities([])
       }
+
+      if (fetchCustomerTrackingHistory) {
+        const history = await fetchCustomerTrackingHistory(enquiry.id)
+        setCustomerTrackingHistory(history || [])
+      } else {
+        setCustomerTrackingHistory([])
+      }
     } catch (err) {
-      console.error('Failed to load activities:', err)
+      console.error('Failed to load enquiry details:', err)
       setEnquiryActivities([])
+      setCustomerTrackingHistory([])
     } finally {
       setIsLoadingActivities(false)
     }
@@ -475,9 +491,11 @@ export default function AdminEnquiriesPage() {
 
   const handleCloseDetails = () => {
     setSelectedEnquiry(null)
+    setTrackingDraft('received')
     setEditingNotes('')
     setNewNoteText('')
     setEnquiryActivities([])
+    setCustomerTrackingHistory([])
     setEnquiryProofs([])
     setIsRejectionModalOpen(false)
     setRejectionReasonInput('')
@@ -929,6 +947,49 @@ export default function AdminEnquiriesPage() {
       if (loadAdminEnquiries) await loadAdminEnquiries()
     } catch (err) {
       showNotification(`Failed to update progress: ${err.message}`, 'error')
+    }
+  }
+
+  // --- Customer-Facing Tracking Status Handler (separate from approval) ---
+  const TRACKING_OPTIONS = [
+    { value: 'received', label: 'Received', icon: '📥' },
+    { value: 'in_progress', label: 'In Progress', icon: '🔧' },
+    { value: 'needs_info', label: 'Need More Info', icon: '❓' },
+    { value: 'completed', label: 'Completed', icon: '✓' }
+  ]
+
+  const handleCustomerTrackingSave = async () => {
+    if (!selectedEnquiry || !updateCustomerTrackingStatus) return
+
+    const nextStatus = trackingDraft
+    if (!TRACKING_OPTIONS.some((option) => option.value === nextStatus)) return
+    if ((selectedEnquiry.customer_tracking_status || 'received') === nextStatus) return
+
+    setIsUpdatingCustomerTracking(true)
+
+    try {
+      const updated = await updateCustomerTrackingStatus(selectedEnquiry.id, nextStatus)
+
+      setSelectedEnquiry((prev) => ({
+        ...prev,
+        customer_tracking_status: nextStatus,
+        customer_tracking_updated_at: updated?.customer_tracking_updated_at || new Date().toISOString(),
+        customer_tracking_updated_by_name: updated?.customer_tracking_updated_by_name || null,
+        customer_tracking_updated_by_code: updated?.customer_tracking_updated_by_code || null
+      }))
+
+      if (loadAdminEnquiries) await loadAdminEnquiries()
+
+      if (fetchCustomerTrackingHistory) {
+        const history = await fetchCustomerTrackingHistory(selectedEnquiry.id)
+        setCustomerTrackingHistory(history || [])
+      }
+
+      showNotification(`Customer tracking updated to "${TRACKING_OPTIONS.find((option) => option.value === nextStatus)?.label}".`)
+    } catch (err) {
+      showNotification(`Failed to update customer tracking: ${err.message}`, 'error')
+    } finally {
+      setIsUpdatingCustomerTracking(false)
     }
   }
 
@@ -3694,6 +3755,117 @@ export default function AdminEnquiriesPage() {
                           </div>
                         )
                       })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Customer Tracking — shown only on the public Services page */}
+                <div
+                  className="customer-tracking-admin-card"
+                  style={{
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: '8px',
+                    padding: '14px 16px',
+                    marginBottom: '14px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '1.2rem' }} aria-hidden="true">🔎</span>
+                      <div>
+                        <strong style={{ color: '#1e3a8a', fontSize: '0.94rem' }}>Customer Tracking</strong>
+                        <span style={{ display: 'block', color: '#475569', fontSize: '0.78rem', marginTop: '2px' }}>
+                          Shown on the Services page. Does not change Head approval, assignment or completion status.
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`customer-tracking-admin-pill tracking-${selectedEnquiry.customer_tracking_status || 'received'}`}>
+                      {TRACKING_OPTIONS.find((option) => option.value === (selectedEnquiry.customer_tracking_status || 'received'))?.icon || '📥'}{' '}
+                      {TRACKING_OPTIONS.find((option) => option.value === (selectedEnquiry.customer_tracking_status || 'received'))?.label || 'Received'}
+                    </span>
+                  </div>
+
+                  <div className="customer-tracking-grid">
+                    <div>
+                      <label htmlFor="customer-tracking-status" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                        Customer-facing Status
+                      </label>
+                      <select
+                        id="customer-tracking-status"
+                        className="admin-select"
+                        value={trackingDraft}
+                        onChange={(event) => setTrackingDraft(event.target.value)}
+                        disabled={isUpdatingCustomerTracking}
+                        style={{ width: '100%' }}
+                      >
+                        {TRACKING_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.icon} {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        onClick={handleCustomerTrackingSave}
+                        disabled={
+                          isUpdatingCustomerTracking ||
+                          (selectedEnquiry.customer_tracking_status || 'received') === trackingDraft
+                        }
+                        style={{ marginTop: '8px' }}
+                      >
+                        {isUpdatingCustomerTracking ? 'Updating…' : 'Update Tracking'}
+                      </button>
+                    </div>
+
+                    <div style={{ background: '#ffffff', border: '1px solid #dbeafe', borderRadius: '8px', padding: '10px 12px' }}>
+                      <span style={{ display: 'block', color: '#64748b', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                        Last Customer Tracking Update
+                      </span>
+                      {selectedEnquiry.customer_tracking_updated_by_name ? (
+                        <>
+                          <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
+                            {selectedEnquiry.customer_tracking_updated_by_name}
+                          </strong>
+                          {selectedEnquiry.customer_tracking_updated_by_code && (
+                            <span style={{ display: 'block', color: '#0369a1', fontSize: '0.76rem', fontWeight: 600 }}>
+                              Code: {selectedEnquiry.customer_tracking_updated_by_code}
+                            </span>
+                          )}
+                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>
+                            {formatDateTime(selectedEnquiry.customer_tracking_updated_at)}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>
+                          No staff update recorded yet.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {customerTrackingHistory.length > 0 && (
+                    <div style={{ marginTop: '12px', borderTop: '1px solid #dbeafe', paddingTop: '10px' }}>
+                      <span style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
+                        Tracking History
+                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {customerTrackingHistory.slice(0, 5).map((entry) => {
+                          const statusOption = TRACKING_OPTIONS.find((option) => option.value === entry.tracking_status)
+                          return (
+                            <div key={entry.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: '#ffffff', border: '1px solid #dbeafe', borderRadius: '6px', padding: '6px 8px', fontSize: '0.76rem' }}>
+                              <span style={{ minWidth: 0 }}>
+                                <strong style={{ color: '#1e3a8a' }}>{statusOption?.icon} {statusOption?.label || entry.tracking_status}</strong>
+                                <span style={{ display: 'block', color: '#64748b' }}>
+                                  {entry.updated_by_name || 'Staff'} {entry.updated_by_employee_code ? `[${entry.updated_by_employee_code}]` : ''}
+                                </span>
+                              </span>
+                              <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{formatDateTime(entry.created_at)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
