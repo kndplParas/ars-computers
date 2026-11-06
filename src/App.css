@@ -12031,7 +12031,8 @@
    Admin Enquiries — Responsive table and cards
    ========================================================================== */
 
-/* Desktop / large tablet: fit the table and pin Actions to the right edge. */
+/* Desktop / large tablet: natural column sizing with horizontal scrolling,
+   headings at their original readable size, Actions frozen to the right edge. */
 @media (min-width: 901px) {
   .enquiries-table-wrap {
     overflow-x: auto;
@@ -12039,35 +12040,54 @@
     scrollbar-gutter: stable;
   }
 
+  /* Auto layout lets every column take its natural content width;
+     the wrapper scrolls horizontally when the natural width exceeds the screen. */
   .enquiries-table-wrap .admin-data-table {
     width: 100%;
-    min-width: 0;
-    table-layout: fixed;
+    table-layout: auto;
   }
 
   .enquiries-table-wrap .admin-data-table th,
   .enquiries-table-wrap .admin-data-table td {
-    padding: 11px 10px;
+    vertical-align: middle;
   }
 
+  /* Headings keep the original readable size and never wrap vertically. */
+  .enquiries-table-wrap .admin-data-table th {
+    font-size: 0.74rem;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+    height: 46px;
+  }
+
+  /* Reasonable minimum widths so data columns never squeeze to a sliver;
+     wider screens stretch them naturally. */
   .enquiries-table-wrap .enquiry-id-heading {
-    width: 120px;
+    min-width: 120px;
   }
 
   .enquiries-table-wrap .enquiry-customer-heading {
-    width: 185px;
+    min-width: 195px;
   }
 
   .enquiries-table-wrap .enquiry-requirement-heading {
-    width: 165px;
+    min-width: 165px;
+  }
+
+  .enquiries-table-wrap .enquiry-message-heading {
+    min-width: 250px;
   }
 
   .enquiries-table-wrap .enquiry-status-heading {
-    width: 145px;
+    min-width: 140px;
   }
 
   .enquiries-table-wrap .enquiry-submitted-heading {
-    width: 98px;
+    min-width: 105px;
+  }
+
+  .enquiries-table-wrap .enquiry-actions-heading {
+    min-width: 190px;
   }
 
   .enquiries-table-wrap .enquiry-id-badge {
@@ -12093,7 +12113,11 @@
 
   .enquiries-table-wrap .enquiry-message-snippet {
     max-width: 100%;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+    overflow: hidden;
+    white-space: normal;
     font-size: 0.8rem;
   }
 
@@ -12103,6 +12127,16 @@
     justify-content: center;
     text-align: center;
     line-height: 1.25;
+  }
+
+  .enquiries-table-wrap .enquiry-status-heading,
+  .enquiries-table-wrap .enquiry-submitted-heading,
+  .enquiries-table-wrap .enquiry-actions-heading {
+    text-align: center;
+  }
+
+  .enquiries-table-wrap .enquiry-id-heading {
+    text-align: left;
   }
 
   .enquiries-table-wrap .enquiry-actions-heading,
@@ -12148,31 +12182,7 @@
   }
 }
 
-/* Small desktop / tablet: reduce padding before switching to cards. */
-@media (min-width: 901px) and (max-width: 1180px) {
-  .enquiries-table-wrap .admin-data-table th,
-  .enquiries-table-wrap .admin-data-table td {
-    padding: 9px 7px;
-  }
-
-  .enquiries-table-wrap .enquiry-customer-heading {
-    width: 165px;
-  }
-
-  .enquiries-table-wrap .enquiry-requirement-heading {
-    width: 145px;
-  }
-
-  .enquiries-table-wrap .enquiry-status-heading {
-    width: 128px;
-  }
-
-  .enquiries-table-wrap .btn-action-icon {
-    font-size: 0.72rem !important;
-    padding-left: 7px !important;
-    padding-right: 7px !important;
-  }
-}
+/* Small desktop / tablet: neutral — columns scroll horizontally like desktop. */
 
 /* Mobile and small tablets: keep card layout and touch-friendly actions. */
 @media (max-width: 900px) {
@@ -12220,145 +12230,6 @@
 
   .mobile-enquiries-cards .view-details-btn {
     font-weight: 700;
-  }
-}
-
-/* ==========================================================================
-   Admin Enquiries — Balanced table columns and header wrapping
-   ========================================================================== */
-@media (min-width: 901px) {
-  .enquiries-table-wrap .admin-data-table {
-    width: 100%;
-    min-width: 0;
-    table-layout: fixed;
-  }
-
-  .enquiries-table-wrap .enquiry-select-col {
-    width: 44px;
-  }
-
-  .enquiries-table-wrap .enquiry-id-col {
-    width: 128px;
-  }
-
-  .enquiries-table-wrap .enquiry-customer-col {
-    width: 190px;
-  }
-
-  .enquiries-table-wrap .enquiry-requirement-col {
-    width: 175px;
-  }
-
-  .enquiries-table-wrap .enquiry-message-col {
-    width: auto;
-  }
-
-  .enquiries-table-wrap .enquiry-status-col {
-    width: 145px;
-  }
-
-  .enquiries-table-wrap .enquiry-submitted-col {
-    width: 102px;
-  }
-
-  .enquiries-table-wrap .enquiry-actions-col {
-    width: 185px;
-  }
-
-  .enquiries-table-wrap .enquiry-actions-col--wide {
-    width: 235px;
-  }
-
-  .enquiries-table-wrap .enquiry-actions-col--staff {
-    width: 118px;
-  }
-
-  .enquiries-table-wrap .admin-data-table th,
-  .enquiries-table-wrap .admin-data-table td {
-    padding: 10px 9px;
-    vertical-align: middle;
-  }
-
-  .enquiries-table-wrap .admin-data-table th {
-    font-size: 0.7rem;
-    line-height: 1.28;
-    letter-spacing: 0.45px;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  .enquiries-table-wrap .enquiry-table-row td {
-    height: 54px;
-    font-size: 0.86rem;
-    line-height: 1.4;
-  }
-
-  .enquiries-table-wrap .enquiry-message-heading,
-  .enquiries-table-wrap .enquiry-message-cell .enquiry-message-snippet {
-    white-space: normal;
-    text-wrap: balance;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  .enquiries-table-wrap .enquiry-message-heading {
-    line-height: 1.35;
-    text-align: left;
-  }
-
-  .enquiries-table-wrap .enquiry-id-heading,
-  .enquiries-table-wrap .enquiry-customer-heading,
-  .enquiries-table-wrap .enquiry-requirement-heading,
-  .enquiries-table-wrap .enquiry-submitted-heading,
-  .enquiries-table-wrap .enquiry-actions-heading {
-    line-height: 1.3;
-    text-wrap: balance;
-  }
-
-  .enquiries-table-wrap .enquiry-status-heading,
-  .enquiries-table-wrap .enquiry-submitted-heading,
-  .enquiries-table-wrap .enquiry-actions-heading {
-    text-align: center;
-  }
-
-  .enquiries-table-wrap .enquiry-id-heading {
-    text-align: left;
-  }
-}
-
-@media (min-width: 901px) and (max-width: 1180px) {
-  .enquiries-table-wrap .admin-data-table th,
-  .enquiries-table-wrap .admin-data-table td {
-    padding: 9px 6px;
-  }
-
-  .enquiries-table-wrap .enquiry-id-col {
-    width: 116px;
-  }
-
-  .enquiries-table-wrap .enquiry-customer-col {
-    width: 165px;
-  }
-
-  .enquiries-table-wrap .enquiry-requirement-col {
-    width: 150px;
-  }
-
-  .enquiries-table-wrap .enquiry-status-col {
-    width: 126px;
-  }
-
-  .enquiries-table-wrap .enquiry-submitted-col {
-    width: 90px;
-  }
-
-  .enquiries-table-wrap .enquiry-actions-col {
-    width: 165px;
-  }
-
-  .enquiries-table-wrap .enquiry-actions-col--wide {
-    width: 210px;
   }
 }
 

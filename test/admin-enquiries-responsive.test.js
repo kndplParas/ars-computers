@@ -63,36 +63,36 @@ test('Sticky Actions work for pending-rejection rows without hiding their amber 
 test('Actions action groups wrap safely for approve/remove workflows',
   css.includes('.enquiries-table-wrap .enquiry-actions-cell > div') &&
   css.includes('flex-wrap: wrap'))
-test('Desktop table uses fixed columns instead of stretching every column equally',
-  css.includes('table-layout: fixed') &&
-  css.includes('.enquiry-customer-heading') &&
-  css.includes('.enquiry-requirement-heading') &&
-  css.includes('.enquiry-status-heading'))
+test('Desktop table uses natural column sizing and scrolls horizontally inside the container',
+  css.includes('table-layout: auto') &&
+  !css.includes('table-layout: fixed') &&
+  css.includes('.enquiries-table-wrap') &&
+  css.includes('overflow-x: auto'))
 test('Message snippets remain inspectable instead of being removed',
   page.includes('className="enquiry-message-snippet"') &&
   page.includes('title={enq.message}') &&
   css.includes('.enquiry-message-snippet'))
-test('Enquiry table declares content-based column widths with a colgroup',
-  page.includes('<colgroup>') &&
-  ['enquiry-select-col', 'enquiry-id-col', 'enquiry-customer-col', 'enquiry-requirement-col', 'enquiry-message-col', 'enquiry-status-col', 'enquiry-submitted-col', 'enquiry-actions-col']
-    .every((className) => page.includes(className)) &&
-  css.includes('.enquiries-table-wrap .enquiry-id-col') &&
-  css.includes('.enquiries-table-wrap .enquiry-customer-col') &&
-  css.includes('.enquiries-table-wrap .enquiry-message-col'))
-test('Header labels wrap neatly and cannot collide at desktop widths',
-  css.includes('white-space: normal') &&
-  css.includes('text-wrap: balance') &&
-  css.includes('overflow-wrap: anywhere') &&
-  css.includes('.enquiries-table-wrap .enquiry-message-heading') &&
-  css.includes('.enquiries-table-wrap .enquiry-status-heading'))
-test('Header and body cells use the same comfortable horizontal padding',
-  css.includes('.enquiries-table-wrap .admin-data-table th,') &&
-  css.includes('.enquiries-table-wrap .admin-data-table td') &&
-  css.includes('padding: 10px 9px'))
-test('Rows keep a readable font size and comfortable minimum height',
-  css.includes('.enquiries-table-wrap .enquiry-table-row td') &&
-  css.includes('height: 54px') &&
-  css.includes('font-size: 0.86rem'))
+test('No colgroup forces narrow columns; headings carry reasonable minimum widths',
+  !page.includes('<colgroup>') &&
+  ['enquiry-id-heading', 'enquiry-customer-heading', 'enquiry-requirement-heading',
+    'enquiry-message-heading', 'enquiry-status-heading', 'enquiry-submitted-heading',
+    'enquiry-actions-heading'].every((className) =>
+    css.includes(`.enquiries-table-wrap .${className}`) && !page.includes(className + '-col')) &&
+  css.includes('min-width'))
+test('Headings keep the original readable size, height and never wrap vertically',
+  css.includes('.enquiries-table-wrap .admin-data-table th') &&
+  /font-size: 0\.74rem/.test(css) &&
+  /white-space: nowrap/.test(css))
+test('Header and body cells use the same original comfortable padding',
+  /\.admin-data-table th \{[^}]*padding: 14px 18px/.test(css) &&
+  /\.admin-data-table td \{[^}]*padding: 14px 18px/.test(css))
+test('Rows keep a readable font size without compressed overrides',
+  /\.admin-data-table \{[^}]*font-size: 0\.88rem/.test(css) &&
+  !/(?:\.enquiries-table-wrap[^{}]*)\{[^}]*font-size: 0\.7rem/.test(css) &&
+  !/(?:\.enquiries-table-wrap[^{}]*)\{[^}]*font-size: 0\.86rem/.test(css))
+test('Actions column reserves a stable minimum width so View never collapses',
+  css.includes('.enquiries-table-wrap .enquiry-actions-heading') &&
+  css.includes('min-width: 190px'))
 
 console.log('\n[Suite 2] Shared desktop and mobile View action')
 const desktopViewClicks = page.match(/onClick={\(\) => handleOpenDetails\(enq\)}/g) || []
