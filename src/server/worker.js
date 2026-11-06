@@ -16,6 +16,11 @@ import {
   processNotificationOutbox,
   sendTestNotification
 } from './notificationService.js'
+import {
+  handleTrackingEnquiries,
+  handleTrackingOtpRequest,
+  handleTrackingOtpVerify
+} from './trackingOtpService.js'
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -79,6 +84,28 @@ export default {
         console.error('[email-notifications] Manual notification route failed:', error?.message || error)
         return jsonResponse({ success: false, error: message }, 503)
       }
+    }
+
+    // Route: /api/tracking/* — customer OTP + sanitized enquiry tracking.
+    // Public (no process token) because customers use this flow; the database
+    // applies per-identifier and per-IP rate limits inside the RPCs.
+    if (url.pathname.startsWith('/api/tracking/')) {
+      if (request.method !== 'POST') {
+        return jsonResponse({ success: false, error: 'Method not allowed.' }, 405)
+      }
+
+      const trackingRoute = url.pathname
+      if (trackingRoute === '/api/tracking/otp/request') {
+        return handleTrackingOtpRequest(request, env)
+      }
+      if (trackingRoute === '/api/tracking/otp/verify') {
+        return handleTrackingOtpVerify(request, env)
+      }
+      if (trackingRoute === '/api/tracking/enquiries') {
+        return handleTrackingEnquiries(request, env)
+      }
+
+      return jsonResponse({ success: false, error: 'Not found.' }, 404)
     }
 
     // Route: /api/share/attachment/:token

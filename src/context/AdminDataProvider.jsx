@@ -1077,10 +1077,10 @@ export function AdminDataProvider({ children }) {
 
       const { data, error } = await supabase
         .from('enquiry_tracking_history')
-        .select('id, enquiry_id, previous_status, tracking_status, updated_by, updated_by_name, updated_by_employee_code, created_at')
+        .select('id, enquiry_id, previous_status, tracking_status, change_kind, previous_value, new_value, updated_by, updated_by_name, updated_by_employee_code, created_at')
         .eq('enquiry_id', enquiryId)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(25)
 
       if (error) {
         console.warn('Failed to load customer tracking history:', error.message)
@@ -1090,6 +1090,59 @@ export function AdminDataProvider({ children }) {
       return data || []
     },
     [isLiveDatabase]
+  )
+
+  // Customer-facing visit details (engineer approved contact, visit status, note)
+  const updateCustomerVisitDetails = useCallback(
+    async (enquiryId, { engineerContact, visitStatus, visitNote }) => {
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
+        throw new Error('Access denied: Authorized staff privileges required to update visit details.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('update_customer_visit_details', {
+          p_enquiry_id: enquiryId,
+          p_engineer_contact: engineerContact || null,
+          p_visit_status: visitStatus || null,
+          p_visit_note: visitNote || null
+        })
+
+        if (error) throw error
+
+        const payload = Array.isArray(data) ? data[0] : data
+
+        setLiveEnquiries((prev) =>
+          prev.map((item) =>
+            item.id === enquiryId
+              ? {
+                  ...item,
+                  engineer_contact_display: payload?.engineer_contact_display ?? null,
+                  visit_status: payload?.visit_status ?? null,
+                  visit_progress_note: payload?.visit_progress_note ?? null
+                }
+              : item
+          )
+        )
+        return payload
+      }
+
+      setDemoEnquiries((prev) =>
+        prev.map((item) =>
+          item.id === enquiryId
+            ? {
+                ...item,
+                engineer_contact_display: engineerContact || null,
+                visit_status: visitStatus || null,
+                visit_progress_note: visitNote || null
+              }
+            : item
+        )
+      )
+      return { id: enquiryId }
+    },
+    [isLiveDatabase, adminUser]
   )
 
   // 3. Request Rejection with Mandatory Reason (Admin & Superadmin)
@@ -3930,6 +3983,7 @@ export function AdminDataProvider({ children }) {
     addEnquiryNote,
     updateEnquiryProgress,
     updateCustomerTrackingStatus,
+    updateCustomerVisitDetails,
     fetchCustomerTrackingHistory,
     requestEnquiryRejection,
     reviewEnquiryRejection,

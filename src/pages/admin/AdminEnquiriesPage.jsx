@@ -116,6 +116,7 @@ export default function AdminEnquiriesPage() {
     addEnquiryNote,
     updateEnquiryProgress,
     updateCustomerTrackingStatus,
+    updateCustomerVisitDetails,
     fetchCustomerTrackingHistory,
     requestEnquiryRejection,
     reviewEnquiryRejection,
@@ -455,6 +456,8 @@ export default function AdminEnquiriesPage() {
   const handleOpenDetails = async (enquiry) => {
     setSelectedEnquiry(enquiry)
     setTrackingDraft(enquiry.customer_tracking_status || 'received')
+    setVisitDetailDraft(syncVisitDetailDraft(enquiry))
+    setHasVisitDetailChanges(false)
     setEditingNotes(enquiry.admin_notes || '')
     setNewNoteText('')
     setReviewNotesInput('')
@@ -492,6 +495,7 @@ export default function AdminEnquiriesPage() {
   const handleCloseDetails = () => {
     setSelectedEnquiry(null)
     setTrackingDraft('received')
+    setHasVisitDetailChanges(false)
     setEditingNotes('')
     setNewNoteText('')
     setEnquiryActivities([])
@@ -957,6 +961,74 @@ export default function AdminEnquiriesPage() {
     { value: 'needs_info', label: 'Need More Info', icon: '❓' },
     { value: 'completed', label: 'Completed', icon: '✓' }
   ]
+
+  const VISIT_STATUS_OPTIONS = [
+    { value: '', label: 'Not set (hide from customer)' },
+    { value: 'scheduled', label: 'Visit Scheduled' },
+    { value: 'in_progress', label: 'Visit In Progress' },
+    { value: 'completed', label: 'Visit Completed' },
+    { value: 'cancelled', label: 'Visit Cancelled' }
+  ]
+
+  const [visitDetailDraft, setVisitDetailDraft] = useState({ contact: '', visitStatus: '', note: '' })
+  const [isSavingVisitDetails, setIsSavingVisitDetails] = useState(false)
+  const [hasVisitDetailChanges, setHasVisitDetailChanges] = useState(false)
+
+  const syncVisitDetailDraft = (enquiry) => ({
+    contact: enquiry.engineer_contact_display || '',
+    visitStatus: enquiry.visit_status || '',
+    note: enquiry.visit_progress_note || ''
+  })
+
+  const handleVisitDetailChange = (field, value) => {
+    setVisitDetailDraft((prev) => {
+      const next = { ...prev, [field]: value }
+      if (selectedEnquiry) {
+        const current = syncVisitDetailDraft(selectedEnquiry)
+        setHasVisitDetailChanges(
+          next.contact !== current.contact ||
+            next.visitStatus !== current.visitStatus ||
+            next.note !== current.note
+        )
+      }
+      return next
+    })
+  }
+
+  const handleVisitDetailsSave = async () => {
+    if (!selectedEnquiry || !updateCustomerVisitDetails) return
+
+    setIsSavingVisitDetails(true)
+
+    try {
+      const updated = await updateCustomerVisitDetails(selectedEnquiry.id, {
+        engineerContact: visitDetailDraft.contact.trim(),
+        visitStatus: visitDetailDraft.visitStatus || null,
+        visitNote: visitDetailDraft.note.trim()
+      })
+
+      setSelectedEnquiry((prev) => ({
+        ...prev,
+        engineer_contact_display: updated?.engineer_contact_display ?? null,
+        visit_status: updated?.visit_status ?? null,
+        visit_progress_note: updated?.visit_progress_note ?? null
+      }))
+
+      if (loadAdminEnquiries) await loadAdminEnquiries()
+
+      if (fetchCustomerTrackingHistory) {
+        const history = await fetchCustomerTrackingHistory(selectedEnquiry.id)
+        setCustomerTrackingHistory(history || [])
+      }
+
+      setHasVisitDetailChanges(false)
+      showNotification('Customer-facing visit details saved with audit records.')
+    } catch (err) {
+      showNotification(`Failed to save visit details: ${err.message}`, 'error')
+    } finally {
+      setIsSavingVisitDetails(false)
+    }
+  }
 
   const handleCustomerTrackingSave = async () => {
     if (!selectedEnquiry || !updateCustomerTrackingStatus) return
@@ -3825,18 +3897,118 @@ export default function AdminEnquiriesPage() {
                     </div>
                   </div>
 
+                  {/* Customer-facing visit details (engineer display contact, visit status, note) */}
+                  <div style={{ marginTop: '12px', borderTop: '1px solid #dbeafe', paddingTop: '10px' }}>
+                    <span style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
+                      Visit & Engineer Customer Details
+                    </span>
+                    <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', marginBottom: '8px' }}>
+                      Only the engineer name from the approved assignment and the contact number you enter here are visible to the customer. Private staff phone details are never exposed.
+                    </span>
+                    <div className="customer-tracking-grid" style={{ marginBottom: '8px' }}>
+                      <div>
+                        <label htmlFor="engineer-contact-display" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                          Engineer Contact (Customer-visible)
+                        </label>
+                        <input
+                          id="engineer-contact-display"
+                          type="text"
+                          className="admin-input"
+                          placeholder="Optional, e.g. +91 70783 82213"
+                          value={visitDetailDraft.contact}
+                          maxLength={40}
+                          onChange={(event) => handleVisitDetailChange('contact', event.target.value)}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="visit-status-select" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                          Visit Status
+                        </label>
+                        <select
+                          id="visit-status-select"
+                          className="admin-select"
+                          value={visitDetailDraft.visitStatus}
+                          onChange={(event) => handleVisitDetailChange('visitStatus', event.target.value)}
+                          style={{ width: '100%' }}
+                          disabled={isSavingVisitDetails}
+                        >
+                          {VISIT_STATUS_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <label htmlFor="visit-progress-note" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                      Customer-facing Visit Note (optional)
+                    </label>
+                    <textarea
+                      id="visit-progress-note"
+                      className="admin-textarea"
+                      placeholder="Optional short note shown to the customer (max 400 characters)…"
+                      value={visitDetailDraft.note}
+                      maxLength={400}
+                      rows={2}
+                      onChange={(event) => handleVisitDetailChange('note', event.target.value)}
+                      style={{ width: '100%', resize: 'vertical' }}
+                      disabled={isSavingVisitDetails}
+                    />
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm"
+                      onClick={handleVisitDetailsSave}
+                      disabled={isSavingVisitDetails || !hasVisitDetailChanges}
+                      style={{ marginTop: '8px' }}
+                    >
+                      {isSavingVisitDetails ? 'Saving…' : 'Save Visit Details'}
+                    </button>
+                  </div>
+
                   {customerTrackingHistory.length > 0 && (
                     <div style={{ marginTop: '12px', borderTop: '1px solid #dbeafe', paddingTop: '10px' }}>
                       <span style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
                         Tracking History
                       </span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {customerTrackingHistory.slice(0, 5).map((entry) => {
+                        {customerTrackingHistory.slice(0, 8).map((entry) => {
                           const statusOption = TRACKING_OPTIONS.find((option) => option.value === entry.tracking_status)
+                          const kindLabels = {
+                            status: { icon: '📶', label: 'Tracking Status' },
+                            engineer_contact: { icon: '📞', label: 'Engineer Contact' },
+                            visit: { icon: '📅', label: 'Visit Details' },
+                            note: { icon: '📝', label: 'Visit Note' }
+                          }
+                          const kind = kindLabels[entry.change_kind] || { icon: '📶', label: 'Tracking Status' }
+                          const formatValue = (value) => {
+                            if (value === null || value === undefined) return '—'
+                            const text = String(value)
+                            if (entry.change_kind === 'status') {
+                              const option = TRACKING_OPTIONS.find((item) => item.value === text)
+                              return option ? option.label : text
+                            }
+                            if (entry.change_kind === 'visit') {
+                              const visitOption = VISIT_STATUS_OPTIONS.find((item) => item.value === text)
+                              if (visitOption) return visitOption.label || 'Not set'
+                              return text
+                            }
+                            return text
+                          }
                           return (
                             <div key={entry.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: '#ffffff', border: '1px solid #dbeafe', borderRadius: '6px', padding: '6px 8px', fontSize: '0.76rem' }}>
                               <span style={{ minWidth: 0 }}>
-                                <strong style={{ color: '#1e3a8a' }}>{statusOption?.icon} {statusOption?.label || entry.tracking_status}</strong>
+                                <strong style={{ color: '#1e3a8a' }}>{kind.icon} {kind.label}{statusOption ? ` — ${statusOption.label}` : ''}</strong>
+                                {entry.change_kind && entry.change_kind !== 'status' && (
+                                  <span style={{ display: 'block', color: '#475569' }}>
+                                    {formatValue(entry.previous_value)} → {formatValue(entry.new_value)}
+                                  </span>
+                                )}
+                                {entry.change_kind === 'status' && (entry.previous_value || entry.previous_status) && (
+                                  <span style={{ display: 'block', color: '#475569' }}>
+                                    {formatValue(entry.previous_value || entry.previous_status)} → {formatValue(entry.new_value || entry.tracking_status)}
+                                  </span>
+                                )}
                                 <span style={{ display: 'block', color: '#64748b' }}>
                                   {entry.updated_by_name || 'Staff'} {entry.updated_by_employee_code ? `[${entry.updated_by_employee_code}]` : ''}
                                 </span>
