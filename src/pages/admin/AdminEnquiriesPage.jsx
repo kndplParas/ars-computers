@@ -1957,17 +1957,18 @@ export default function AdminEnquiriesPage() {
                     />
                   </th>
                 )}
-                <th scope="col" style={{ width: '130px', minWidth: '130px' }}>Enquiry ID</th>
-                <th scope="col" style={{ width: '210px', minWidth: '190px' }}>Customer / Company</th>
-                <th scope="col" style={{ width: '180px', minWidth: '160px' }}>Requirement</th>
-                <th scope="col" style={{ minWidth: '240px' }}>Inbound Message Snippet</th>
-                <th scope="col" style={{ width: '160px', minWidth: '140px' }}>Status</th>
-                <th scope="col" style={{ width: '110px', minWidth: '100px' }}>Submitted</th>
+                <th scope="col" className="enquiry-id-heading">Enquiry ID</th>
+                <th scope="col" className="enquiry-customer-heading">Customer / Company</th>
+                <th scope="col" className="enquiry-requirement-heading">Requirement</th>
+                <th scope="col" className="enquiry-message-heading">Inbound Message Snippet</th>
+                <th scope="col" className="enquiry-status-heading">Status</th>
+                <th scope="col" className="enquiry-submitted-heading">Submitted</th>
                 <th
                   scope="col"
+                  className="enquiry-actions-heading"
                   style={{
-                    width: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '220px' : (isSuperadmin ? '180px' : '100px'),
-                    minWidth: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '200px' : (isSuperadmin ? '160px' : '90px'),
+                    width: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '240px' : (isSuperadmin ? '180px' : '100px'),
+                    minWidth: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '220px' : (isSuperadmin ? '165px' : '90px'),
                     textAlign: 'center'
                   }}
                 >
@@ -2117,7 +2118,7 @@ export default function AdminEnquiriesPage() {
                       </td>
 
                       {/* Message Snippet */}
-                      <td>
+                      <td className="enquiry-message-cell">
                         <p className="enquiry-message-snippet" title={enq.message}>
                           {enq.message}
                         </p>
@@ -2188,7 +2189,7 @@ export default function AdminEnquiriesPage() {
                       </td>
 
                       {/* Actions */}
-                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <td className="enquiry-actions-cell" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {activeWorkflowTab === 'removed' && isSuperadmin ? (
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                             <button
