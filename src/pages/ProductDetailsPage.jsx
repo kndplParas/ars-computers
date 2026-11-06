@@ -344,9 +344,9 @@ export default function ProductDetailsPage() {
                     </div>
                   )}
 
-                  {/* Pricing and Stock Bar */}
-                  <div className="product-pricing-card">
-                    {typeof product.price === 'number' && product.price > 0 && (
+                  {/* Optional Official Pricing */}
+                  {typeof product.price === 'number' && product.price > 0 && (
+                    <div className="product-pricing-card price-only">
                       <div className="pricing-col">
                         <span className="pricing-label">Official Pricing</span>
                         <div className="pricing-value-wrap">
@@ -356,32 +356,15 @@ export default function ProductDetailsPage() {
                           <span className="pricing-tax-note">+ GST (Input Credit Available)</span>
                         </div>
                       </div>
-                    )}
-
-                    <div className="stock-col">
-                      <span className="pricing-label">Availability</span>
-                      {product.availabilityStatus === 'in_stock' || (typeof product.stock === 'number' && product.stock > 0) ? (
-                        <div className="stock-status-pill in-stock">
-                          <span className="stock-dot"></span>
-                          <span>In Stock{typeof product.stock === 'number' && product.stock > 0 ? ` (${product.stock} units available)` : ''}</span>
-                        </div>
-                      ) : product.availabilityStatus === 'out_of_stock' ? (
-                        <div className="stock-status-pill out-of-stock">
-                          <span className="stock-dot"></span>
-                          <span>Out of Stock</span>
-                        </div>
-                      ) : product.availabilityStatus === 'discontinued' ? (
-                        <div className="stock-status-pill discontinued">
-                          <span className="stock-dot"></span>
-                          <span>Discontinued Model</span>
-                        </div>
-                      ) : (
-                        <div className="stock-status-pill on-demand">
-                          <span className="stock-dot"></span>
-                          <span>Contact us for availability</span>
-                        </div>
-                      )}
                     </div>
+                  )}
+
+                  {/* Product-specific short description */}
+                  <div className="short-description-card">
+                    <span className="short-description-label">Short Product Description</span>
+                    <p className="short-description-text">
+                      {product.shortDescription || 'Product-specific summary is being updated by the admin.'}
+                    </p>
                   </div>
 
                   {/* Primary CTA Buttons */}

@@ -11980,3 +11980,49 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Product Details — Short Product Description
+   ========================================================================== */
+.product-pricing-card.price-only {
+  grid-template-columns: 1fr;
+  max-width: 520px;
+}
+
+.short-description-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.short-description-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+
+.short-description-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-main);
+}
+
+@media (max-width: 768px) {
+  .short-description-card {
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+
+  .short-description-text {
+    font-size: 14px;
+  }
+}

@@ -19,6 +19,7 @@ import {
   formatSpecLabel,
   SPEC_LABELS
 } from '../src/data/specSchemas.js'
+import { SHORT_PRODUCT_DESCRIPTIONS } from '../src/data/product-content/short-descriptions.js'
 import { CATEGORY_PRODUCTS } from './known-products.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -35,6 +36,24 @@ const seedPath = path.join(
   'supabase',
   'migrations',
   '20261105000002_product_description_seed.sql'
+)
+const shortMigrationPath = path.join(
+  projectRoot,
+  'supabase',
+  'migrations',
+  '20261106000001_product_short_description.sql'
+)
+const shortSeedPath = path.join(
+  projectRoot,
+  'supabase',
+  'migrations',
+  '20261106000002_product_short_description_seed.sql'
+)
+const productDetailsPagePath = path.join(
+  projectRoot,
+  'src',
+  'pages',
+  'ProductDetailsPage.jsx'
 )
 const adminPagePath = path.join(
   projectRoot,
@@ -120,6 +139,26 @@ for (const slug of expectedSlugs) {
     typeof item.specSource === 'string' && item.specSource.trim().length >= 30)
 }
 
+// 2b. Short product descriptions: concise, unique and product-specific.
+console.log('\n[Suite 2b] Short product descriptions')
+const shortKeys = Object.keys(SHORT_PRODUCT_DESCRIPTIONS).sort()
+test('Short descriptions cover every audited catalogue product exactly once',
+  shortKeys.length === expectedSlugs.length && expectedSlugs.every((slug) => SHORT_PRODUCT_DESCRIPTIONS[slug]))
+test('Short descriptions match exported product content entries',
+  expectedSlugs.every((slug) => PRODUCT_CONTENT[slug]?.shortDescription === SHORT_PRODUCT_DESCRIPTIONS[slug]))
+for (const slug of expectedSlugs) {
+  const summary = SHORT_PRODUCT_DESCRIPTIONS[slug]
+  test(`${slug}: short description is concise (80–360 characters)`,
+    typeof summary === 'string' && summary.trim().length >= 80 && summary.trim().length <= 360)
+  test(`${slug}: short description avoids generic availability placeholder text`,
+    typeof summary === 'string' &&
+      !/contact us for availability/i.test(summary) &&
+      !/high-quality product|best performance|premium quality/i.test(summary))
+}
+test('Short descriptions are all unique',
+  new Set(Object.values(SHORT_PRODUCT_DESCRIPTIONS).map((value) => String(value).trim().toLowerCase())).size ===
+    Object.values(SHORT_PRODUCT_DESCRIPTIONS).length)
+
 // 3. Category-specific schema: authored keys are known and render in expected sections.
 console.log('\n[Suite 3] Category specification schemas')
 for (const [slug, item] of Object.entries(PRODUCT_CONTENT)) {
@@ -157,6 +196,8 @@ test('All known keys have labels',
 console.log('\n[Suite 4] Product content database migration')
 const schemaSql = readText(migrationPath)
 const seedSql = readText(seedPath)
+const shortSchemaSql = readText(shortMigrationPath)
+const shortSeedSql = readText(shortSeedPath)
 test('Schema migration exists and is non-destructive for existing product columns',
   fs.existsSync(migrationPath) &&
   schemaSql.includes('ADD COLUMN IF NOT EXISTS description') &&
@@ -191,6 +232,34 @@ test('Seed migration does not modify cost_price or permissions',
 test('Seed migration contains no empty descriptions',
   !/description = \$ars_product_content\$\s*\$ars_product_content\$/.test(seedSql))
 
+// 4b. Short description database migration
+console.log('\n[Suite 4b] Short description database migration')
+test('Short description migration adds the new customer-facing field safely',
+  fs.existsSync(shortMigrationPath) &&
+  shortSchemaSql.includes('ADD COLUMN IF NOT EXISTS short_description') &&
+  !/ALTER TABLE public\.products\s+DROP COLUMN/i.test(shortSchemaSql))
+test('Short description migration does not grant public cost_price access',
+  shortSchemaSql.includes('GRANT SELECT (') &&
+  !/GRANT SELECT \([^)]*cost_price/is.test(shortSchemaSql) &&
+  shortSchemaSql.includes('short_description TEXT'))
+test('Short description migration recreates admin RPC with short_description only for authenticated administrators',
+  shortSchemaSql.includes('DROP FUNCTION IF EXISTS public.get_admin_products') &&
+  shortSchemaSql.includes('short_description TEXT') &&
+  shortSchemaSql.includes("REVOKE EXECUTE ON FUNCTION public.get_admin_products(UUID, BOOLEAN, INTEGER, INTEGER) FROM PUBLIC, anon") &&
+  shortSchemaSql.includes('GRANT EXECUTE ON FUNCTION public.get_admin_products(UUID, BOOLEAN, INTEGER, INTEGER) TO authenticated'))
+test('Short description migration shields inventory staff from editing customer content',
+  shortSchemaSql.includes('(NEW.short_description IS DISTINCT FROM OLD.short_description)'))
+test('Short description seed updates every audited product by slug',
+  expectedSlugs.every((slug) => shortSeedSql.includes(`WHERE slug = '${slug}';`)))
+test('Short description seed fails loudly when a slug is missing or blank',
+  shortSeedSql.includes('RAISE EXCEPTION') &&
+  shortSeedSql.includes('v_missing') && shortSeedSql.includes('v_blank'))
+test('Short description seed does not modify permissions, policies or Auth',
+  !shortSeedSql.includes('GRANT') &&
+  !shortSeedSql.includes('REVOKE') &&
+  !shortSeedSql.includes('CREATE POLICY') &&
+  !shortSeedSql.includes('auth.users'))
+
 // 5. Admin editor supports the same structure for future products.
 console.log('\n[Suite 5] Admin product editor support')
 const adminCode = readText(adminPagePath)
@@ -202,6 +271,18 @@ test('Admin editor edits compatibility and box contents',
   adminCode.includes('compatibility') && adminCode.includes('box_contents'))
 test('Admin editor edits specification verification and source',
   adminCode.includes('specs_verified') && adminCode.includes('spec_source'))
+test('Admin editor requires and saves short product descriptions',
+  adminCode.includes('short_description') &&
+  adminCode.includes('A product-specific short description is required.') &&
+  adminCode.includes('short_description: formData.short_description'.trim()))
+const detailsCode = readText(productDetailsPagePath)
+test('Product details render the product-specific short description card',
+  detailsCode.includes('product.shortDescription') &&
+  detailsCode.includes('short-description-card'))
+test('Product details no longer show the generic availability box',
+  !detailsCode.includes('Contact us for availability') &&
+  !detailsCode.includes('<span className="pricing-label">Availability</span>') &&
+  !detailsCode.includes('stock-status-pill on-demand'))
 test('Admin editor can insert a category-specific specification template',
   adminCode.includes('getSpecTemplate') && adminCode.includes('Insert Category Template'))
 test('Admin editor stores specifications under canonical keys',

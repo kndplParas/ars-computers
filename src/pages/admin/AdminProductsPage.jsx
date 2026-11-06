@@ -105,6 +105,7 @@ export default function AdminProductsPage() {
       spec_summary: '',
       spec_attributes_text: '',
       description: '',
+      short_description: '',
       key_features_text: '',
       compatibility: '',
       box_contents: '',
@@ -217,6 +218,7 @@ export default function AdminProductsPage() {
               .join('\n')
           : '',
       description: product.description || '',
+      short_description: product.short_description || '',
       key_features_text: Array.isArray(product.key_features)
         ? product.key_features.join('\n')
         : '',
@@ -263,6 +265,7 @@ export default function AdminProductsPage() {
               .join('\n')
           : '',
       description: product.description || '',
+      short_description: product.short_description || '',
       key_features_text: Array.isArray(product.key_features)
         ? product.key_features.join('\n')
         : '',
@@ -433,6 +436,10 @@ export default function AdminProductsPage() {
       }
     }
 
+    if (!formData.short_description.trim()) {
+      errors.short_description = 'A product-specific short description is required.'
+    }
+
     if (!formData.description.trim()) {
       errors.description = 'A product-specific description is required.'
     }
@@ -500,6 +507,7 @@ export default function AdminProductsPage() {
       model: formData.model.trim() || null,
       is_generic: Boolean(formData.is_generic),
       spec_summary: formData.spec_summary.trim() || null,
+      short_description: formData.short_description.trim() || null,
       spec_attributes: specAttributes,
       description: formData.description.trim() || null,
       key_features: keyFeatures,
@@ -1552,6 +1560,28 @@ export default function AdminProductsPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Short Product Summary shown above purchase controls */}
+              <div className="form-group">
+                <label htmlFor="form-prod-short-description" className="form-label">
+                  Short Product Description * <span className="form-field-hint-inline">2–3 customer-facing lines</span>
+                </label>
+                <textarea
+                  id="form-prod-short-description"
+                  rows="2"
+                  className={`form-textarea ${formErrors.short_description ? 'input-error' : ''}`}
+                  maxLength={360}
+                  placeholder="What this product is, its main purpose and its key benefit. Do not invent specifications."
+                  value={formData.short_description}
+                  onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
+                ></textarea>
+                <span className="form-field-hint">
+                  This replaces generic availability text on the product page. Keep it concise and product-specific.
+                </span>
+                {formErrors.short_description && (
+                  <span className="form-field-error">{formErrors.short_description}</span>
+                )}
               </div>
 
               {/* Product Content: Overview & Features */}

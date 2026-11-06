@@ -14,6 +14,7 @@ import { BIOMETRIC_CONTENT } from './product-content/biometrics.js'
 import { ACCESSORY_CORE_CONTENT } from './product-content/accessories-core.js'
 import { ACCESSORY_PERIPHERAL_CONTENT } from './product-content/accessories-peripherals.js'
 import { ACCESSORY_CABLE_CONTENT } from './product-content/accessories-cables.js'
+import { SHORT_PRODUCT_DESCRIPTIONS } from './product-content/short-descriptions.js'
 
 const CONTENT_MODULES = [
   COMPUTER_CONTENT,
@@ -31,9 +32,16 @@ for (const module of CONTENT_MODULES) {
     if (PRODUCT_CONTENT[slug]) {
       throw new Error(`Duplicate product content entry for slug: ${slug}`)
     }
-    PRODUCT_CONTENT[slug] = content
+    if (!SHORT_PRODUCT_DESCRIPTIONS[slug]) {
+      throw new Error(`Missing short product description for slug: ${slug}`)
+    }
+    PRODUCT_CONTENT[slug] = {
+      ...content,
+      shortDescription: SHORT_PRODUCT_DESCRIPTIONS[slug]
+    }
   }
 }
+
 
 export const PRODUCT_CONTENT_SLUGS = Object.freeze(Object.keys(PRODUCT_CONTENT).sort())
 

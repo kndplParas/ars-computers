@@ -34,6 +34,7 @@ export const APPROVED_PUBLIC_PRODUCT_COLUMNS = [
   'box_contents',
   'specs_verified',
   'spec_source',
+  'short_description',
   'created_at',
   'updated_at'
 ].join(', ')
@@ -151,10 +152,15 @@ export function mergeProductContentFields(raw = {}) {
   const contentVerification = normalizeVerification(content.specsVerified)
   const specsVerified = dbVerification || contentVerification || 'configuration_dependent'
 
+  const dbShortDescription = asCleanString(raw.short_description || raw.shortDescription)
+  const contentShortDescription = asCleanString(content.shortDescription)
+  const shortDescription = dbShortDescription || contentShortDescription || ''
+
   const specSource = asCleanString(raw.spec_source || raw.specSource) || asCleanString(content.specSource) || null
 
   return {
     description,
+    shortDescription,
     keyFeatures,
     compatibility,
     boxContents,
@@ -190,6 +196,7 @@ export function normalizeStaticCategories(categories) {
           spec: p.spec,
           specSummary: p.spec,
           description: merged.description,
+          shortDescription: merged.shortDescription,
           specAttributes: merged.specAttributes,
           keyFeatures: merged.keyFeatures,
           compatibility: merged.compatibility,
@@ -496,6 +503,7 @@ export async function fetchPublicCatalog({ forceRefresh = false } = {}) {
               spec: p.spec_summary || (p.model ? `Model: ${p.model}` : 'Genuine Hardware with Warranty'),
               specSummary: p.spec_summary || null,
               description: merged.description,
+              shortDescription: merged.shortDescription,
               specAttributes: merged.specAttributes,
               keyFeatures: merged.keyFeatures,
               compatibility: merged.compatibility,
