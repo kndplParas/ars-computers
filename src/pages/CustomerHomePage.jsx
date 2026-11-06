@@ -57,6 +57,7 @@ function CustomerHomePage() {
     return {
       name: '',
       contact_info: '',
+      email: '',
       category_interest: catParam || 'general',
       message: prodParam ? `I would like to request an official quote for ${prodParam}.` : '',
       website_hp: ''
@@ -211,19 +212,35 @@ function CustomerHomePage() {
       setFormStatus({ loading: false, success: false, error: 'Please enter a valid name (at least 2 characters).' })
       return
     }
-    if (contactInfo.length < 5) {
-      setFormStatus({ loading: false, success: false, error: 'Please enter a valid phone number or email (at least 5 characters).' })
-      return
-    }
 
-    // Validate contact info format (either email or phone)
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    const phonePattern = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,15}$/
-    if (!emailPattern.test(contactInfo) && !phonePattern.test(contactInfo)) {
+    // Email is required: OTP verification codes and enquiry tracking updates
+    // are sent to this address, so an enquiry without it cannot be tracked.
+    const emailPattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+    const email = formData.email.trim().toLowerCase()
+    if (!email) {
       setFormStatus({
         loading: false,
         success: false,
-        error: 'Please provide a valid email address (e.g. name@domain.com) or phone number (e.g. +91 9876543210).'
+        error: 'Email address is required. Your verification code and enquiry tracking updates are sent to this email address.'
+      })
+      return
+    }
+    if (!emailPattern.test(email)) {
+      setFormStatus({
+        loading: false,
+        success: false,
+        error: 'Please provide a valid email address (e.g. name@domain.com).'
+      })
+      return
+    }
+
+    // Optional phone number: validated only when provided.
+    const phonePattern = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,15}$/
+    if (contactInfo && !phonePattern.test(contactInfo)) {
+      setFormStatus({
+        loading: false,
+        success: false,
+        error: 'Please provide a valid phone number (e.g. +91 9876543210).'
       })
       return
     }
@@ -238,9 +255,11 @@ function CustomerHomePage() {
     try {
       if (isSupabaseConfigured && supabase) {
         // Secure RPC validates and inserts, then returns the generated enquiry reference.
+        // Contact info keeps the established "phone | email" segment format so
+        // the customer can verify with either the mobile number or the email.
         const submitPromise = supabase.rpc('create_customer_enquiry', {
           p_name: name,
-          p_contact_info: contactInfo,
+          p_contact_info: contactInfo ? `${contactInfo} | ${email}` : email,
           p_category_interest: formData.category_interest,
           p_message: message
         })
@@ -270,6 +289,7 @@ function CustomerHomePage() {
       setFormData({
         name: '',
         contact_info: '',
+        email: '',
         category_interest: 'general',
         message: '',
         website_hp: ''
@@ -755,7 +775,7 @@ function CustomerHomePage() {
                     <div className="submission-reference-box">
                       <span>Your Enquiry ID</span>
                       <strong>{submittedEnquiryId}</strong>
-                      <small>Use this ID and the mobile number used on this form to track your enquiry on the Services page.</small>
+                      <small>Use this ID and the mobile number or email address used on this form to track your enquiry on the Services page.</small>
                     </div>
                   )}
                   <button
@@ -805,16 +825,31 @@ function CustomerHomePage() {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="contact_info">Phone Number / Email *</label>
+                    <label htmlFor="contact_info">Phone Number (Optional)</label>
                     <input
                       id="contact_info"
                       name="contact_info"
                       type="text"
-                      required
-                      placeholder="e.g. +91 9876543210 or john@example.com"
+                      placeholder="e.g. +91 9876543210"
                       value={formData.contact_info}
                       onChange={handleInputChange}
                     />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="email">Email Address *</label>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      required
+                      placeholder="e.g. john@example.com"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                    />
+                    <small className="form-field-hint">
+                      Required — your verification code and enquiry tracking updates are sent to this email address.
+                    </small>
                   </div>
 
                   <div className="form-group">

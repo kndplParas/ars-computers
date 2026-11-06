@@ -20,6 +20,13 @@ import { ARS_SALES_DISPLAY_NUMBER, ARS_SALES_TEL_HREF } from '../lib/contact'
 
 const GENERIC_ERROR = 'Something went wrong. Please try again or contact ARS Computers for help.'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Static instructional copy shown at the code-entry step. It describes how OTP
+// verification works (email-based, never SMS) and does not claim that any
+// specific delivery succeeded — the serverWorker keeps its generic response,
+// so nothing here reveals whether a contact is registered.
+const OTP_DELIVERY_EMAIL = 'Your verification code will be sent to your registered email address.'
+const OTP_DELIVERY_MOBILE =
+  'Your verification code will be sent to the email address registered with this mobile number. We do not currently send OTPs by SMS.'
 
 function formatDate(value) {
   if (!value) return null
@@ -459,7 +466,7 @@ export default function EnquiryTrackingCard() {
       {step === 'otp' && (
         <div className="enquiry-tracking-form">
           <p className="tracking-help-text" style={{ marginTop: 0 }}>
-            {notice || 'Enter the 6-digit verification code sent to the registered email address.'}
+            {EMAIL_PATTERN.test(contact.trim()) ? OTP_DELIVERY_EMAIL : OTP_DELIVERY_MOBILE}
           </p>
           <label className="tracking-field-label" htmlFor="tracking-otp-input">
             Verification Code

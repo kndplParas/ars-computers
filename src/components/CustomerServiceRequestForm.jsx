@@ -120,12 +120,20 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
       return
     }
 
-    if (formData.email && formData.email.trim()) {
-      const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
-      if (!emailRegex.test(formData.email.trim())) {
-        setErrorMessage('Please enter a valid email address or leave it blank.')
-        return
-      }
+    // Email is required: OTP verification codes and enquiry tracking updates are
+    // sent to this address, so a service request without it cannot be tracked.
+    const emailPattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+    const cleanEmail = formData.email ? formData.email.trim().toLowerCase() : ''
+    if (!cleanEmail) {
+      setErrorMessage(
+        'Email address is required. Your verification code and enquiry tracking updates are sent to this email address.'
+      )
+      return
+    }
+
+    if (!emailPattern.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address (e.g. rajesh@company.com).')
+      return
     }
 
     const cleanDesc = formData.problem_description.trim()
@@ -210,7 +218,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
       const payload = {
         customer_name: cleanName,
         mobile_number: cleanMobile,
-        email: formData.email ? formData.email.trim().toLowerCase() : null,
+        email: cleanEmail,
         customer_type: formData.customer_type,
         product_category: formData.product_category,
         brand: formData.brand.trim() || null,
@@ -271,9 +279,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
         attachmentUrl ? `• Attachment: ${attachmentUrl}` : null
       ].filter(Boolean).join('\n')
 
-      const contactInfo = formData.email?.trim()
-        ? `${cleanMobile} | ${formData.email.trim().toLowerCase()}`
-        : cleanMobile
+      const contactInfo = `${cleanMobile} | ${cleanEmail}`
 
       const enquiryPayload = {
         p_name: cleanName,
@@ -310,7 +316,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
           customer_name: cleanName,
           contact_info: contactInfo,
           phone: cleanMobile,
-          email: formData.email ? formData.email.trim().toLowerCase() : null,
+          email: cleanEmail,
           category_interest: `Service: ${formData.product_category}`.slice(0, 50),
           category_label: `Service: ${formData.product_category}`,
           service_requested: `Service: ${formData.product_category} (${formData.request_type})`,
@@ -538,7 +544,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
 
             <div className="service-field-group">
               <label htmlFor="sr-email">
-                Email Address <span className="field-hint">(Optional)</span>
+                Email Address <span className="required-star">*</span>
               </label>
               <input
                 id="sr-email"
@@ -547,7 +553,11 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="e.g. rajesh@company.com"
+                required
               />
+              <span className="field-hint">
+                Required — your verification code and enquiry tracking updates are sent to this email.
+              </span>
             </div>
 
             <div className="service-field-group">
