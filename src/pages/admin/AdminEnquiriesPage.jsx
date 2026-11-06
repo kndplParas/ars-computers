@@ -1919,6 +1919,26 @@ export default function AdminEnquiriesPage() {
         {/* 3. Desktop Enquiries Data Table */}
         <div className="admin-table-container products-table-wrap enquiries-table-wrap">
           <table className="admin-data-table enquiries-data-table" aria-label="Customer Enquiries List">
+            <colgroup>
+              {isSuperadmin && activeWorkflowTab !== 'removed' && (
+                <col className="enquiry-select-col" />
+              )}
+              <col className="enquiry-id-col" />
+              <col className="enquiry-customer-col" />
+              <col className="enquiry-requirement-col" />
+              <col className="enquiry-message-col" />
+              <col className="enquiry-status-col" />
+              <col className="enquiry-submitted-col" />
+              <col
+                className={
+                  activeWorkflowTab === 'pending_rejection' && isSuperadmin
+                    ? 'enquiry-actions-col enquiry-actions-col--wide'
+                    : isSuperadmin
+                      ? 'enquiry-actions-col'
+                      : 'enquiry-actions-col enquiry-actions-col--staff'
+                }
+              />
+            </colgroup>
             <thead>
               <tr>
                 {isSuperadmin && activeWorkflowTab !== 'removed' && (
@@ -1966,11 +1986,6 @@ export default function AdminEnquiriesPage() {
                 <th
                   scope="col"
                   className="enquiry-actions-heading"
-                  style={{
-                    width: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '240px' : (isSuperadmin ? '180px' : '100px'),
-                    minWidth: activeWorkflowTab === 'pending_rejection' && isSuperadmin ? '220px' : (isSuperadmin ? '165px' : '90px'),
-                    textAlign: 'center'
-                  }}
                 >
                   Actions
                 </th>

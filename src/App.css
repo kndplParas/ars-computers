@@ -12222,3 +12222,142 @@
     font-weight: 700;
   }
 }
+
+/* ==========================================================================
+   Admin Enquiries — Balanced table columns and header wrapping
+   ========================================================================== */
+@media (min-width: 901px) {
+  .enquiries-table-wrap .admin-data-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .enquiries-table-wrap .enquiry-select-col {
+    width: 44px;
+  }
+
+  .enquiries-table-wrap .enquiry-id-col {
+    width: 128px;
+  }
+
+  .enquiries-table-wrap .enquiry-customer-col {
+    width: 190px;
+  }
+
+  .enquiries-table-wrap .enquiry-requirement-col {
+    width: 175px;
+  }
+
+  .enquiries-table-wrap .enquiry-message-col {
+    width: auto;
+  }
+
+  .enquiries-table-wrap .enquiry-status-col {
+    width: 145px;
+  }
+
+  .enquiries-table-wrap .enquiry-submitted-col {
+    width: 102px;
+  }
+
+  .enquiries-table-wrap .enquiry-actions-col {
+    width: 185px;
+  }
+
+  .enquiries-table-wrap .enquiry-actions-col--wide {
+    width: 235px;
+  }
+
+  .enquiries-table-wrap .enquiry-actions-col--staff {
+    width: 118px;
+  }
+
+  .enquiries-table-wrap .admin-data-table th,
+  .enquiries-table-wrap .admin-data-table td {
+    padding: 10px 9px;
+    vertical-align: middle;
+  }
+
+  .enquiries-table-wrap .admin-data-table th {
+    font-size: 0.7rem;
+    line-height: 1.28;
+    letter-spacing: 0.45px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .enquiries-table-wrap .enquiry-table-row td {
+    height: 54px;
+    font-size: 0.86rem;
+    line-height: 1.4;
+  }
+
+  .enquiries-table-wrap .enquiry-message-heading,
+  .enquiries-table-wrap .enquiry-message-cell .enquiry-message-snippet {
+    white-space: normal;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .enquiries-table-wrap .enquiry-message-heading {
+    line-height: 1.35;
+    text-align: left;
+  }
+
+  .enquiries-table-wrap .enquiry-id-heading,
+  .enquiries-table-wrap .enquiry-customer-heading,
+  .enquiries-table-wrap .enquiry-requirement-heading,
+  .enquiries-table-wrap .enquiry-submitted-heading,
+  .enquiries-table-wrap .enquiry-actions-heading {
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+
+  .enquiries-table-wrap .enquiry-status-heading,
+  .enquiries-table-wrap .enquiry-submitted-heading,
+  .enquiries-table-wrap .enquiry-actions-heading {
+    text-align: center;
+  }
+
+  .enquiries-table-wrap .enquiry-id-heading {
+    text-align: left;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  .enquiries-table-wrap .admin-data-table th,
+  .enquiries-table-wrap .admin-data-table td {
+    padding: 9px 6px;
+  }
+
+  .enquiries-table-wrap .enquiry-id-col {
+    width: 116px;
+  }
+
+  .enquiries-table-wrap .enquiry-customer-col {
+    width: 165px;
+  }
+
+  .enquiries-table-wrap .enquiry-requirement-col {
+    width: 150px;
+  }
+
+  .enquiries-table-wrap .enquiry-status-col {
+    width: 126px;
+  }
+
+  .enquiries-table-wrap .enquiry-submitted-col {
+    width: 90px;
+  }
+
+  .enquiries-table-wrap .enquiry-actions-col {
+    width: 165px;
+  }
+
+  .enquiries-table-wrap .enquiry-actions-col--wide {
+    width: 210px;
+  }
+}
