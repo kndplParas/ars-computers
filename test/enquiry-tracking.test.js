@@ -5,6 +5,11 @@
  * Validates:
  *  1. v1 migration security (deployed lookup baseline: server-side checks, rate limits, sanitized output, guards)
  *  2. v2 migration security (OTP/sessions/IP throttle tables, service-role-only RPCs, audit columns)
+ *  2b. v3 migration (engineer contact from the staff record): derivation security, plus the
+ *      dedicated engineer_contact_hidden audit trail for hide AND unhide transitions
+ *  2c. v4 alignment migration (20261108000002): history-safe delta of the two unapplied pieces —
+ *      widened change_kind constraint + recreated update_customer_visit_details — reviewed
+ *      against production drift (applied 20261108000001 lacks both)
  *  3. Services page layout and submission flow (Enquiry ID generation + confirmation display)
  *  4. Customer tracking card OTP flow (no Enquiry ID needed, no unverified access, no storage)
  *  5. Worker OTP service (generic errors, hashed codes, server-only delivery)
@@ -24,6 +29,7 @@ const read = (rel) => fs.readFileSync(path.join(projectRoot, ...rel.split('/')),
 const migration = read('supabase/migrations/20261106000003_enquiry_customer_tracking.sql')
 const migration2 = read('supabase/migrations/20261107000001_customer_tracking_full_system.sql')
 const migration3 = read('supabase/migrations/20261108000001_engineer_contact_from_staff_record.sql')
+const migration4 = read('supabase/migrations/20261108000002_engineer_contact_hide_audit_alignment.sql')
 const trackingCard = read('src/components/EnquiryTrackingCard.jsx')
 const trackingService = read('src/server/trackingOtpService.js')
 const worker = read('src/server/worker.js')
@@ -306,11 +312,14 @@ test('Session validation and identifier resolution are byte-preserved in the der
   /revoked_at IS NULL/.test(migration3) &&
   /expires_at > now\(\)/.test(migration3) &&
   /tracking_enquiry_ids_for_identifier\(v_channel, v_identifier\)/.test(migration3))
-test('update_customer_visit_details guard and audit are preserved; blank save = explicit customer hide',
+test('update_customer_visit_details guard is preserved; blank save = explicit customer hide',
   migration3.includes('CREATE OR REPLACE FUNCTION public.update_customer_visit_details') &&
   /NOT public\.is_enquiry_management_staff\(\)/.test(migration3) &&
-  /engineer_contact_hidden = v_hidden/.test(migration3) &&
-  /v_enquiry\.engineer_contact_display IS DISTINCT FROM v_contact\s*\n\s*OR v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden/.test(migration3.replace(/\r/g, '')))
+  /engineer_contact_hidden = v_hidden/.test(migration3))
+test('engineer_contact audit entry is preserved and fires on display changes only (no OR with the hide flag)',
+  /IF v_enquiry\.engineer_contact_display IS DISTINCT FROM v_contact THEN/.test(migration3.replace(/\r/g, '')) &&
+  /'engineer_contact', v_enquiry\.engineer_contact_display, v_contact,/.test(migration3.replace(/\r/g, '')) &&
+  !/engineer_contact_display IS DISTINCT FROM v_contact\s*\n\s*OR/.test(migration3.replace(/\r/g, '')))
 test('update_customer_visit_details remains denied to anon/public',
   /REVOKE EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*FROM PUBLIC, anon/.test(migration3.replace(/\r/g, '')) &&
   /GRANT EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*TO authenticated/.test(migration3.replace(/\r/g, '')))
@@ -321,6 +330,107 @@ test('Customer card shows phone as tel: link directly under the name with the ne
 test('Admin panel documents the auto-share default and explicit hide',
   adminEnquiries.includes("Auto: engineer's registered phone") &&
   adminEnquiries.includes('hide the customer-visible contact'))
+
+console.log('\n[Suite 2d] Hide/show audit trail — dedicated engineer_contact_hidden audit rows')
+
+const migration3Sql = migration3.replace(/\r/g, '')
+const visitDetailsBody =
+  migration3Sql.split('CREATE OR REPLACE FUNCTION public.update_customer_visit_details')[1]
+    ?.split('$$;')[0] || ''
+
+test('A dedicated audit row records engineer_contact_hidden transitions with previous and new boolean values',
+  /IF v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden THEN/.test(visitDetailsBody) &&
+  /'engineer_contact_hidden',\s*\n\s*v_enquiry\.engineer_contact_hidden::TEXT, v_hidden::TEXT,/.test(visitDetailsBody))
+test('The hide/show audit row keeps the full actor identity (id, name, employee code)',
+  /p_enquiry_id, 'engineer_contact_hidden',\s*\n\s*v_enquiry\.engineer_contact_hidden::TEXT, v_hidden::TEXT,\s*\n\s*v_actor_id, v_actor_name, v_actor_code/.test(visitDetailsBody))
+test('The hide-flag audit fires independently of the display value — NULL → NULL hide is auditable',
+  (() => {
+    const block =
+      visitDetailsBody.match(
+        /IF v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden THEN[\s\S]*?END IF;/
+      )?.[0] || ''
+    return block.includes("'engineer_contact_hidden'") &&
+      block.includes('::TEXT') &&
+      !block.includes('engineer_contact_display')
+  })())
+test('The hide-flag guard is direction-symmetric: hide (false → true) AND unhide (true → false) both audit',
+  (visitDetailsBody.match(/v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden/g) || []).length >= 1 &&
+  !/v_hidden IS (TRUE|FALSE)/.test(visitDetailsBody) &&
+  !/v_hidden\s*=\s*(true|false)/.test(visitDetailsBody))
+test('Exactly one display audit insert and one hide-flag audit insert per save',
+  (visitDetailsBody.match(/p_enquiry_id, 'engineer_contact',/g) || []).length === 1 &&
+  (visitDetailsBody.match(/p_enquiry_id, 'engineer_contact_hidden',/g) || []).length === 1)
+test('Visit and note audit entries remain exactly as before (two visit inserts: change + no-op save)',
+  (visitDetailsBody.match(/p_enquiry_id, 'visit', v_enquiry\.visit_status, v_visit_status,/g) || []).length === 2 &&
+  (visitDetailsBody.match(/p_enquiry_id, 'note', v_enquiry\.visit_progress_note, NULLIF\(v_note, ''\),/g) || []).length === 1)
+test('The history change_kind constraint admits engineer_contact_hidden, widened additively in THIS migration only',
+  /ALTER TABLE public\.enquiry_tracking_history\s*\n\s*DROP CONSTRAINT IF EXISTS enquiry_tracking_history_change_kind_check;/.test(migration3Sql) &&
+  /ADD CONSTRAINT enquiry_tracking_history_change_kind_check\s*\n\s*CHECK \(change_kind IS NULL OR change_kind IN \(\s*\n\s*'status', 'engineer_contact', 'engineer_contact_hidden', 'visit', 'note'\s*\n\s*\)\)/.test(migration3Sql))
+test('The applied v2 migration file itself is untouched (its constraint still lists the original four kinds)',
+  /'status', 'engineer_contact', 'visit', 'note'/.test(migration2) &&
+  !/engineer_contact_hidden/.test(migration2))
+
+console.log('\n[Suite 2e] Hide-audit alignment migration (20261108000002 — history-safe production delta)')
+
+const migration4Sql = migration4.replace(/\r/g, '')
+const visitDetailsBody4 =
+  migration4Sql.split('CREATE OR REPLACE FUNCTION public.update_customer_visit_details')[1]
+    ?.split('$$;')[0] || ''
+
+test('The alignment migration recreates ONLY update_customer_visit_details — no unrelated objects touched',
+  (migration4Sql.match(/CREATE OR REPLACE FUNCTION/g) || []).length === 1 &&
+  migration4Sql.includes('CREATE OR REPLACE FUNCTION public.update_customer_visit_details') &&
+  !migration4Sql.includes('CREATE OR REPLACE FUNCTION public.list_customer_enquiries') &&
+  !/ALTER TABLE public\.enquiries/ .test(migration4Sql) &&
+  !/ADD COLUMN/.test(migration4Sql) &&
+  !/DROP (TABLE|POLICY|TRIGGER|ROLE)|CREATE (POLICY|TRIGGER|ROLE)|DISABLE ROW LEVEL|FORCE ROW LEVEL/.test(migration4Sql) &&
+  !/LOAD 'pgcrypto'|CREATE EXTENSION|ON CONFLICT|INSERT INTO public\.enquiries|UPDATE public\.enquiries SET(?!$)/.test(migration4Sql))
+test('The function signature and staff guard are unchanged',
+  /CREATE OR REPLACE FUNCTION public\.update_customer_visit_details\(\s*\n\s*p_enquiry_id UUID,\s*\n\s*p_engineer_contact TEXT,\s*\n\s*p_visit_status TEXT,\s*\n\s*p_visit_note TEXT\s*\n\)/.test(migration4Sql) &&
+  /RETURNS JSONB/.test(migration4Sql) &&
+  /SECURITY DEFINER/.test(migration4Sql) &&
+  /SET search_path = ''/.test(migration4Sql) &&
+  /NOT public\.is_enquiry_management_staff\(\)/.test(migration4Sql))
+test('The widened change_kind constraint preserves ALL four existing values and adds exactly one',
+  /ALTER TABLE public\.enquiry_tracking_history\s*\n\s*DROP CONSTRAINT IF EXISTS enquiry_tracking_history_change_kind_check;/.test(migration4Sql) &&
+  /ADD CONSTRAINT enquiry_tracking_history_change_kind_check\s*\n\s*CHECK \(change_kind IS NULL OR change_kind IN \(\s*\n\s*'status', 'engineer_contact', 'engineer_contact_hidden', 'visit', 'note'\s*\n\s*\)\)/.test(migration4Sql))
+test('The alignment migration does not touch migration history, auth users or session security',
+  !/supabase_migrations|schema_migrations/.test(migration4Sql) &&
+  !/auth\.users|auth\.identities|ALTER ROLE|CREATE ROLE|DROP ROLE|ALTER SCHEMA auth/.test(migration4Sql) &&
+  !/customer_tracking_sessions|customer_tracking_otp/.test(migration4Sql))
+test('[hide] Hide transition gets a dedicated audit row with previous/new boolean values and full actor',
+  /IF v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden THEN/.test(visitDetailsBody4) &&
+  /p_enquiry_id, 'engineer_contact_hidden',\s*\n\s*v_enquiry\.engineer_contact_hidden::TEXT, v_hidden::TEXT,\s*\n\s*v_actor_id, v_actor_name, v_actor_code/.test(visitDetailsBody4))
+test('[unhide] The guard is direction-symmetric — unhide (true → false) audits identically to hide',
+  (visitDetailsBody4.match(/v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden/g) || []).length >= 1 &&
+  !/v_hidden IS (TRUE|FALSE)/.test(visitDetailsBody4) &&
+  !/v_hidden\s*=\s*(true|false)/.test(visitDetailsBody4))
+test('[NULL→NULL display] The hide-flag audit fires independently of engineer_contact_display',
+  (() => {
+    const block =
+      visitDetailsBody4.match(
+        /IF v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden THEN[\s\S]*?END IF;/
+      )?.[0] || ''
+    return block.includes("'engineer_contact_hidden'") &&
+      block.includes('::TEXT') &&
+      !block.includes('engineer_contact_display')
+  })())
+test('Blank save still = explicit hide; non-empty save still clears the hide flag',
+  /IF v_contact = '' THEN\s*\n\s*v_contact := NULL;\s*\n\s*v_hidden := true;\s*\n\s*ELSE\s*\n\s*v_hidden := false;\s*\n\s*END IF;/.test(visitDetailsBody4))
+test('engineer_contact audit now records display only; visit/note and no-op-save audits preserved',
+  /IF v_enquiry\.engineer_contact_display IS DISTINCT FROM v_contact THEN/.test(visitDetailsBody4) &&
+  !/engineer_contact_display IS DISTINCT FROM v_contact\s*\n\s*OR/.test(visitDetailsBody4) &&
+  (visitDetailsBody4.match(/p_enquiry_id, 'engineer_contact',/g) || []).length === 1 &&
+  (visitDetailsBody4.match(/p_enquiry_id, 'engineer_contact_hidden',/g) || []).length === 1 &&
+  (visitDetailsBody4.match(/p_enquiry_id, 'visit', v_enquiry\.visit_status, v_visit_status,/g) || []).length === 2 &&
+  (visitDetailsBody4.match(/p_enquiry_id, 'note', v_enquiry\.visit_progress_note, NULLIF\(v_note, ''\),/g) || []).length === 1)
+test('Authorization surface preserved: revoked from PUBLIC/anon, granted to authenticated',
+  /REVOKE EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*FROM PUBLIC, anon/.test(migration4Sql) &&
+  /GRANT EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*TO authenticated/.test(migration4Sql) &&
+  !/GRANT EXECUTE ON FUNCTION public\.update_customer_visit_details[^;]*(anon|PUBLIC)/.test(migration4Sql))
+test('The approved 20261108000001 file remains the full corrected version (unchanged by the delta)',
+  /ALTER TABLE public\.enquiry_tracking_history\s*\n\s*DROP CONSTRAINT IF EXISTS enquiry_tracking_history_change_kind_check;/.test(migration3Sql) &&
+  /p_enquiry_id, 'engineer_contact_hidden',/.test(migration3Sql))
 
 console.log('\n[Suite 3] Services page & submission flow')
 
