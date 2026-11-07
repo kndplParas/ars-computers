@@ -12381,8 +12381,9 @@
 
 .tracking-help-text {
   display: block;
-  color: #64748b;
-  font-size: 0.7rem;
+  color: #334155;
+  font-size: 0.76rem;
+  font-weight: 600;
   line-height: 1.45;
 }
 

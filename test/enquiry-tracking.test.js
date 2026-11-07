@@ -23,6 +23,7 @@ const read = (rel) => fs.readFileSync(path.join(projectRoot, ...rel.split('/')),
 
 const migration = read('supabase/migrations/20261106000003_enquiry_customer_tracking.sql')
 const migration2 = read('supabase/migrations/20261107000001_customer_tracking_full_system.sql')
+const migration3 = read('supabase/migrations/20261108000001_engineer_contact_from_staff_record.sql')
 const trackingCard = read('src/components/EnquiryTrackingCard.jsx')
 const trackingService = read('src/server/trackingOtpService.js')
 const worker = read('src/server/worker.js')
@@ -262,7 +263,67 @@ test('OTP and session RPC responses keep anti-enumeration wording identical for 
   /return noStoreJson\(\{ success: true, message: GENERIC_OTP_MESSAGE \}\)/.test(trackingService) &&
   (trackingService.match(/GENERIC_FAIL_MESSAGE/g) || []).length >= 6)
 
+console.log('\n[Suite 2c] Engineer contact from the staff record (assignment = approval)')
+
+test('Customer-visible contact is derived server-side from the assigned engineer staff record',
+  migration3.includes('CREATE OR REPLACE FUNCTION public.list_customer_enquiries') &&
+  /e\.assigned_employee_phone/.test(migration3) &&
+  migration3.includes('public.admin_users au') &&
+  migration3.includes('au.phone_number') &&
+  migration3.includes('au.id = e.assigned_employee_id AND au.is_active') &&
+  migration3.includes('WHEN e.engineer_contact_hidden THEN NULL'))
+test('Derivation only exposes the assigned engineer of THAT enquiry — never the staff directory',
+  migration3.includes('au.id = e.assigned_employee_id') &&
+  migration3.includes('WHEN e.assigned_employee_id IS NULL THEN NULL') &&
+  !/FROM public\.admin_users(?![\s\S]{0,120}assigned_employee_id)/.test(
+    migration3.split('CREATE OR REPLACE FUNCTION public.update_customer_visit_details')[0]
+  ))
+test('No private staff fields (email, employee_code, aadhaar) are selected from admin_users for the customer',
+  !/(SELECT[\s\S]{0,200}?public\.admin_users[\s\S]{0,200}?(employee_code|aadhaar_number)[\s\S]{0,200}?AS engineer_contact_display)|\(SELECT NULLIF\(btrim\(au\.phone_number\), ''\)[\s\S]{0,200}?aadhaar/.test(migration3))
+test('Staff hide beats derivation: explicit hide flag is additive with default false',
+  migration3.includes('ADD COLUMN IF NOT EXISTS engineer_contact_hidden BOOLEAN NOT NULL DEFAULT false'))
+test('Derivation requires an ACTIVE staff record (deactivated engineers are hidden)',
+  /NOT EXISTS \(\s*\n\s*SELECT 1 FROM public\.admin_users au\s*\n\s*WHERE au\.id = e\.assigned_employee_id AND au\.is_active\s*\n\s*\)/.test(migration3))
+test('Deactivating the assigned engineer hides ALL numbers, including staff-typed approved ones',
+  (() => {
+    const sql = migration3.replace(/\r/g, '')
+    const listBody = sql.split('CREATE OR REPLACE FUNCTION public.list_customer_enquiries')[1]
+      .split('REVOKE EXECUTE ON FUNCTION public.list_customer_enquiries')[0] || ''
+    const deactivationBranch = listBody.indexOf('WHEN NOT EXISTS (')
+    const overrideBranch = listBody.indexOf("NULLIF(btrim(e.engineer_contact_display), '') IS NOT NULL")
+    const hiddenBranch = listBody.indexOf('WHEN e.engineer_contact_hidden THEN NULL')
+    return deactivationBranch >= 0 &&
+      overrideBranch > deactivationBranch &&
+      /WHEN NOT EXISTS \(\s*\n\s*SELECT 1 FROM public\.admin_users au\s*\n\s*WHERE au\.id = e\.assigned_employee_id AND au\.is_active\s*\n\s*\) THEN NULL/.test(listBody) &&
+      /WHEN e\.engineer_contact_hidden THEN NULL/.test(listBody) &&
+      hiddenBranch < deactivationBranch
+  })())
+test('list_customer_enquiries stays service-role only',
+  /GRANT EXECUTE ON FUNCTION public\.list_customer_enquiries\(TEXT\) TO service_role/.test(migration3) &&
+  /REVOKE EXECUTE ON FUNCTION public\.list_customer_enquiries\(TEXT\) FROM PUBLIC, anon, authenticated/.test(migration3))
+test('Session validation and identifier resolution are byte-preserved in the derived version',
+  /token_hash = pg_catalog\.encode\(extensions\.digest\(v_token, 'sha256'\), 'hex'\)/.test(migration3) &&
+  /revoked_at IS NULL/.test(migration3) &&
+  /expires_at > now\(\)/.test(migration3) &&
+  /tracking_enquiry_ids_for_identifier\(v_channel, v_identifier\)/.test(migration3))
+test('update_customer_visit_details guard and audit are preserved; blank save = explicit customer hide',
+  migration3.includes('CREATE OR REPLACE FUNCTION public.update_customer_visit_details') &&
+  /NOT public\.is_enquiry_management_staff\(\)/.test(migration3) &&
+  /engineer_contact_hidden = v_hidden/.test(migration3) &&
+  /v_enquiry\.engineer_contact_display IS DISTINCT FROM v_contact\s*\n\s*OR v_enquiry\.engineer_contact_hidden IS DISTINCT FROM v_hidden/.test(migration3.replace(/\r/g, '')))
+test('update_customer_visit_details remains denied to anon/public',
+  /REVOKE EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*FROM PUBLIC, anon/.test(migration3.replace(/\r/g, '')) &&
+  /GRANT EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*TO authenticated/.test(migration3.replace(/\r/g, '')))
+test('Customer card shows phone as tel: link directly under the name with the new fallback',
+  trackingCard.includes('Contact number not yet available.') &&
+  trackingCard.includes("engineer.contact.replace(/[^0-9+]/g, '')") &&
+  /<strong>\{engineer\.name\}<\/strong>[\s\S]{0,600}?href=\{`tel:\$\{engineer\.contact\.replace\(\/\[\^0-9\+\]\/g, ''\)\}`\}[\s\S]{0,80}?\{engineer\.contact\}/.test(trackingCard.replace(/\r/g, '')))
+test('Admin panel documents the auto-share default and explicit hide',
+  adminEnquiries.includes("Auto: engineer's registered phone") &&
+  adminEnquiries.includes('hide the customer-visible contact'))
+
 console.log('\n[Suite 3] Services page & submission flow')
+
 test('Services hero uses a two-column layout with the tracking card on the right',
   customerHome.includes('<EnquiryTrackingCard />') &&
   customerHome.includes('services-introduction'))
@@ -296,8 +357,10 @@ test('No Supabase credentials or service-role keys reach the customer components
 test('Expired sessions force re-verification instead of showing stale data',
   /setStep\('contact'\)/.test(trackingCard) &&
   trackingCard.includes('setSessionToken(null)'))
-test('Exact fallback texts are used for missing engineer and missing visit schedule',
+test('Exact fallback texts are used for missing engineer, missing number and missing visit schedule',
   trackingCard.includes('Engineer not assigned yet. Our team will update you once an engineer is assigned.') &&
+  trackingCard.includes('Contact number not yet available.') &&
+  !trackingCard.includes('Engineer contact number will be shared at the visit') &&
   trackingCard.includes('Visit schedule is not available yet.'))
 test('All customer-facing status labels are represented with chips',
   ['Enquiry Received', 'Under Review', 'In Progress', 'Engineer Assigned', 'Visit Scheduled', 'Waiting for Customer', 'Service Completed'].every(

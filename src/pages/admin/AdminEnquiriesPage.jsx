@@ -3903,7 +3903,7 @@ export default function AdminEnquiriesPage() {
                       Visit & Engineer Customer Details
                     </span>
                     <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', marginBottom: '8px' }}>
-                      Only the engineer name from the approved assignment and the contact number you enter here are visible to the customer. Private staff phone details are never exposed.
+                      The assigned engineer's registered phone number is shown to the customer automatically. Enter a number here only to override it, or leave it blank and save to hide the customer-visible contact. Private staff phone details are never exposed.
                     </span>
                     <div className="customer-tracking-grid" style={{ marginBottom: '8px' }}>
                       <div>
@@ -3914,7 +3914,7 @@ export default function AdminEnquiriesPage() {
                           id="engineer-contact-display"
                           type="text"
                           className="admin-input"
-                          placeholder="Optional, e.g. +91 70783 82213"
+                          placeholder="Auto: engineer's registered phone. Enter to override, or blank to hide"
                           value={visitDetailDraft.contact}
                           maxLength={40}
                           onChange={(event) => handleVisitDetailChange('contact', event.target.value)}

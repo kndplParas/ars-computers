@@ -209,8 +209,8 @@ function EnquiryDetail({ enquiry, onBack }) {
             <span>👤 <strong>{engineer.name}</strong></span>
             <span>
               {engineer.contact
-                ? <>📞 Eng. <a href={`tel:${engineer.contact.replace(/[^0-9+]/g, '')}`} className="tracking-contact-link">{engineer.contact}</a></>
-                : '📞 Engineer contact number will be shared at the visit.'}
+                ? <>📞 <a href={`tel:${engineer.contact.replace(/[^0-9+]/g, '')}`} className="tracking-contact-link">{engineer.contact}</a></>
+                : '📞 Contact number not yet available.'}
             </span>
           </div>
         ) : (
@@ -455,7 +455,7 @@ export default function EnquiryTrackingCard() {
             >
               {busy ? 'Requesting…' : 'Send Verification Code'}
             </button>
-            <p className="tracking-help-text">
+            <p className="tracking-help-text" style={{ fontWeight: 600, color: '#334155' }}>
               A one-time code will be sent to the registered email address on your enquiry.
             </p>
           </div>
