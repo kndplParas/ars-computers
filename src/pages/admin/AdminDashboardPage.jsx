@@ -118,6 +118,7 @@ function AdminDashboardPage() {
 
   const userRole = adminUser?.role || 'inventory_staff'
   const isSuperadminOrAdmin = ENQUIRY_ROLES.includes(userRole)
+  const smartMetrics = metrics?.smartMetrics
   const isDashboardLoading =
     isLoadingProducts ||
     isLoadingCategories ||
@@ -273,92 +274,314 @@ function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Summary Metric Cards Grid */}
-        <div className="admin-summary-grid">
-          {/* Card 1: Total Catalog Products */}
-          <div className="admin-stat-card" aria-busy={isLoadingProducts}>
-            <div className="stat-card-icon blue">📦</div>
-            <div className="stat-card-content">
-              <span className="stat-label">Total Catalog Products</span>
-              <div className="stat-number-wrap">
-                <span className="stat-number">{formatCount(metrics.products.total, isLoadingProducts)}</span>
-                <span className="stat-badge">{isLiveDatabase ? 'Supabase' : 'Local Store'}</span>
-              </div>
-              <span className="stat-subtext">Across {formatCount(categories.length, isLoadingCategories)} hardware categories</span>
-            </div>
+        {/* Truncation Notice (when Supabase query exceeds PostgREST default limit) */}
+        {smartMetrics?.isDatasetTruncated && (
+          <div className="admin-truncation-notice">
+            <span>ℹ️</span>
+            <span>
+              Showing metrics for latest 1,000 enquiries. Total database records: <strong>{smartMetrics.exactTotalCount}</strong>.
+            </span>
           </div>
+        )}
 
-          {/* Card 2: Active on Website */}
-          <div className="admin-stat-card" aria-busy={isLoadingProducts}>
-            <div className="stat-card-icon green">✓</div>
-            <div className="stat-card-content">
-              <span className="stat-label">Active on Website</span>
-              <div className="stat-number-wrap">
-                <span className="stat-number">{formatCount(metrics.products.active, isLoadingProducts)}</span>
-                <span className="stat-badge green">
-                  {isLoadingProducts
-                    ? 'Loading'
-                    : `${Math.round((metrics.products.active / (metrics.products.total || 1)) * 100)}% Live`}
-                </span>
-              </div>
-              <span className="stat-subtext">Visible to public customer catalog</span>
-            </div>
-          </div>
-
-          {/* Card 3: Low-Stock Alerts */}
-          <div className="admin-stat-card" aria-busy={isLoadingProducts}>
-            <div className="stat-card-icon amber">⚠️</div>
-            <div className="stat-card-content">
-              <span className="stat-label">Low-Stock Alerts</span>
-              <div className="stat-number-wrap">
-                <span className="stat-number">{formatCount(metrics.products.lowStock, isLoadingProducts)}</span>
-                <span className={`stat-badge ${metrics.products.lowStock > 0 ? 'amber' : 'green'}`}>
-                  {isLoadingProducts ? 'Loading' : metrics.products.lowStock > 0 ? 'Restock Needed' : 'Healthy'}
-                </span>
-              </div>
-              <span className="stat-subtext">
-                {isLoadingProducts
-                  ? 'Checking inventory thresholds…'
-                  : metrics.products.lowStock > 0
-                  ? `${metrics.products.lowStock} item(s) at or below alert threshold`
-                  : 'No inventory critical warnings'}
+        {/* Overdue Follow-ups Urgency Alert Banner */}
+        {isSuperadminOrAdmin && smartMetrics?.overdueFollowUps > 0 && (
+          <div
+            className="admin-overdue-alert-banner"
+            onClick={() => navigate('/admin/enquiries?tab=all_active&filter=overdue')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/enquiries?tab=all_active&filter=overdue') }}
+          >
+            <div className="alert-left">
+              <span>⚠️</span>
+              <span>
+                <strong>{smartMetrics.overdueFollowUps}</strong> service follow-up / visit {smartMetrics.overdueFollowUps === 1 ? 'is' : 'are'} overdue past scheduled date!
               </span>
             </div>
+            <span className="alert-action-pill">Review Overdue Visits →</span>
           </div>
+        )}
 
-          {/* Card 4: Inbound Enquiries (Admin only) or Stock Health (Staff) */}
-          {isSuperadminOrAdmin ? (
-            <div className="admin-stat-card" aria-busy={isLoadingEnquiries}>
-              <div className="stat-card-icon purple">💬</div>
+        {/* Smart Enquiry Metrics Grid (Operational Roles) */}
+        {isSuperadminOrAdmin && smartMetrics ? (
+          <div className="admin-summary-grid six-cards">
+            {/* Card 1: Today's Enquiries */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/enquiries?filter=today')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/enquiries?filter=today') }}
+              aria-label="Filter today's inbound enquiries"
+            >
+              <div className="stat-card-icon blue">📅</div>
               <div className="stat-card-content">
-                <span className="stat-label">Inbound Enquiries</span>
+                <span className="stat-label">Today's Enquiries</span>
                 <div className="stat-number-wrap">
-                  <span className="stat-number">{formatCount(metrics.enquiries.total, isLoadingEnquiries)}</span>
-                  <span className="stat-badge purple">
-                    {isLoadingEnquiries
-                      ? 'Loading'
-                      : `${metrics.enquiries.newCount} New / ${metrics.enquiries.inProgress} Active`}
-                  </span>
+                  <span className="stat-number">{formatCount(smartMetrics.today, isLoadingEnquiries)}</span>
+                  <span className="stat-badge blue">IST Today</span>
                 </div>
-                <span className="stat-subtext">Customer quote and service requests</span>
+                <span className="stat-subtext">Received today in local business time</span>
               </div>
             </div>
-          ) : (
+
+            {/* Card 2: Pending Enquiries */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/enquiries?tab=all_active&filter=pending')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/enquiries?tab=all_active&filter=pending') }}
+              aria-label="Filter pending enquiries"
+            >
+              <div className="stat-card-icon amber">⏳</div>
+              <div className="stat-card-content">
+                <span className="stat-label">Pending Enquiries</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(smartMetrics.pending, isLoadingEnquiries)}</span>
+                  <span className="stat-badge amber">Awaiting Action</span>
+                </div>
+                <span className="stat-subtext">New, quoted &amp; review queue</span>
+              </div>
+            </div>
+
+            {/* Card 3: In Progress Enquiries */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/enquiries?tab=all_active&status=in_progress')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/enquiries?tab=all_active&status=in_progress') }}
+              aria-label="Filter in progress enquiries"
+            >
+              <div className="stat-card-icon purple">⚡</div>
+              <div className="stat-card-content">
+                <span className="stat-label">In Progress</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(smartMetrics.inProgress, isLoadingEnquiries)}</span>
+                  <span className="stat-badge purple">Active Work</span>
+                </div>
+                <span className="stat-subtext">Under active technical service/survey</span>
+              </div>
+            </div>
+
+            {/* Card 4: Completed Enquiries */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/enquiries?tab=archived&filter=completed')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/enquiries?tab=archived&filter=completed') }}
+              aria-label="Filter completed enquiries"
+            >
+              <div className="stat-card-icon green">✅</div>
+              <div className="stat-card-content">
+                <span className="stat-label">Completed Enquiries</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(smartMetrics.completed, isLoadingEnquiries)}</span>
+                  <span className="stat-badge green">Approved</span>
+                </div>
+                <span className="stat-subtext">Head-approved permanent archives</span>
+              </div>
+            </div>
+
+            {/* Card 5: Unassigned Enquiries */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/enquiries?tab=all_active&filter=unassigned')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/enquiries?tab=all_active&filter=unassigned') }}
+              aria-label="Filter unassigned enquiries"
+            >
+              <div className="stat-card-icon teal">👤</div>
+              <div className="stat-card-content">
+                <span className="stat-label">Unassigned Enquiries</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(smartMetrics.unassigned, isLoadingEnquiries)}</span>
+                  <span className={`stat-badge ${smartMetrics.unassigned > 0 ? 'amber' : 'green'}`}>
+                    {smartMetrics.unassigned > 0 ? 'Needs Assignee' : 'All Assigned'}
+                  </span>
+                </div>
+                <span className="stat-subtext">Open requests ready for engineer dispatch</span>
+              </div>
+            </div>
+
+            {/* Card 6: Overdue Follow-ups */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/enquiries?tab=all_active&filter=overdue')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/enquiries?tab=all_active&filter=overdue') }}
+              aria-label="Filter overdue follow-ups"
+            >
+              <div className={`stat-card-icon ${smartMetrics.overdueFollowUps > 0 ? 'red' : 'green'}`}>
+                {smartMetrics.overdueFollowUps > 0 ? '⚠️' : '🎯'}
+              </div>
+              <div className="stat-card-content">
+                <span className="stat-label">Overdue Follow-ups</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(smartMetrics.overdueFollowUps, isLoadingEnquiries)}</span>
+                  <span className={`stat-badge ${smartMetrics.overdueFollowUps > 0 ? 'red' : 'green'}`}>
+                    {smartMetrics.overdueFollowUps > 0 ? 'Action Needed' : 'On Schedule'}
+                  </span>
+                </div>
+                <span className="stat-subtext">Visits past scheduled arrival date</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Inventory Staff Summary Grid (Zero Customer Enquiries Shown) */
+          <div className="admin-summary-grid">
             <div className="admin-stat-card" aria-busy={isLoadingProducts}>
-              <div className="stat-card-icon purple">📊</div>
+              <div className="stat-card-icon blue">📦</div>
+              <div className="stat-card-content">
+                <span className="stat-label">Total Catalog Products</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(metrics.products.total, isLoadingProducts)}</span>
+                  <span className="stat-badge">{isLiveDatabase ? 'Supabase' : 'Local Store'}</span>
+                </div>
+                <span className="stat-subtext">Across {formatCount(categories.length, isLoadingCategories)} hardware categories</span>
+              </div>
+            </div>
+
+            <div className="admin-stat-card" aria-busy={isLoadingProducts}>
+              <div className="stat-card-icon green">✓</div>
               <div className="stat-card-content">
                 <span className="stat-label">In-Stock Catalog</span>
                 <div className="stat-number-wrap">
                   <span className="stat-number">{formatCount(metrics.products.inStock, isLoadingProducts)}</span>
-                  <span className="stat-badge purple">
-                    {isLoadingProducts ? 'Loading' : `${metrics.products.outOfStock} Out of Stock`}
-                  </span>
+                  <span className="stat-badge green">Available</span>
                 </div>
-                <span className="stat-subtext">Units available for customer fulfillment</span>
+                <span className="stat-subtext">Units available for customer orders</span>
               </div>
             </div>
-          )}
-        </div>
+
+            <div className="admin-stat-card" aria-busy={isLoadingProducts}>
+              <div className="stat-card-icon amber">⚠️</div>
+              <div className="stat-card-content">
+                <span className="stat-label">Low-Stock Alerts</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(metrics.products.lowStock, isLoadingProducts)}</span>
+                  <span className={`stat-badge ${metrics.products.lowStock > 0 ? 'amber' : 'green'}`}>
+                    {metrics.products.lowStock > 0 ? 'Restock Needed' : 'Healthy'}
+                  </span>
+                </div>
+                <span className="stat-subtext">Items at or below stock reorder threshold</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Operational Field & Technical Workload (Head Superadmin View) */}
+        {userRole === 'superadmin' && smartMetrics?.staffWorkload && smartMetrics.staffWorkload.length > 0 && (
+          <div className="admin-workload-section">
+            <div className="admin-workload-header">
+              <h2>👥 Operational Field &amp; Technical Workload</h2>
+              <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                {smartMetrics.staffWorkload.length} Active Operational Staff
+              </span>
+            </div>
+            <div className="admin-workload-table-wrap">
+              <table className="admin-workload-table">
+                <thead>
+                  <tr>
+                    <th>Staff Member</th>
+                    <th>Role</th>
+                    <th>Active Assigned</th>
+                    <th>Awaiting Approval (Subset)</th>
+                    <th>Completed</th>
+                    <th>Overdue Visits</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {smartMetrics.staffWorkload.map((member) => (
+                    <tr
+                      key={member.id}
+                      className="clickable-row"
+                      onClick={() => navigate(`/admin/enquiries?tab=all_active&staff=${encodeURIComponent(member.id)}`)}
+                      title={`View active enquiries assigned to ${member.name}`}
+                    >
+                      <td>
+                        <strong>{member.name}</strong>
+                        {member.employeeCode && (
+                          <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b' }}>
+                            Code: {member.employeeCode}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="stat-badge" style={{ textTransform: 'capitalize' }}>
+                          {member.role}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="workload-count-badge active">{member.activeAssigned}</span>
+                      </td>
+                      <td>
+                        <span className="workload-count-badge approval">{member.awaitingApproval}</span>
+                      </td>
+                      <td>
+                        <span className="workload-count-badge completed">{member.completed}</span>
+                      </td>
+                      <td>
+                        <span className={`workload-count-badge ${member.overdueCount > 0 ? 'overdue' : 'completed'}`}>
+                          {member.overdueCount > 0 ? `⚠️ ${member.overdueCount}` : '0'}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ color: '#2563eb', fontSize: '0.82rem', fontWeight: 600 }}>
+                          View Queue →
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Personal Workload Card (Operational Employee View: engineer, technical, admin) */}
+        {userRole !== 'superadmin' && isSuperadminOrAdmin && smartMetrics?.myWorkload && (
+          <div className="admin-personal-workload-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '0.98rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>📋</span> My Assigned Workload ({adminUser?.fullName || adminUser?.email})
+              </h3>
+              <button
+                type="button"
+                className="btn-outline btn-sm"
+                onClick={() => navigate(`/admin/enquiries?tab=all_active&staff=${encodeURIComponent(adminUser.id)}`)}
+              >
+                Open My Queue →
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <div>
+                <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>ACTIVE ASSIGNED</span>
+                <strong style={{ fontSize: '1.2rem', color: '#1d4ed8' }}>{smartMetrics.myWorkload.activeAssigned}</strong>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>AWAITING APPROVAL</span>
+                <strong style={{ fontSize: '1.2rem', color: '#7c3aed' }}>{smartMetrics.myWorkload.awaitingApproval}</strong>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>COMPLETED</span>
+                <strong style={{ fontSize: '1.2rem', color: '#047857' }}>{smartMetrics.myWorkload.completed}</strong>
+              </div>
+              {smartMetrics.myWorkload.overdueCount > 0 && (
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#b91c1c', display: 'block' }}>OVERDUE VISITS</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#b91c1c' }}>⚠️ {smartMetrics.myWorkload.overdueCount}</strong>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Dual Panel Section: Quick Actions + Role-Gated Panel */}
         <div className="admin-dashboard-split">

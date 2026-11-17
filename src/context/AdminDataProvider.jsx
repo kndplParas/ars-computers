@@ -10,6 +10,7 @@ import { INITIAL_DEMO_ENQUIRIES } from '../data/mockEnquiries'
 import { INITIAL_DEMO_STAFF } from '../data/mockStaff'
 import { INITIAL_DEMO_SERVICE_REQUESTS } from '../data/mockServiceRequests'
 import { normalizeAadhaar, validateAadhaar } from '../utils/aadhaarFormatter'
+import { classifyEnquiry, computeStaffWorkload, OPERATIONAL_WORKLOAD_ROLES } from '../utils/enquiryClassification'
 
 const ALL_STAFF_ROLES = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff']
 const OPERATIONAL_ROLES = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account']
@@ -137,6 +138,7 @@ export function AdminDataProvider({ children }) {
   const [liveProducts, setLiveProducts] = useState([])
   const [liveCategories, setLiveCategories] = useState([])
   const [liveEnquiries, setLiveEnquiries] = useState([])
+  const [enquiriesExactCount, setEnquiriesExactCount] = useState(null)
   const [liveStaff, setLiveStaff] = useState([])
   const [liveServiceRequests, setLiveServiceRequests] = useState([])
   const [liveOrders, setLiveOrders] = useState([])
@@ -276,16 +278,18 @@ export function AdminDataProvider({ children }) {
         throw new Error('Supabase client is not configured.')
       }
 
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from('enquiries')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
 
       if (error) {
         // STRICT RULE: Never silently fallback to demo data on live database failure
         setLiveEnquiries([])
+        setEnquiriesExactCount(null)
         setEnquiriesError(error.message || 'Failed to query customer enquiries.')
       } else {
+        setEnquiriesExactCount(typeof count === 'number' ? count : (data || []).length)
         const mapped = (data || []).map((row) => ({
           ...row,
           customer_name: row.name,
@@ -306,6 +310,7 @@ export function AdminDataProvider({ children }) {
     } catch (err) {
       // STRICT RULE: Never silently fallback to demo data on live database failure
       setLiveEnquiries([])
+      setEnquiriesExactCount(null)
       setEnquiriesError(err.message || 'Failed to query customer enquiries.')
     } finally {
       setIsLoadingEnquiries(false)
@@ -3874,6 +3879,82 @@ export function AdminDataProvider({ children }) {
     const resolvedServiceRequests = serviceRequests.filter((s) => s.status === 'resolved').length
     const closedServiceRequests = serviceRequests.filter((s) => s.status === 'closed').length
 
+    // --- Smart Admin Dashboard Metrics (Module 1) ---
+    // Strict Role Authorization:
+    // Only operational roles ('superadmin', 'admin', 'technical', 'engineer', 'hr', 'account') receive enquiry metrics.
+    // inventory_staff is blocked (smartMetrics is null).
+    const userRole = adminUser?.role || 'inventory_staff'
+    const isEnquiryRole = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(userRole)
+    const isSuperadmin = userRole === 'superadmin'
+
+    let smartMetrics = null
+    if (isEnquiryRole) {
+      let todayCount = 0
+      let pendingCount = 0
+      let inProgressCount = 0
+      let completedCount = 0
+      let unassignedCount = 0
+      let overdueCount = 0
+
+      for (const enq of enquiries) {
+        const c = classifyEnquiry(enq)
+        if (!c.isLegitimate) continue
+
+        if (c.isToday) todayCount += 1
+        if (c.isCompleted) completedCount += 1
+        else if (c.isInProgress) inProgressCount += 1
+        else if (c.isPending) pendingCount += 1
+
+        if (c.isUnassigned) unassignedCount += 1
+        if (c.isOverdue) overdueCount += 1
+      }
+
+      // Workload calculations:
+      // Superadmin sees the Company-wide Workload Table for active operational staff
+      let staffWorkload = []
+      if (isSuperadmin) {
+        const activeStaffList = staff.filter((s) => s.is_active !== false)
+        staffWorkload = activeStaffList
+          .map((s) => {
+            const workload = computeStaffWorkload(s.id, enquiries)
+            const isOperational = OPERATIONAL_WORKLOAD_ROLES.includes(s.role)
+            return {
+              id: s.id,
+              name: s.full_name || s.name || s.email,
+              role: s.role,
+              employeeCode: s.employee_code || null,
+              isOperational,
+              ...workload
+            }
+          })
+          // Filter to operational roles by default, or non-operational staff who currently have assigned work
+          .filter((s) => s.isOperational || s.activeAssigned > 0 || s.completed > 0)
+      }
+
+      // Personal Workload for the logged-in user
+      const myWorkload = adminUser?.id ? computeStaffWorkload(adminUser.id, enquiries) : {
+        activeAssigned: 0,
+        awaitingApproval: 0,
+        completed: 0,
+        overdueCount: 0
+      }
+
+      const isDatasetTruncated = Boolean(isLiveDatabase && enquiriesExactCount !== null && enquiriesExactCount > enquiries.length)
+
+      smartMetrics = {
+        today: todayCount,
+        pending: pendingCount,
+        inProgress: inProgressCount,
+        completed: completedCount,
+        unassigned: unassignedCount,
+        overdueFollowUps: overdueCount,
+        staffWorkload,
+        myWorkload,
+        isDatasetTruncated,
+        exactTotalCount: enquiriesExactCount !== null ? enquiriesExactCount : enquiries.length
+      }
+    }
+
     return {
       products: {
         total: totalProducts,
@@ -3920,9 +4001,10 @@ export function AdminDataProvider({ children }) {
         resolved: resolvedServiceRequests,
         closed: closedServiceRequests,
         pending: newServiceRequests + assignedServiceRequests + inProgressServiceRequests + waitingServiceRequests
-      }
+      },
+      smartMetrics
     }
-  }, [products, categories, enquiries, staff, serviceRequests])
+  }, [products, categories, enquiries, staff, serviceRequests, adminUser, isLiveDatabase, enquiriesExactCount])
 
   const value = {
     // Datasets
@@ -3932,6 +4014,9 @@ export function AdminDataProvider({ children }) {
     staff,
     serviceRequests,
     orders,
+    smartMetrics,
+    isDatasetTruncated: smartMetrics?.isDatasetTruncated || false,
+    enquiriesExactCount,
 
     // Live Database Metadata & Handlers
     isLiveDatabase,

@@ -4,6 +4,7 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import { ENQUIRY_STATUSES } from '../../data/mockEnquiries'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
+import { classifyEnquiry } from '../../utils/enquiryClassification'
 import { parseServiceEnquiry } from '../../utils/serviceEnquiryHelper'
 import { formatAadhaarDisplay } from '../../utils/aadhaarFormatter'
 import { formatJobDispatchText, buildWhatsAppDispatchUrl } from '../../utils/jobDispatchFormatter'
@@ -151,6 +152,8 @@ export default function AdminEnquiriesPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all') // 'all', 'last_7_days', 'last_30_days'
+  const [dashboardFilter, setDashboardFilter] = useState('all') // 'all', 'today', 'pending', 'completed', 'unassigned', 'overdue'
+  const [staffFilter, setStaffFilter] = useState('') // staffId filter
 
   // Modals & Panels State
   const [selectedEnquiry, setSelectedEnquiry] = useState(null)
@@ -343,6 +346,17 @@ export default function AdminEnquiriesPage() {
       if (effectiveWorkflowTab === 'bin' && !isInBin) return false
       if (effectiveWorkflowTab === 'archived' && !item.is_archived) return false
 
+      // 1b. Smart Dashboard Click-Through Filters
+      const c = classifyEnquiry(item)
+      if (dashboardFilter === 'today' && !c.isToday) return false
+      if (dashboardFilter === 'pending' && !c.isPending) return false
+      if (dashboardFilter === 'completed' && !c.isCompleted) return false
+      if (dashboardFilter === 'unassigned' && !c.isUnassigned) return false
+      if (dashboardFilter === 'overdue' && !c.isOverdue) return false
+
+      // 1c. Staff Assignment Filter
+      if (staffFilter && item.assigned_employee_id !== staffFilter) return false
+
       // 2. Search Query
       const q = searchQuery.trim().toLowerCase()
       const customerName = item.customer_name || item.name || ''
@@ -378,7 +392,7 @@ export default function AdminEnquiriesPage() {
 
       return matchesSearch && matchesStatus && matchesCategory && matchesDate
     })
-  }, [enquiries, effectiveWorkflowTab, searchQuery, statusFilter, categoryFilter, dateFilter])
+  }, [enquiries, effectiveWorkflowTab, searchQuery, statusFilter, categoryFilter, dateFilter, dashboardFilter, staffFilter])
 
   const eligibleEnquiriesInView = useMemo(
     () => filteredEnquiries.filter((enq) => isEnquiryEligibleForRemoval(enq)),
@@ -386,13 +400,15 @@ export default function AdminEnquiriesPage() {
   )
 
   const hasActiveFilters =
-    searchQuery.trim() !== '' || statusFilter !== 'all' || categoryFilter !== 'all' || dateFilter !== 'all'
+    searchQuery.trim() !== '' || statusFilter !== 'all' || categoryFilter !== 'all' || dateFilter !== 'all' || dashboardFilter !== 'all' || Boolean(staffFilter)
 
   const handleClearFilters = () => {
     setSearchQuery('')
     setStatusFilter('all')
     setCategoryFilter('all')
     setDateFilter('all')
+    setDashboardFilter('all')
+    setStaffFilter('')
   }
 
   // --- Customer Communication Handlers ---
@@ -543,6 +559,34 @@ export default function AdminEnquiriesPage() {
     handleOpenDetailsRef.current(target)
     clearDeepLinkParam()
   }, [deepLinkEnquiryId, enquiries, isLoadingEnquiries, searchParams, setSearchParams])
+
+  // Smart Dashboard click-through URL filter support:
+  // /admin/enquiries?tab=all_active | archived | pending_completion | ...
+  // /admin/enquiries?filter=today | pending | completed | unassigned | overdue
+  // /admin/enquiries?status=in_progress | ...
+  // /admin/enquiries?staff=<staff_id>
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    const filterParam = searchParams.get('filter')
+    const statusParam = searchParams.get('status')
+    const staffParam = searchParams.get('staff')
+
+    if (tabParam && ['all_active', 'pending_completion', 'pending_rejection', 'quoted', 'rejected_closed', 'bin', 'archived', 'removed'].includes(tabParam)) {
+      setActiveWorkflowTab(tabParam)
+    }
+
+    if (statusParam && ENQUIRY_STATUSES.some((s) => s.id === statusParam)) {
+      setStatusFilter(statusParam)
+    }
+
+    if (filterParam && ['today', 'pending', 'completed', 'unassigned', 'overdue'].includes(filterParam)) {
+      setDashboardFilter(filterParam)
+    }
+
+    if (staffParam) {
+      setStaffFilter(staffParam)
+    }
+  }, [searchParams])
 
   // --- Step 2 Proof Action Handlers ---
   const handlePreviewProof = async (proof) => {
@@ -1994,6 +2038,46 @@ export default function AdminEnquiriesPage() {
             )}
           </div>
         </div>
+
+        {/* Active Smart Dashboard Filter Indicator */}
+        {(dashboardFilter !== 'all' || Boolean(staffFilter)) && (
+          <div
+            className="admin-dashboard-filter-indicator"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              marginBottom: '16px',
+              fontSize: '0.86rem',
+              color: '#1e40af'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🎯 Filtered by:</span>
+              <strong style={{ textTransform: 'capitalize' }}>
+                {dashboardFilter === 'today' && "Today's Inbound Enquiries"}
+                {dashboardFilter === 'pending' && 'Pending Enquiries'}
+                {dashboardFilter === 'completed' && 'Head-Approved Completed Enquiries'}
+                {dashboardFilter === 'unassigned' && 'Unassigned Open Queue'}
+                {dashboardFilter === 'overdue' && 'Overdue Follow-ups & Visits'}
+                {Boolean(staffFilter) && `Staff ID: ${staffFilter}`}
+              </strong>
+              <span style={{ fontSize: '0.78rem', color: '#3b82f6' }}>({filteredEnquiries.length} matching)</span>
+            </div>
+            <button
+              type="button"
+              className="btn-outline btn-sm"
+              onClick={handleClearFilters}
+              style={{ fontSize: '0.78rem', padding: '3px 8px' }}
+            >
+              Clear Filter ✕
+            </button>
+          </div>
+        )}
 
         {/* Bulk Removal Toolbar (Head Superadmin Only) */}
         {isSuperadmin && activeWorkflowTab !== 'removed' && selectedEnquiryIds.size > 0 && (

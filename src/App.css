@@ -10630,12 +10630,29 @@
   transition: width 0.3s ease;
 }
 
-.cat-color-0 { background: #3b82f6; }
-.cat-color-1 { background: #10b981; }
-.cat-color-2 { background: #f59e0b; }
-.cat-color-3 { background: #8b5cf6; }
-.cat-color-4 { background: #ec4899; }
-.cat-color-5 { background: #06b6d4; }
+.cat-color-0 {
+  background: #3b82f6;
+}
+
+.cat-color-1 {
+  background: #10b981;
+}
+
+.cat-color-2 {
+  background: #f59e0b;
+}
+
+.cat-color-3 {
+  background: #8b5cf6;
+}
+
+.cat-color-4 {
+  background: #ec4899;
+}
+
+.cat-color-5 {
+  background: #06b6d4;
+}
 
 .share-pill {
   font-weight: 700;
@@ -10732,7 +10749,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 900px) {
@@ -10740,10 +10759,12 @@
     flex-direction: column;
     align-items: stretch;
   }
+
   .business-month-selector {
     justify-content: center;
     flex-wrap: wrap;
   }
+
   .business-header-right {
     justify-content: space-between;
   }
@@ -11562,12 +11583,29 @@
   transition: width 0.3s ease;
 }
 
-.cat-color-0 { background: #3b82f6; }
-.cat-color-1 { background: #10b981; }
-.cat-color-2 { background: #f59e0b; }
-.cat-color-3 { background: #8b5cf6; }
-.cat-color-4 { background: #ec4899; }
-.cat-color-5 { background: #06b6d4; }
+.cat-color-0 {
+  background: #3b82f6;
+}
+
+.cat-color-1 {
+  background: #10b981;
+}
+
+.cat-color-2 {
+  background: #f59e0b;
+}
+
+.cat-color-3 {
+  background: #8b5cf6;
+}
+
+.cat-color-4 {
+  background: #ec4899;
+}
+
+.cat-color-5 {
+  background: #06b6d4;
+}
 
 .share-pill {
   font-weight: 700;
@@ -11664,7 +11702,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 900px) {
@@ -11672,10 +11712,12 @@
     flex-direction: column;
     align-items: stretch;
   }
+
   .business-month-selector {
     justify-content: center;
     flex-wrap: wrap;
   }
+
   .business-header-right {
     justify-content: space-between;
   }
@@ -11949,6 +11991,7 @@
 }
 
 @media (max-width: 768px) {
+
   .product-overview-card,
   .product-key-features,
   .product-spec-card,
@@ -12535,7 +12578,7 @@
   gap: 8px;
 }
 
-.tracking-result-grid > div {
+.tracking-result-grid>div {
   min-width: 0;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -12543,7 +12586,7 @@
   padding: 7px 9px;
 }
 
-.tracking-result-grid > div:first-child {
+.tracking-result-grid>div:first-child {
   grid-column: 1 / -1;
 }
 
@@ -12860,7 +12903,7 @@
   border-top: 1px solid #eef2f7;
 }
 
-.tracking-section > strong {
+.tracking-section>strong {
   color: #64748b;
   font-size: 0.66rem;
   font-weight: 800;
@@ -13052,7 +13095,7 @@
     grid-template-columns: 1fr;
   }
 
-  .tracking-result-grid > div:first-child {
+  .tracking-result-grid>div:first-child {
     grid-column: 1;
   }
 
@@ -13066,5 +13109,256 @@
 
   .tracking-stage-label {
     font-size: 0.5rem;
+  }
+}
+
+/* ==========================================================================
+   Smart Admin Dashboard (Module 1) — Interactive Metrics & Workload Matrix
+   ========================================================================== */
+.admin-summary-grid.six-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 1200px) {
+  .admin-summary-grid.six-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1440px) {
+  .admin-summary-grid.six-cards {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+.admin-stat-card.interactive {
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+  user-select: none;
+}
+
+.admin-stat-card.interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  border-color: #93c5fd;
+}
+
+.admin-stat-card.interactive:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.stat-card-icon.red {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.stat-card-icon.teal {
+  background: #f0fdfa;
+  color: #0d9488;
+}
+
+.stat-badge.blue {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.stat-badge.amber {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.stat-badge.purple {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.stat-badge.red {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.stat-badge.green {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.admin-overdue-alert-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.admin-overdue-alert-banner:hover {
+  background: #fee2e2;
+  transform: translateY(-1px);
+}
+
+.admin-overdue-alert-banner .alert-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #991b1b;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.admin-overdue-alert-banner .alert-action-pill {
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.admin-truncation-notice {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-workload-section {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-workload-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-workload-header h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-workload-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-workload-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.admin-workload-table th {
+  text-align: left;
+  padding: 10px 14px;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.admin-workload-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.admin-workload-table tr.clickable-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.admin-workload-table tr.clickable-row:hover {
+  background: #f8fafc;
+}
+
+.workload-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+}
+
+.workload-count-badge.active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.workload-count-badge.approval {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.workload-count-badge.completed {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.workload-count-badge.overdue {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-personal-workload-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .admin-summary-grid.six-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .admin-overdue-alert-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-overdue-alert-banner .alert-action-pill {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-summary-grid.six-cards {
+    grid-template-columns: 1fr;
   }
 }
