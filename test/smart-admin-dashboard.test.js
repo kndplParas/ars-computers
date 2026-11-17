@@ -564,3 +564,22 @@ test('Suite 9: Realtime Updates Delta Simulation', async (t) => {
   })
 })
 
+test('Suite 10: Provider Context Value & Scope Safety', async (t) => {
+  await t.test('AdminDataProvider derives smartMetrics from metrics safely without ReferenceError', async () => {
+    const fs = await import('node:fs')
+    const providerContent = fs.readFileSync('src/context/AdminDataProvider.jsx', 'utf8')
+
+    // Verify context value mapping
+    assert.match(
+      providerContent,
+      /smartMetrics:\s*metrics\?\.smartMetrics/,
+      'smartMetrics must be derived from metrics to avoid scope ReferenceError'
+    )
+    assert.match(
+      providerContent,
+      /isDatasetTruncated:\s*metrics\?\.smartMetrics\?\.isDatasetTruncated/,
+      'isDatasetTruncated must safely traverse metrics'
+    )
+  })
+})
+

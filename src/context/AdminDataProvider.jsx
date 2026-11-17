@@ -4014,8 +4014,8 @@ export function AdminDataProvider({ children }) {
     staff,
     serviceRequests,
     orders,
-    smartMetrics,
-    isDatasetTruncated: smartMetrics?.isDatasetTruncated || false,
+    smartMetrics: metrics?.smartMetrics || null,
+    isDatasetTruncated: metrics?.smartMetrics?.isDatasetTruncated || false,
     enquiriesExactCount,
 
     // Live Database Metadata & Handlers
