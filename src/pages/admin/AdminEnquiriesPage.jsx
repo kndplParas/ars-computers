@@ -4394,16 +4394,11 @@ export default function AdminEnquiriesPage() {
                   )}
                 </div>
 
-                {/* Customer Tracking & Visit Details */}
+                {/* Customer Tracking & Visit Details (Removed from UI per request; preserved hidden for compatibility) */}
                 <div
                   className="customer-tracking-admin-card"
-                  style={{
-                    background: '#f0f9ff',
-                    border: '1px solid #bae6fd',
-                    borderRadius: '8px',
-                    padding: '12px 14px',
-                    marginBottom: '12px'
-                  }}
+                  style={{ display: 'none' }}
+                  aria-hidden="true"
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
