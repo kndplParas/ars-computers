@@ -2235,7 +2235,7 @@ export default function AdminEnquiriesPage() {
         )}
 
         {/* 2. Filter & Search Toolbar */}
-        <div className="admin-product-toolbar">
+        <div className="admin-product-toolbar enquiries-filter-toolbar">
           {/* Search Field */}
           <div className="toolbar-search-wrap">
             <span className="search-icon" aria-hidden="true">🔍</span>
