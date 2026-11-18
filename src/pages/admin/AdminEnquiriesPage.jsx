@@ -4,7 +4,7 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import { ENQUIRY_STATUSES } from '../../data/mockEnquiries'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
-import { classifyEnquiry } from '../../utils/enquiryClassification'
+import { classifyEnquiry, getISTCalendarDate } from '../../utils/enquiryClassification'
 import { parseServiceEnquiry } from '../../utils/serviceEnquiryHelper'
 import { formatAadhaarDisplay } from '../../utils/aadhaarFormatter'
 import { formatJobDispatchText, buildWhatsAppDispatchUrl } from '../../utils/jobDispatchFormatter'
@@ -103,10 +103,12 @@ export default function AdminEnquiriesPage() {
   const { adminUser } = useAdminAuth()
   const isSuperadmin = adminUser?.role === 'superadmin'
   const isEmployee = ['admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)
+  const isOperationalUser = isSuperadmin || isEmployee
   const [searchParams, setSearchParams] = useSearchParams()
   const handledDeepLinkRef = useRef(null)
 
   const {
+    staff,
     enquiries,
     categories,
     isLiveDatabase,
@@ -145,15 +147,33 @@ export default function AdminEnquiriesPage() {
   const handleWorkflowTabChange = (tab) => {
     setActiveWorkflowTab(tab)
     setSelectedEnquiryIds(new Set())
+    setCurrentPage(1)
   }
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
-  const [dateFilter, setDateFilter] = useState('all') // 'all', 'last_7_days', 'last_30_days'
+  const [dateFilter, setDateFilter] = useState('all') // 'all', 'today', 'yesterday', 'last_7_days', 'last_30_days'
   const [dashboardFilter, setDashboardFilter] = useState('all') // 'all', 'today', 'pending', 'completed', 'unassigned', 'overdue'
-  const [staffFilter, setStaffFilter] = useState('') // staffId filter
+  const [staffFilter, setStaffFilter] = useState('') // staffId filter or 'unassigned'
+
+  // Step 2: Client-side Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
+  // Step 2: Unified Timeline Tab
+  const [timelineTab, setTimelineTab] = useState('all') // 'all', 'tracking', 'internal'
+
+  // Step 2: Bulk Assignment States (Head Superadmin Only)
+  const [isBulkAssignModalOpen, setIsBulkAssignModalOpen] = useState(false)
+  const [bulkAssigneeId, setBulkAssigneeId] = useState('')
+  const [bulkAssignReason, setBulkAssignReason] = useState('')
+  const [bulkVisitDate, setBulkVisitDate] = useState('')
+  const [bulkExpectedArrival, setBulkExpectedArrival] = useState('')
+  const [bulkVisitNote, setBulkVisitNote] = useState('')
+  const [isSubmittingBulkAssign, setIsSubmittingBulkAssign] = useState(false)
+  const [bulkAssignResults, setBulkAssignResults] = useState(null) // { total, succeeded: [], failed: [] }
 
   // Modals & Panels State
   const [selectedEnquiry, setSelectedEnquiry] = useState(null)
@@ -171,6 +191,24 @@ export default function AdminEnquiriesPage() {
   const [assignmentError, setAssignmentError] = useState(null)
   const [isSelfAssigning, setIsSelfAssigning] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
+
+  // Preload and memoize eligible operational staff list
+  const eligibleStaffList = useMemo(() => {
+    if (assigneesList.length > 0) return assigneesList
+    return (staff || []).filter(
+      (s) => s.is_active !== false && ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(s.role)
+    )
+  }, [assigneesList, staff])
+
+  useEffect(() => {
+    let isMounted = true
+    loadEligibleEnquiryAssignees()
+      .then((list) => {
+        if (isMounted && Array.isArray(list)) setAssigneesList(list)
+      })
+      .catch((err) => console.warn('Could not preload assignees list:', err))
+    return () => { isMounted = false }
+  }, [loadEligibleEnquiryAssignees])
 
   // Step 2 Service Proof States
   const [enquiryProofs, setEnquiryProofs] = useState([])
@@ -355,19 +393,49 @@ export default function AdminEnquiriesPage() {
       if (dashboardFilter === 'overdue' && !c.isOverdue) return false
 
       // 1c. Staff Assignment Filter
-      if (staffFilter && item.assigned_employee_id !== staffFilter) return false
+      if (staffFilter) {
+        if (staffFilter === 'unassigned') {
+          if (item.assigned_employee_id) return false
+        } else if (item.assigned_employee_id !== staffFilter) {
+          return false
+        }
+      }
 
-      // 2. Search Query
+      // 2. Search Query (Enquiry ID, Number, Customer, Phone with digit normalization, Message)
       const q = searchQuery.trim().toLowerCase()
+      const cleanQ = q.replace(/^#/, '').trim()
+      const qDigits = q.replace(/\D/g, '')
+
       const customerName = item.customer_name || item.name || ''
+      const enquiryNumber = item.enquiry_number || ''
+      const rawPhone = item.phone || ''
+      const rawContact = item.contact_info || ''
+      const phoneDigits = rawPhone.replace(/\D/g, '')
+      const contactDigits = rawContact.replace(/\D/g, '')
+
+      const matchesEnquiryNumber =
+        enquiryNumber &&
+        (enquiryNumber.toLowerCase().includes(q) ||
+          enquiryNumber.toLowerCase().includes(cleanQ) ||
+          cleanQ.includes(enquiryNumber.toLowerCase()))
+
+      const matchesPhoneDigits =
+        qDigits.length >= 3 &&
+        (phoneDigits.includes(qDigits) ||
+          contactDigits.includes(qDigits) ||
+          (qDigits.length === 10 && phoneDigits.endsWith(qDigits)) ||
+          (phoneDigits.length === 10 && qDigits.endsWith(phoneDigits)))
+
       const matchesSearch =
         !q ||
-        item.id.toLowerCase().includes(q) ||
+        matchesEnquiryNumber ||
+        item.id.toLowerCase().includes(cleanQ) ||
         customerName.toLowerCase().includes(q) ||
         (item.company && item.company.toLowerCase().includes(q)) ||
         (item.email && item.email.toLowerCase().includes(q)) ||
-        (item.phone && item.phone.toLowerCase().includes(q)) ||
-        (item.contact_info && item.contact_info.toLowerCase().includes(q)) ||
+        matchesPhoneDigits ||
+        (rawPhone && rawPhone.toLowerCase().includes(q)) ||
+        (rawContact && rawContact.toLowerCase().includes(q)) ||
         (item.service_requested && item.service_requested.toLowerCase().includes(q)) ||
         (item.message && item.message.toLowerCase().includes(q))
 
@@ -382,9 +450,19 @@ export default function AdminEnquiriesPage() {
           ? serviceInfo.isService
           : item.category_interest === categoryFilter)
 
-      // 5. Date Range
+      // 5. Date Range Presets (All, Today, Yesterday, Last 7 Days, Last 30 Days in IST)
       let matchesDate = true
-      if (dateFilter === 'last_7_days') {
+      const itemIstDate = getISTCalendarDate(item.created_at)
+      const now = new Date()
+      const todayIst = getISTCalendarDate(now)
+
+      if (dateFilter === 'today') {
+        matchesDate = itemIstDate === todayIst
+      } else if (dateFilter === 'yesterday') {
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        const yesterdayIst = getISTCalendarDate(yesterday)
+        matchesDate = itemIstDate === yesterdayIst
+      } else if (dateFilter === 'last_7_days') {
         matchesDate = isWithinDays(item.created_at, 7)
       } else if (dateFilter === 'last_30_days') {
         matchesDate = isWithinDays(item.created_at, 30)
@@ -393,6 +471,23 @@ export default function AdminEnquiriesPage() {
       return matchesSearch && matchesStatus && matchesCategory && matchesDate
     })
   }, [enquiries, effectiveWorkflowTab, searchQuery, statusFilter, categoryFilter, dateFilter, dashboardFilter, staffFilter])
+
+  // Step 2: Client-side Paginated Slice
+  const totalFilteredRecords = filteredEnquiries.length
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(totalFilteredRecords / (Number(pageSize) || 25)))
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  const paginatedEnquiries = useMemo(() => {
+    if (pageSize === 'all') return filteredEnquiries
+    const size = Number(pageSize) || 25
+    const start = (currentPage - 1) * size
+    return filteredEnquiries.slice(start, start + size)
+  }, [filteredEnquiries, currentPage, pageSize])
 
   const eligibleEnquiriesInView = useMemo(
     () => filteredEnquiries.filter((enq) => isEnquiryEligibleForRemoval(enq)),
@@ -409,6 +504,7 @@ export default function AdminEnquiriesPage() {
     setDateFilter('all')
     setDashboardFilter('all')
     setStaffFilter('')
+    setCurrentPage(1)
   }
 
   // --- Customer Communication Handlers ---
@@ -798,18 +894,20 @@ export default function AdminEnquiriesPage() {
 
   // --- Phase 4 Employee Assignment Handlers ---
   // Opens the self-assign confirmation modal (employee provides optional visit time)
-  const handleSelfAssign = () => {
-    if (!selectedEnquiry || !isEmployee) return
-    setSelfVisitDate(selectedEnquiry.expected_visit_at ? selectedEnquiry.expected_visit_at.split('T')[0] : '')
-    setSelfExpectedArrival(selectedEnquiry.expected_arrival || '')
-    setSelfVisitNote(selectedEnquiry.assignment_visit_note || '')
+  const handleSelfAssign = (targetEnquiry = selectedEnquiry) => {
+    const target = targetEnquiry || selectedEnquiry
+    if (!target || !isOperationalUser) return
+    setSelectedEnquiry(target)
+    setSelfVisitDate(target.expected_visit_at ? target.expected_visit_at.split('T')[0] : '')
+    setSelfExpectedArrival(target.expected_arrival || '')
+    setSelfVisitNote(target.assignment_visit_note || '')
     setIsSelfAssignModalOpen(true)
   }
 
   // Executes self-assignment with optional visit time; identity is derived server-side
   const handleConfirmSelfAssign = async (e) => {
     if (e) e.preventDefault()
-    if (!selectedEnquiry || !isEmployee) return
+    if (!selectedEnquiry || !isOperationalUser) return
     setIsSelfAssigning(true)
     try {
       const expectedArrival = selfExpectedArrival || null
@@ -840,20 +938,135 @@ export default function AdminEnquiriesPage() {
     }
   }
 
-  const handleOpenAssignModal = async () => {
-    if (!isSuperadmin || !selectedEnquiry) return
+  const handleOpenAssignModal = async (targetEnquiry = selectedEnquiry) => {
+    const target = targetEnquiry || selectedEnquiry
+    if (!isSuperadmin || !target) return
+    setSelectedEnquiry(target)
     setAssignmentError(null)
     setAssignReason('')
-    setSelectedAssigneeId(selectedEnquiry.assigned_employee_id || '')
-    setAssignVisitDate(selectedEnquiry.expected_visit_at ? selectedEnquiry.expected_visit_at.split('T')[0] : '')
-    setAssignExpectedArrival(selectedEnquiry.expected_arrival || '')
-    setAssignVisitNote(selectedEnquiry.assignment_visit_note || '')
+    setSelectedAssigneeId(target.assigned_employee_id || '')
+    setAssignVisitDate(target.expected_visit_at ? target.expected_visit_at.split('T')[0] : '')
+    setAssignExpectedArrival(target.expected_arrival || '')
+    setAssignVisitNote(target.assignment_visit_note || '')
     setIsAssignModalOpen(true)
     try {
       const list = await loadEligibleEnquiryAssignees()
       setAssigneesList(list || [])
     } catch (err) {
       setAssignmentError(err.message || 'Failed to load eligible assignees directory.')
+    }
+  }
+
+  // --- Step 2: Head Bulk Employee Assignment Handlers ---
+  const handleOpenBulkAssignModal = async () => {
+    if (!isSuperadmin || selectedEnquiryIds.size === 0) return
+    setBulkAssigneeId('')
+    setBulkAssignReason('')
+    setBulkVisitDate('')
+    setBulkExpectedArrival('')
+    setBulkVisitNote('')
+    setBulkAssignResults(null)
+    setIsBulkAssignModalOpen(true)
+    try {
+      const list = await loadEligibleEnquiryAssignees()
+      setAssigneesList(list || [])
+    } catch (err) {
+      console.warn('Failed to load eligible assignees directory for bulk assignment:', err)
+    }
+  }
+
+  const handleExecuteBulkAssign = async () => {
+    if (!isSuperadmin) {
+      showNotification('Access denied: Superadministrator privileges required for bulk assignment.', 'error')
+      return
+    }
+    if (!bulkAssigneeId) {
+      showNotification('Please select an employee to assign.', 'error')
+      return
+    }
+
+    const selectedList = enquiries.filter((e) => selectedEnquiryIds.has(e.id))
+    const eligibleList = []
+    const failedList = []
+
+    for (const enq of selectedList) {
+      const c = classifyEnquiry(enq)
+      if (enq.is_removed || c.isRemoved) {
+        failedList.push({
+          id: enq.id,
+          enquiryNumber: enq.enquiry_number || enq.id,
+          reason: 'Cannot assign: Enquiry has been removed (spam/fake).'
+        })
+      } else if (enq.is_archived || c.isCompleted) {
+        failedList.push({
+          id: enq.id,
+          enquiryNumber: enq.enquiry_number || enq.id,
+          reason: 'Cannot assign: Enquiry is completed or permanently archived.'
+        })
+      } else if (enq.is_in_bin || c.isInBin) {
+        failedList.push({
+          id: enq.id,
+          enquiryNumber: enq.enquiry_number || enq.id,
+          reason: 'Cannot assign: Enquiry is currently in the Bin.'
+        })
+      } else if (enq.status === 'completion_requested' || enq.status === 'rejection_requested') {
+        failedList.push({
+          id: enq.id,
+          enquiryNumber: enq.enquiry_number || enq.id,
+          reason: 'Cannot assign: Assignment is frozen during pending review.'
+        })
+      } else if (['closed', 'rejected'].includes(enq.status)) {
+        failedList.push({
+          id: enq.id,
+          enquiryNumber: enq.enquiry_number || enq.id,
+          reason: 'Cannot assign: Enquiry is closed or rejected.'
+        })
+      } else {
+        eligibleList.push(enq)
+      }
+    }
+
+    setIsSubmittingBulkAssign(true)
+    const succeeded = []
+    const expectedArrival = bulkExpectedArrival ? bulkExpectedArrival : null
+    const visitNote = bulkVisitNote.trim() ? bulkVisitNote.trim() : null
+    const expectedVisitAt = bulkVisitDate ? new Date(bulkVisitDate + 'T09:00:00').toISOString() : null
+    const reason = bulkAssignReason.trim() ? bulkAssignReason.trim() : null
+
+    for (const enq of eligibleList) {
+      try {
+        await assignEnquiryEmployee(
+          enq.id,
+          bulkAssigneeId,
+          reason,
+          expectedArrival,
+          visitNote,
+          expectedVisitAt
+        )
+        succeeded.push({ id: enq.id, enquiryNumber: enq.enquiry_number || enq.id })
+      } catch (err) {
+        failedList.push({
+          id: enq.id,
+          enquiryNumber: enq.enquiry_number || enq.id,
+          reason: err.message || 'Assignment failed'
+        })
+      }
+    }
+
+    setIsSubmittingBulkAssign(false)
+    setBulkAssignResults({
+      total: selectedList.length,
+      succeeded,
+      failed: failedList
+    })
+
+    if (succeeded.length > 0) {
+      setSelectedEnquiryIds((prev) => {
+        const next = new Set(prev)
+        for (const s of succeeded) next.delete(s.id)
+        return next
+      })
+      await loadAdminEnquiries()
     }
   }
 
@@ -1031,8 +1244,8 @@ export default function AdminEnquiriesPage() {
         const current = syncVisitDetailDraft(selectedEnquiry)
         setHasVisitDetailChanges(
           next.contact !== current.contact ||
-            next.visitStatus !== current.visitStatus ||
-            next.note !== current.note
+          next.visitStatus !== current.visitStatus ||
+          next.note !== current.note
         )
       }
       return next
@@ -1461,6 +1674,88 @@ export default function AdminEnquiriesPage() {
     )
   }
 
+  // Step 2: Reusable Client-Side Pagination Bar
+  const renderPaginationBar = (position = 'top') => {
+    if (totalFilteredRecords === 0) return null
+    const startRecord = pageSize === 'all' ? 1 : (currentPage - 1) * pageSize + 1
+    const endRecord = pageSize === 'all' ? totalFilteredRecords : Math.min(currentPage * pageSize, totalFilteredRecords)
+
+    return (
+      <div className={`enquiry-pagination-bar pagination-${position}`}>
+        <div className="pagination-count-info">
+          Showing <strong>{startRecord}–{endRecord}</strong> of <strong>{totalFilteredRecords}</strong> enquiries
+        </div>
+        <div className="pagination-controls-group">
+          <div className="page-size-selector">
+            <label htmlFor={`enquiry-page-size-select-${position}`} className="page-size-label">Per Page:</label>
+            <select
+              id={`enquiry-page-size-select-${position}`}
+              className="admin-select pagination-page-size-select"
+              value={pageSize}
+              onChange={(e) => {
+                const val = e.target.value === 'all' ? 'all' : Number(e.target.value)
+                setPageSize(val)
+                setCurrentPage(1)
+              }}
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          {pageSize !== 'all' && totalPages > 1 && (
+            <div className="pagination-nav-buttons">
+              <button
+                type="button"
+                className="btn-outline btn-xs pagination-btn"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                aria-label="First page"
+                title="Go to first page"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                className="btn-outline btn-xs pagination-btn"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                aria-label="Previous page"
+                title="Previous page"
+              >
+                ‹ Prev
+              </button>
+              <span className="pagination-current-page">
+                Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+              </span>
+              <button
+                type="button"
+                className="btn-outline btn-xs pagination-btn"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                aria-label="Next page"
+                title="Next page"
+              >
+                Next ›
+              </button>
+              <button
+                type="button"
+                className="btn-outline btn-xs pagination-btn"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                aria-label="Last page"
+                title="Go to last page"
+              >
+                »
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <AdminLayout activeTab="enquiries">
       {/* Toast Notification */}
@@ -1832,7 +2127,7 @@ export default function AdminEnquiriesPage() {
           )}
         </div>
 
-                {/* Removed Enquiries Audit Bar for Superadmin */}
+        {/* Removed Enquiries Audit Bar for Superadmin */}
         {activeWorkflowTab === 'removed' && isSuperadmin && (
           <div
             style={{
@@ -1948,16 +2243,22 @@ export default function AdminEnquiriesPage() {
               id="enquiry-search-input"
               type="text"
               className="admin-search-input"
-              placeholder="Search by client name, company, email, phone, or ID (ENQ-...)..."
+              placeholder="Search by client name, mobile, or ID (#ARS-ENQ-...)..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
               aria-label="Search customer enquiries"
             />
             {searchQuery && (
               <button
                 type="button"
                 className="clear-search-btn"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('')
+                  setCurrentPage(1)
+                }}
                 aria-label="Clear search query"
               >
                 ✕
@@ -1976,7 +2277,10 @@ export default function AdminEnquiriesPage() {
                 id="enquiry-status-filter"
                 className="admin-select"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value)
+                  setCurrentPage(1)
+                }}
               >
                 <option value="all">All Statuses</option>
                 {ENQUIRY_STATUSES.map((st) => (
@@ -1987,7 +2291,7 @@ export default function AdminEnquiriesPage() {
               </select>
             </div>
 
-            {/* Category Filter */}
+            {/* Category / Department Filter */}
             <div className="filter-select-wrap">
               <label htmlFor="enquiry-category-filter" className="filter-label-inline">
                 Department:
@@ -1996,7 +2300,10 @@ export default function AdminEnquiriesPage() {
                 id="enquiry-category-filter"
                 className="admin-select"
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value)
+                  setCurrentPage(1)
+                }}
               >
                 <option value="all">All Departments</option>
                 <option value="service_requests">🛠️ Service &amp; Repair Requests</option>
@@ -2008,7 +2315,31 @@ export default function AdminEnquiriesPage() {
               </select>
             </div>
 
-            {/* Date Range Filter */}
+            {/* Step 2: Staff Assignment Filter */}
+            <div className="filter-select-wrap">
+              <label htmlFor="enquiry-staff-filter" className="filter-label-inline">
+                Staff:
+              </label>
+              <select
+                id="enquiry-staff-filter"
+                className="admin-select"
+                value={staffFilter}
+                onChange={(e) => {
+                  setStaffFilter(e.target.value)
+                  setCurrentPage(1)
+                }}
+              >
+                <option value="">All Staff</option>
+                <option value="unassigned">⚠️ Unassigned</option>
+                {eligibleStaffList.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.full_name || st.name || st.email} ({st.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Step 2: Date Range Presets (All, Today, Yesterday, Last 7 Days, Last 30 Days) */}
             <div className="filter-select-wrap">
               <label htmlFor="enquiry-date-filter" className="filter-label-inline">
                 Date:
@@ -2017,9 +2348,14 @@ export default function AdminEnquiriesPage() {
                 id="enquiry-date-filter"
                 className="admin-select"
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
+                onChange={(e) => {
+                  setDateFilter(e.target.value)
+                  setCurrentPage(1)
+                }}
               >
                 <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
                 <option value="last_7_days">Last 7 Days</option>
                 <option value="last_30_days">Last 30 Days</option>
               </select>
@@ -2064,7 +2400,11 @@ export default function AdminEnquiriesPage() {
                 {dashboardFilter === 'completed' && 'Head-Approved Completed Enquiries'}
                 {dashboardFilter === 'unassigned' && 'Unassigned Open Queue'}
                 {dashboardFilter === 'overdue' && 'Overdue Follow-ups & Visits'}
-                {Boolean(staffFilter) && `Staff ID: ${staffFilter}`}
+                {Boolean(staffFilter) && (
+                  staffFilter === 'unassigned'
+                    ? 'Unassigned Queue'
+                    : `Staff: ${eligibleStaffList.find((s) => s.id === staffFilter)?.full_name || eligibleStaffList.find((s) => s.id === staffFilter)?.email || staffFilter}`
+                )}
               </strong>
               <span style={{ fontSize: '0.78rem', color: '#3b82f6' }}>({filteredEnquiries.length} matching)</span>
             </div>
@@ -2079,7 +2419,7 @@ export default function AdminEnquiriesPage() {
           </div>
         )}
 
-        {/* Bulk Removal Toolbar (Head Superadmin Only) */}
+        {/* Bulk Removal & Assignment Toolbar (Head Superadmin Only) */}
         {isSuperadmin && activeWorkflowTab !== 'removed' && selectedEnquiryIds.size > 0 && (
           <div
             className="bulk-removal-toolbar"
@@ -2102,7 +2442,7 @@ export default function AdminEnquiriesPage() {
                 Selected: <strong>{selectedEnquiryIds.size}</strong> {selectedEnquiryIds.size === 1 ? 'enquiry' : 'enquiries'}
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn-outline btn-sm clear-selection-btn"
@@ -2110,6 +2450,15 @@ export default function AdminEnquiriesPage() {
                 style={{ borderColor: '#fda4af', color: '#9f1239', background: '#ffffff' }}
               >
                 Clear Selection
+              </button>
+              <button
+                type="button"
+                id="bulk-assign-selected-btn"
+                className="btn-primary btn-sm"
+                onClick={handleOpenBulkAssignModal}
+                style={{ background: '#2563eb', borderColor: '#1d4ed8', color: '#ffffff', fontWeight: 600 }}
+              >
+                👥 Assign Selected ({selectedEnquiryIds.size})
               </button>
               <button
                 type="button"
@@ -2132,6 +2481,9 @@ export default function AdminEnquiriesPage() {
             </div>
           </div>
         )}
+
+        {/* Step 2: Client-side Top Pagination Bar */}
+        {renderPaginationBar('top')}
 
         {/* 3. Desktop Enquiries Data Table */}
         <div className="admin-table-container products-table-wrap enquiries-table-wrap">
@@ -2179,6 +2531,7 @@ export default function AdminEnquiriesPage() {
                 <th scope="col" className="enquiry-requirement-heading">Requirement</th>
                 <th scope="col" className="enquiry-message-heading">Inbound Message Snippet</th>
                 <th scope="col" className="enquiry-status-heading">Status</th>
+                <th scope="col" className="enquiry-assignee-heading">Assigned &amp; Visit</th>
                 <th scope="col" className="enquiry-submitted-heading">Submitted</th>
                 <th
                   scope="col"
@@ -2189,9 +2542,9 @@ export default function AdminEnquiriesPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredEnquiries.length === 0 ? (
+              {totalFilteredRecords === 0 ? (
                 <tr>
-                  <td colSpan={isSuperadmin && activeWorkflowTab !== 'removed' ? 8 : 7}>
+                  <td colSpan={isSuperadmin && activeWorkflowTab !== 'removed' ? 9 : 8}>
                     <div className="empty-state-wrap">
                       <span className="empty-icon">🔍</span>
                       <h3>No enquiries match your selection</h3>
@@ -2210,10 +2563,11 @@ export default function AdminEnquiriesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredEnquiries.map((enq) => {
+                paginatedEnquiries.map((enq) => {
                   const statusMeta = getStatusMeta(enq.status)
                   const customerName = enq.customer_name || enq.name || 'Anonymous Customer'
                   const isPendingRejection = enq.status === 'rejection_requested'
+                  const c = classifyEnquiry(enq)
 
                   return (
                     <tr
@@ -2245,8 +2599,8 @@ export default function AdminEnquiriesPage() {
                                 enq.completion_approved_at || enq.status === 'completed'
                                   ? 'Completed/approved enquiries are permanently protected from removal'
                                   : !isCurrentCalendarMonth(enq.created_at)
-                                  ? 'Historical month enquiries cannot be removed'
-                                  : 'Ineligible for removal'
+                                    ? 'Historical month enquiries cannot be removed'
+                                    : 'Ineligible for removal'
                               }
                               style={{ color: '#cbd5e1', fontSize: '0.85rem' }}
                             >
@@ -2371,26 +2725,70 @@ export default function AdminEnquiriesPage() {
                             </span>
                           </div>
                         )}
-                        {enq.assigned_employee_name && (
-                          <div style={{ marginTop: '3px' }}>
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
-                                fontSize: '0.72rem',
-                                color: enq.assigned_employee_id === adminUser?.id ? '#1e40af' : '#475569',
-                                fontWeight: 600,
-                                background: enq.assigned_employee_id === adminUser?.id ? '#dbeafe' : '#f1f5f9',
-                                padding: '1px 6px',
-                                borderRadius: '8px'
-                              }}
-                              title={`Assigned: ${enq.assigned_employee_name}${enq.assigned_employee_code ? ` [${enq.assigned_employee_code}]` : ''}`}
-                            >
-                              👤 {enq.assigned_employee_id === adminUser?.id ? 'You' : enq.assigned_employee_name}
-                            </span>
-                          </div>
-                        )}
+                      </td>
+
+                      {/* Step 2: Assigned & Visit Cell */}
+                      <td className="enquiry-assignee-cell" style={{ whiteSpace: 'nowrap' }}>
+                        <div className="enquiry-assignee-cell">
+                          {enq.assigned_employee_name ? (
+                            <div className="enquiry-assignee-badge-wrap">
+                              <span
+                                className={`enquiry-assignee-badge ${enq.assigned_employee_id === adminUser?.id ? 'assigned-to-me' : ''}`}
+                                title={`Assigned: ${enq.assigned_employee_name}${enq.assigned_employee_code ? ` [${enq.assigned_employee_code}]` : ''}`}
+                              >
+                                👤 {enq.assigned_employee_id === adminUser?.id ? 'You' : enq.assigned_employee_name}
+                              </span>
+                              {isSuperadmin && !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status) && (
+                                <button
+                                  type="button"
+                                  className="quick-reassign-btn"
+                                  title="Reassign to another staff member"
+                                  onClick={() => handleOpenAssignModal(enq)}
+                                >
+                                  ✏️ Reassign
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="enquiry-unassigned-wrap">
+                              <span className="enquiry-unassigned-tag">⚠️ Unassigned</span>
+                              {isSuperadmin && !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status) && (
+                                <button
+                                  type="button"
+                                  className="quick-assign-btn"
+                                  onClick={() => handleOpenAssignModal(enq)}
+                                >
+                                  + Assign
+                                </button>
+                              )}
+                              {!isSuperadmin && isOperationalUser && !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status) && (
+                                <button
+                                  type="button"
+                                  className="quick-self-assign-btn"
+                                  onClick={() => handleSelfAssign(enq)}
+                                >
+                                  ✋ Take Job
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Expected Visit & Overdue Indicator */}
+                          {enq.expected_visit_at ? (
+                            <div className="enquiry-visit-row">
+                              <span className="enquiry-visit-date" title={`Expected Visit: ${formatDateTime(enq.expected_visit_at)}`}>
+                                📅 {formatDate(enq.expected_visit_at)}{enq.expected_arrival ? ` • ${enq.expected_arrival}` : ''}
+                              </span>
+                              {c.isOverdue && (
+                                <span className="enquiry-overdue-chip" title="Scheduled visit date is in the past and pending completion!">
+                                  ⚠️ Overdue
+                                </span>
+                              )}
+                            </div>
+                          ) : c.isOverdue ? (
+                            <span className="enquiry-overdue-chip" title="Overdue follow-up">⚠️ Overdue</span>
+                          ) : null}
+                        </div>
                       </td>
 
                       {/* Submitted Date */}
@@ -2646,7 +3044,7 @@ export default function AdminEnquiriesPage() {
 
         {/* 4. Mobile Enquiries Cards (< 900px) */}
         <div className="mobile-products-cards-list mobile-enquiries-cards">
-          {filteredEnquiries.length === 0 ? (
+          {totalFilteredRecords === 0 ? (
             <div className="empty-state-wrap mobile-empty-box">
               <span className="empty-icon">🔍</span>
               <h3>No enquiries match your criteria</h3>
@@ -2663,11 +3061,12 @@ export default function AdminEnquiriesPage() {
               )}
             </div>
           ) : (
-            filteredEnquiries.map((enq) => {
+            paginatedEnquiries.map((enq) => {
               const statusMeta = getStatusMeta(enq.status)
               const isPendingRejection = enq.status === 'rejection_requested'
               const isPendingCompletion = enq.status === 'completion_requested'
               const isInBin = enq.is_in_bin || enq.status === 'in_bin'
+              const c = classifyEnquiry(enq)
 
               return (
                 <div
@@ -2677,10 +3076,10 @@ export default function AdminEnquiriesPage() {
                     isPendingRejection
                       ? { borderColor: '#f59e0b', background: '#fffbeb' }
                       : isPendingCompletion
-                      ? { borderColor: '#7c3aed', background: '#f5f3ff' }
-                      : isInBin
-                      ? { borderColor: '#94a3b8', background: '#f8fafc' }
-                      : undefined
+                        ? { borderColor: '#7c3aed', background: '#f5f3ff' }
+                        : isInBin
+                          ? { borderColor: '#94a3b8', background: '#f8fafc' }
+                          : undefined
                   }
                 >
                   <div className="mobile-card-header">
@@ -2752,9 +3151,54 @@ export default function AdminEnquiriesPage() {
                     ) : null}
                   </div>
 
+                  {/* Step 2: Mobile Card Assignment & Follow-Up Row */}
+                  <div className="mobile-card-assignment-row">
+                    <div className="mobile-assignment-info">
+                      {enq.assigned_employee_name ? (
+                        <span className={`mobile-assignee-pill ${enq.assigned_employee_id === adminUser?.id ? 'assigned-to-me' : ''}`}>
+                          👤 {enq.assigned_employee_id === adminUser?.id ? 'Assigned to You' : enq.assigned_employee_name}
+                        </span>
+                      ) : (
+                        <span className="mobile-unassigned-pill">⚠️ Unassigned</span>
+                      )}
+                      {enq.expected_visit_at && (
+                        <span className="mobile-visit-date">
+                          📅 {formatDate(enq.expected_visit_at)}{enq.expected_arrival ? ` (${enq.expected_arrival})` : ''}
+                        </span>
+                      )}
+                    </div>
+                    {c.isOverdue && (
+                      <span className="mobile-overdue-alert">
+                        ⚠️ Overdue Follow-up
+                      </span>
+                    )}
+                  </div>
+
                   <p className="mobile-specs-snippet">{enq.message}</p>
 
                   <div className="mobile-card-actions">
+                    {/* Quick Assignment Actions for Mobile */}
+                    {!isSuperadmin && isOperationalUser && !enq.assigned_employee_id && !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status) && (
+                      <button
+                        type="button"
+                        className="btn-outline btn-block quick-self-assign-btn"
+                        onClick={() => handleSelfAssign(enq)}
+                        style={{ marginBottom: '8px' }}
+                      >
+                        ✋ Self-Assign to Me
+                      </button>
+                    )}
+                    {isSuperadmin && !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status) && (
+                      <button
+                        type="button"
+                        className="btn-outline btn-block quick-assign-btn"
+                        onClick={() => handleOpenAssignModal(enq)}
+                        style={{ marginBottom: '8px' }}
+                      >
+                        {enq.assigned_employee_name ? '✏️ Reassign Engineer' : '👤 Assign Engineer'}
+                      </button>
+                    )}
+
                     {activeWorkflowTab === 'removed' && isSuperadmin && (
                       <div style={{ marginBottom: '8px' }}>
                         <button
@@ -2852,6 +3296,9 @@ export default function AdminEnquiriesPage() {
             })
           )}
         </div>
+
+        {/* Step 2: Client-side Bottom Pagination Bar */}
+        {renderPaginationBar('bottom')}
       </div>
 
       {/* 5. Detailed Enquiry Inspection & Workflow Modal */}
@@ -2882,6 +3329,85 @@ export default function AdminEnquiriesPage() {
           !['closed', 'converted', 'rejected'].includes(selectedEnquiry.status) &&
           (isSuperadmin || (isEmployee && selectedEnquiry.assigned_employee_id === adminUser?.id))
         )
+
+        // Step 2: Unified Chronological Timeline (Tracking Events + Internal Activities)
+        const unifiedTimeline = [
+          ...customerTrackingHistory.map((entry) => {
+            const kindLabels = {
+              status: { icon: '📶', label: 'Tracking Status' },
+              engineer_contact: { icon: '📞', label: 'Customer Contact' },
+              visit: { icon: '📅', label: 'Visit Schedule' },
+              note: { icon: '📝', label: 'Customer Note' }
+            }
+            const kind = kindLabels[entry.change_kind] || { icon: '📶', label: 'Tracking Event' }
+            let description = ''
+            if (entry.change_kind === 'status') {
+              const prevOpt = TRACKING_OPTIONS.find((o) => o.value === (entry.previous_value || entry.previous_status))
+              const newOpt = TRACKING_OPTIONS.find((o) => o.value === (entry.new_value || entry.tracking_status))
+              description = `${prevOpt ? prevOpt.label : (entry.previous_value || 'Initial')} → ${newOpt ? newOpt.label : entry.tracking_status}`
+            } else if (entry.change_kind === 'visit') {
+              const prevVisit = VISIT_STATUS_OPTIONS.find((o) => o.value === entry.previous_value)
+              const newVisit = VISIT_STATUS_OPTIONS.find((o) => o.value === entry.new_value)
+              description = `${prevVisit ? prevVisit.label : (entry.previous_value || '—')} → ${newVisit ? newVisit.label : (entry.new_value || '—')}`
+            } else if (entry.new_value) {
+              description = String(entry.new_value)
+            }
+            return {
+              id: `tracking-${entry.id}`,
+              source: 'tracking',
+              icon: kind.icon,
+              category: kind.label,
+              badgeColor: '#1d4ed8',
+              badgeBg: '#eff6ff',
+              author: entry.updated_by_name || 'Staff',
+              role: entry.updated_by_employee_code ? `[${entry.updated_by_employee_code}]` : '',
+              content: description,
+              timestamp: entry.created_at
+            }
+          }),
+          ...enquiryActivities.map((act) => {
+            const isSystem = act.activity_type === 'system_event'
+            const isStatus = act.activity_type === 'status_change'
+            const isRejectionReq = act.activity_type === 'rejection_requested'
+            const isRejectionRev = act.activity_type === 'rejection_reviewed'
+            const isCompletionReq = act.activity_type === 'completion_requested'
+            const isCompletionRev = act.activity_type === 'completion_reviewed'
+            const isBinEntered = act.activity_type === 'bin_entered'
+            const isBinRestored = act.activity_type === 'bin_restored'
+            const isBinPurged = act.activity_type === 'bin_purged'
+            const isArchive = act.activity_type === 'archived' || act.activity_type === 'restored'
+            const isAssign = act.activity_type === 'assigned' || act.activity_type === 'reassigned' || act.activity_type === 'unassigned'
+
+            let icon = '📝'
+            let badgeColor = '#475569'
+            let badgeBg = '#f1f5f9'
+
+            if (isSystem) { icon = '🌐'; badgeColor = '#0284c7'; badgeBg = '#e0f2fe' }
+            else if (isStatus) { icon = '🔄'; badgeColor = '#16a34a'; badgeBg = '#dcfce7' }
+            else if (isAssign) { icon = '👤'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
+            else if (isRejectionReq) { icon = '⚠️'; badgeColor = '#d97706'; badgeBg = '#fef3c7' }
+            else if (isRejectionRev) { icon = '⚖️'; badgeColor = '#9333ea'; badgeBg = '#f3e8ff' }
+            else if (isCompletionReq) { icon = '⏳'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
+            else if (isCompletionRev) { icon = '✅'; badgeColor = '#059669'; badgeBg = '#d1fae5' }
+            else if (isBinEntered) { icon = '🗑️'; badgeColor = '#dc2626'; badgeBg = '#fee2e2' }
+            else if (isBinRestored) { icon = '♻️'; badgeColor = '#0d9488'; badgeBg = '#ccfbf1' }
+            else if (isBinPurged) { icon = '🧹'; badgeColor = '#475569'; badgeBg = '#f1f5f9' }
+            else if (isArchive) { icon = '📦'; badgeColor = '#64748b'; badgeBg = '#f1f5f9' }
+
+            return {
+              id: `activity-${act.id}`,
+              source: 'internal',
+              icon,
+              category: (act.activity_type || 'note').replace(/_/g, ' '),
+              badgeColor,
+              badgeBg,
+              author: act.actor_email || (isSystem ? 'Customer Submission' : 'System'),
+              role: act.actor_role ? `(${act.actor_role})` : '',
+              content: act.content,
+              timestamp: act.created_at
+            }
+          })
+        ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
         return (
           <div
@@ -4050,1131 +4576,1108 @@ export default function AdminEnquiriesPage() {
                     </button>
                   </div>
 
-                  {customerTrackingHistory.length > 0 && (
-                    <div style={{ marginTop: '12px', borderTop: '1px solid #dbeafe', paddingTop: '10px' }}>
-                      <span style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
-                        Tracking History
+                  {/* Step 2: Unified Chronological Timeline (Tracking History + Internal Activities) */}
+                  <div style={{ marginTop: '14px', borderTop: '1px solid #dbeafe', paddingTop: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        🕒 Unified Activity &amp; Tracking Timeline
                       </span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {customerTrackingHistory.slice(0, 8).map((entry) => {
-                          const statusOption = TRACKING_OPTIONS.find((option) => option.value === entry.tracking_status)
-                          const kindLabels = {
-                            status: { icon: '📶', label: 'Tracking Status' },
-                            engineer_contact: { icon: '📞', label: 'Engineer Contact' },
-                            visit: { icon: '📅', label: 'Visit Details' },
-                            note: { icon: '📝', label: 'Visit Note' }
-                          }
-                          const kind = kindLabels[entry.change_kind] || { icon: '📶', label: 'Tracking Status' }
-                          const formatValue = (value) => {
-                            if (value === null || value === undefined) return '—'
-                            const text = String(value)
-                            if (entry.change_kind === 'status') {
-                              const option = TRACKING_OPTIONS.find((item) => item.value === text)
-                              return option ? option.label : text
-                            }
-                            if (entry.change_kind === 'visit') {
-                              const visitOption = VISIT_STATUS_OPTIONS.find((item) => item.value === text)
-                              if (visitOption) return visitOption.label || 'Not set'
-                              return text
-                            }
-                            return text
-                          }
-                          return (
-                            <div key={entry.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: '#ffffff', border: '1px solid #dbeafe', borderRadius: '6px', padding: '6px 8px', fontSize: '0.76rem' }}>
-                              <span style={{ minWidth: 0 }}>
-                                <strong style={{ color: '#1e3a8a' }}>{kind.icon} {kind.label}{statusOption ? ` — ${statusOption.label}` : ''}</strong>
-                                {entry.change_kind && entry.change_kind !== 'status' && (
-                                  <span style={{ display: 'block', color: '#475569' }}>
-                                    {formatValue(entry.previous_value)} → {formatValue(entry.new_value)}
-                                  </span>
-                                )}
-                                {entry.change_kind === 'status' && (entry.previous_value || entry.previous_status) && (
-                                  <span style={{ display: 'block', color: '#475569' }}>
-                                    {formatValue(entry.previous_value || entry.previous_status)} → {formatValue(entry.new_value || entry.tracking_status)}
-                                  </span>
-                                )}
-                                <span style={{ display: 'block', color: '#64748b' }}>
-                                  {entry.updated_by_name || 'Staff'} {entry.updated_by_employee_code ? `[${entry.updated_by_employee_code}]` : ''}
-                                </span>
-                              </span>
-                              <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{formatDateTime(entry.created_at)}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Section C: Work & Follow-up (Activity Timeline & Notes) */}
-                <div style={{ marginTop: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Activity & Follow-Up Notes
-                    </span>
-                  </div>
-
-                  {/* Compact Activity Timeline Feed */}
-                  <div
-                    className="enquiry-activities-timeline"
-                    style={{
-                      maxHeight: '220px',
-                      overflowY: 'auto',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                      padding: '10px',
-                      background: '#f8fafc',
-                      marginBottom: '10px'
-                    }}
-                  >
-                    {isLoadingActivities ? (
-                      <div style={{ textAlign: 'center', padding: '12px', color: '#64748b', fontSize: '0.85rem' }}>
-                        ⏳ Loading activity...
-                      </div>
-                    ) : enquiryActivities.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '12px', color: '#94a3b8', fontSize: '0.85rem' }}>
-                        No activity records logged yet.
-                      </div>
-                    ) : (
-                      enquiryActivities.map((act) => {
-                        const isSystem = act.activity_type === 'system_event'
-                        const isStatus = act.activity_type === 'status_change'
-                        const isRejectionReq = act.activity_type === 'rejection_requested'
-                        const isRejectionRev = act.activity_type === 'rejection_reviewed'
-                        const isCompletionReq = act.activity_type === 'completion_requested'
-                        const isCompletionRev = act.activity_type === 'completion_reviewed'
-                        const isBinEntered = act.activity_type === 'bin_entered'
-                        const isBinRestored = act.activity_type === 'bin_restored'
-                        const isBinPurged = act.activity_type === 'bin_purged'
-                        const isArchive = act.activity_type === 'archived' || act.activity_type === 'restored'
-
-                        let icon = '📝'
-                        let badgeColor = '#475569'
-                        let badgeBg = '#f1f5f9'
-
-                        if (isSystem) { icon = '🌐'; badgeColor = '#0284c7'; badgeBg = '#e0f2fe' }
-                        else if (isStatus) { icon = '🔄'; badgeColor = '#16a34a'; badgeBg = '#dcfce7' }
-                        else if (isRejectionReq) { icon = '⚠️'; badgeColor = '#d97706'; badgeBg = '#fef3c7' }
-                        else if (isRejectionRev) { icon = '⚖️'; badgeColor = '#9333ea'; badgeBg = '#f3e8ff' }
-                        else if (isCompletionReq) { icon = '⏳'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
-                        else if (isCompletionRev) { icon = '✅'; badgeColor = '#059669'; badgeBg = '#d1fae5' }
-                        else if (isBinEntered) { icon = '🗑️'; badgeColor = '#dc2626'; badgeBg = '#fee2e2' }
-                        else if (isBinRestored) { icon = '♻️'; badgeColor = '#0d9488'; badgeBg = '#ccfbf1' }
-                        else if (isBinPurged) { icon = '🧹'; badgeColor = '#475569'; badgeBg = '#f1f5f9' }
-                        else if (isArchive) { icon = '📦'; badgeColor = '#64748b'; badgeBg = '#f1f5f9' }
-
-                        return (
-                          <div
-                            key={act.id}
-                            style={{
-                              padding: '6px 8px',
-                              background: '#ffffff',
-                              borderRadius: '4px',
-                              border: '1px solid #e2e8f0',
-                              marginBottom: '6px'
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span>{icon}</span>
-                                <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: badgeColor, background: badgeBg, padding: '1px 5px', borderRadius: '3px' }}>
-                                  {act.activity_type.replace('_', ' ')}
-                                </span>
-                                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>
-                                  {act.actor_email || (isSystem ? 'Customer Submission' : 'System')}
-                                </span>
-                                {act.actor_role && (
-                                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.actor_role})</span>
-                                )}
-                              </div>
-                              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                                {formatDateTime(act.created_at)}
-                              </span>
-                            </div>
-                            <p style={{ margin: 0, fontSize: '0.84rem', color: '#1e293b', whiteSpace: 'pre-wrap' }}>
-                              {act.content}
-                            </p>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-
-                  {/* Add Follow-Up Note Form */}
-                  <form onSubmit={handleAddNote} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <textarea
-                      id="new-enquiry-note-input"
-                      className="modal-textarea"
-                      rows="1"
-                      placeholder="Record follow-up note (phone call, quotation reference, hardware availability)..."
-                      value={newNoteText}
-                      onChange={(e) => setNewNoteText(e.target.value)}
-                      style={{ flex: 1, resize: 'vertical', minHeight: '36px', fontSize: '0.84rem' }}
-                    />
-                    <button
-                      type="submit"
-                      className="btn-primary btn-sm"
-                      id="save-new-note-btn"
-                      disabled={isSavingNote || !newNoteText.trim()}
-                      style={{ whiteSpace: 'nowrap', height: '36px', padding: '0 12px' }}
-                    >
-                      {isSavingNote ? 'Saving...' : '💾 Add Note'}
-                    </button>
-                  </form>
-
-                  {/* Hidden compatibility block preserving RBAC security test assertions */}
-                  <div style={{ display: 'none' }} aria-hidden="true">
-                    <div className="status-selector-row">
-                      {ENQUIRY_STATUSES.map((st) => (
+                      <div style={{ display: 'flex', gap: '4px' }}>
                         <button
-                          key={st.id}
                           type="button"
-                          disabled={!isSuperadmin}
-                          className="status-select-btn"
-                          onClick={() => handleOpenStatusConfirm(selectedEnquiry, st.id)}
+                          className="btn-outline btn-xs"
+                          onClick={() => setTimelineTab('all')}
+                          style={{
+                            fontSize: '0.74rem',
+                            padding: '2px 8px',
+                            background: timelineTab === 'all' ? '#dbeafe' : '#ffffff',
+                            color: timelineTab === 'all' ? '#1e40af' : '#64748b',
+                            fontWeight: timelineTab === 'all' ? 700 : 500,
+                            borderColor: timelineTab === 'all' ? '#93c5fd' : '#cbd5e1'
+                          }}
                         >
-                          {st.label}
+                          All ({unifiedTimeline.length})
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          className="btn-outline btn-xs"
+                          onClick={() => setTimelineTab('tracking')}
+                          style={{
+                            fontSize: '0.74rem',
+                            padding: '2px 8px',
+                            background: timelineTab === 'tracking' ? '#dbeafe' : '#ffffff',
+                            color: timelineTab === 'tracking' ? '#1e40af' : '#64748b',
+                            fontWeight: timelineTab === 'tracking' ? 700 : 500,
+                            borderColor: timelineTab === 'tracking' ? '#93c5fd' : '#cbd5e1'
+                          }}
+                        >
+                          Customer Tracking ({customerTrackingHistory.length})
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-outline btn-xs"
+                          onClick={() => setTimelineTab('internal')}
+                          style={{
+                            fontSize: '0.74rem',
+                            padding: '2px 8px',
+                            background: timelineTab === 'internal' ? '#dbeafe' : '#ffffff',
+                            color: timelineTab === 'internal' ? '#1e40af' : '#64748b',
+                            fontWeight: timelineTab === 'internal' ? 700 : 500,
+                            borderColor: timelineTab === 'internal' ? '#93c5fd' : '#cbd5e1'
+                          }}
+                        >
+                          Internal Activities ({enquiryActivities.length})
+                        </button>
+                      </div>
                     </div>
-                    <textarea
-                      id="enquiry-admin-notes-input"
-                      value={editingNotes}
-                      readOnly={!isSuperadmin}
-                      disabled={!isSuperadmin}
-                      onChange={(e) => setEditingNotes(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      id="save-notes-btn"
-                      onClick={handleSaveNotes}
+
+                    {/* Compact Activity & Tracking Timeline Feed */}
+                    <div
+                      className="enquiry-activities-timeline unified-timeline-wrap"
+                      style={{
+                        maxHeight: '260px',
+                        overflowY: 'auto',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        padding: '10px',
+                        background: '#f8fafc',
+                        marginBottom: '10px'
+                      }}
                     >
-                      Save Notes
-                    </button>
+                      {isLoadingActivities ? (
+                        <div style={{ textAlign: 'center', padding: '12px', color: '#64748b', fontSize: '0.85rem' }}>
+                          ⏳ Loading activity timeline...
+                        </div>
+                      ) : unifiedTimeline.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '12px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                          No activity or tracking records logged yet.
+                        </div>
+                      ) : (
+                        unifiedTimeline
+                          .filter((event) => timelineTab === 'all' || event.source === timelineTab)
+                          .map((ev) => (
+                            <div
+                              key={ev.id}
+                              className="timeline-event-card"
+                              style={{
+                                padding: '8px 10px',
+                                background: '#ffffff',
+                                borderRadius: '5px',
+                                border: '1px solid #e2e8f0',
+                                marginBottom: '6px'
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap', gap: '4px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>{ev.icon}</span>
+                                  <span
+                                    style={{
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      textTransform: 'uppercase',
+                                      color: ev.badgeColor,
+                                      background: ev.badgeBg,
+                                      padding: '1px 6px',
+                                      borderRadius: '3px'
+                                    }}
+                                  >
+                                    {ev.category}
+                                  </span>
+                                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>
+                                    {ev.author}
+                                  </span>
+                                  {ev.role && (
+                                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{ev.role}</span>
+                                  )}
+                                </div>
+                                <span style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                                  {formatDateTime(ev.timestamp)}
+                                </span>
+                              </div>
+                              <p style={{ margin: 0, fontSize: '0.83rem', color: '#1e293b', whiteSpace: 'pre-wrap' }}>
+                                {ev.content}
+                              </p>
+                            </div>
+                          ))
+                      )}
+                    </div>
+
+                    {/* Add Follow-Up Note Form */}
+                    <form onSubmit={handleAddNote} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <textarea
+                        id="new-enquiry-note-input"
+                        className="modal-textarea"
+                        rows="1"
+                        placeholder="Record follow-up note (phone call, quotation reference, hardware availability)..."
+                        value={newNoteText}
+                        onChange={(e) => setNewNoteText(e.target.value)}
+                        style={{ flex: 1, resize: 'vertical', minHeight: '36px', fontSize: '0.84rem' }}
+                      />
+                      <button
+                        type="submit"
+                        className="btn-primary btn-sm"
+                        id="save-new-note-btn"
+                        disabled={isSavingNote || !newNoteText.trim()}
+                        style={{ whiteSpace: 'nowrap', height: '36px', padding: '0 12px' }}
+                      >
+                        {isSavingNote ? 'Saving...' : '💾 Add Note'}
+                      </button>
+                    </form>
+
+                    {/* Hidden compatibility block preserving RBAC security test assertions */}
+                    <div style={{ display: 'none' }} aria-hidden="true">
+                      <div className="status-selector-row">
+                        {ENQUIRY_STATUSES.map((st) => (
+                          <button
+                            key={st.id}
+                            type="button"
+                            disabled={!isSuperadmin}
+                            className="status-select-btn"
+                            onClick={() => handleOpenStatusConfirm(selectedEnquiry, st.id)}
+                          >
+                            {st.label}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        id="enquiry-admin-notes-input"
+                        value={editingNotes}
+                        readOnly={!isSuperadmin}
+                        disabled={!isSuperadmin}
+                        onChange={(e) => setEditingNotes(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        id="save-notes-btn"
+                        onClick={handleSaveNotes}
+                      >
+                        Save Notes
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Section D: Contextual Actions for Workable Enquiries */}
-                {isWorkable && (
-                  <div
-                    style={{
-                      marginTop: '16px',
-                      padding: '12px 14px',
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '10px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Set Status:</span>
-                      {['new', 'in_progress', 'quoted'].map((statusKey) => {
-                        const meta = getStatusMeta(statusKey)
-                        const isCurrent = selectedEnquiry.status === statusKey
-                        return (
+                  {isWorkable && (
+                    <div
+                      style={{
+                        marginTop: '16px',
+                        padding: '12px 14px',
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '10px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Set Status:</span>
+                        {['new', 'in_progress', 'quoted'].map((statusKey) => {
+                          const meta = getStatusMeta(statusKey)
+                          const isCurrent = selectedEnquiry.status === statusKey
+                          return (
+                            <button
+                              key={statusKey}
+                              type="button"
+                              onClick={() => handleProgressChange(statusKey)}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                border: isCurrent ? `2px solid ${meta.color}` : '1px solid #cbd5e1',
+                                background: isCurrent ? meta.bg : '#ffffff',
+                                color: isCurrent ? meta.color : '#334155',
+                                fontWeight: isCurrent ? 700 : 500,
+                                fontSize: '0.8rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {meta.icon} {meta.label}
+                            </button>
+                          )
+                        })}
+
+                        {isSuperadmin && (
                           <button
-                            key={statusKey}
                             type="button"
-                            onClick={() => handleProgressChange(statusKey)}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              border: isCurrent ? `2px solid ${meta.color}` : '1px solid #cbd5e1',
-                              background: isCurrent ? meta.bg : '#ffffff',
-                              color: isCurrent ? meta.color : '#334155',
-                              fontWeight: isCurrent ? 700 : 500,
-                              fontSize: '0.8rem',
-                              cursor: 'pointer'
-                            }}
+                            className="btn-outline btn-sm"
+                            onClick={handleArchiveToggle}
+                            style={{ borderColor: '#64748b', color: '#475569', fontSize: '0.8rem', padding: '4px 10px' }}
+                            title="Archive this enquiry"
                           >
-                            {meta.icon} {meta.label}
+                            📦 Archive
                           </button>
-                        )
-                      })}
+                        )}
 
-                      {isSuperadmin && (
-                        <button
-                          type="button"
-                          className="btn-outline btn-sm"
-                          onClick={handleArchiveToggle}
-                          style={{ borderColor: '#64748b', color: '#475569', fontSize: '0.8rem', padding: '4px 10px' }}
-                          title="Archive this enquiry"
-                        >
-                          📦 Archive
-                        </button>
-                      )}
+                        {isSuperadmin && !selectedEnquiry.is_removed && !selectedEnquiry.completion_approved_at && selectedEnquiry.status !== 'completed' && isCurrentCalendarMonth(selectedEnquiry.created_at) && (
+                          <button
+                            type="button"
+                            id="open-removal-modal-btn"
+                            className="btn-danger btn-sm"
+                            onClick={() => {
+                              setRemovalTargets([selectedEnquiry]);
+                              setRemovalCategory('spam');
+                              setRemovalReason('');
+                              setRemovalError('');
+                            }}
+                            style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                            title="Soft-remove fake, spam, duplicate or test enquiry from current month"
+                          >
+                            🚫 Remove (Spam / Fake)
+                          </button>
+                        )}
 
-                      {isSuperadmin && !selectedEnquiry.is_removed && !selectedEnquiry.completion_approved_at && selectedEnquiry.status !== 'completed' && isCurrentCalendarMonth(selectedEnquiry.created_at) && (
-                        <button
-                          type="button"
-                          id="open-removal-modal-btn"
-                          className="btn-danger btn-sm"
-                          onClick={() => {
-                            setRemovalTargets([selectedEnquiry]);
-                            setRemovalCategory('spam');
-                            setRemovalReason('');
-                            setRemovalError('');
-                          }}
-                          style={{ fontSize: '0.8rem', padding: '4px 10px' }}
-                          title="Soft-remove fake, spam, duplicate or test enquiry from current month"
-                        >
-                          🚫 Remove (Spam / Fake)
-                        </button>
-                      )}
+                        {isSuperadmin && selectedEnquiry.is_removed && (
+                          <button
+                            type="button"
+                            id="restore-removed-enquiry-btn"
+                            className="btn-outline btn-sm"
+                            onClick={() => handleRestoreRemoved(selectedEnquiry)}
+                            disabled={isRestoringRemoved}
+                            style={{ borderColor: '#0d9488', color: '#0d9488', fontSize: '0.8rem', padding: '4px 10px' }}
+                            title="Restore enquiry back to workable status"
+                          >
+                            {isRestoringRemoved ? 'Restoring...' : '🔄 Restore Enquiry'}
+                          </button>
+                        )}
+                      </div>
 
-                      {isSuperadmin && selectedEnquiry.is_removed && (
-                        <button
-                          type="button"
-                          id="restore-removed-enquiry-btn"
-                          className="btn-outline btn-sm"
-                          onClick={() => handleRestoreRemoved(selectedEnquiry)}
-                          disabled={isRestoringRemoved}
-                          style={{ borderColor: '#0d9488', color: '#0d9488', fontSize: '0.8rem', padding: '4px 10px' }}
-                          title="Restore enquiry back to workable status"
-                        >
-                          {isRestoringRemoved ? 'Restoring...' : '🔄 Restore Enquiry'}
-                        </button>
+                      {isEmployee && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            id="open-rejection-modal-btn"
+                            className="btn-outline btn-sm"
+                            onClick={() => handleOpenRejectionModal(selectedEnquiry)}
+                            style={{ borderColor: '#f59e0b', color: '#b45309', fontSize: '0.82rem' }}
+                            title="Submit a rejection request to head person"
+                          >
+                            ⚠️ Request Rejection
+                          </button>
+
+                          <button
+                            type="button"
+                            id="open-completion-modal-btn"
+                            className="btn-submit-completion"
+                            onClick={() => handleOpenCompletionModal(selectedEnquiry)}
+                            title="Submit completed work with summary for head-person approval"
+                          >
+                            <span>✨</span> Submit for Approval
+                          </button>
+                        </div>
                       )}
                     </div>
+                  )}
+                </div>
 
-                    {isEmployee && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {/* Modal Footer: Customer Communication Actions & Close */}
+                {(() => {
+                  const rawCustPhone = resolveCustomerPhone(selectedEnquiry)
+                  const normCustPhone = normalizeIndianPhoneForWhatsApp(rawCustPhone)
+                  const isCustWhatsAppValid = Boolean(normCustPhone)
+                  const custPhoneDisplay = rawCustPhone || 'None'
+
+                  const resolvedCustEmail = resolveCustomerEmail(selectedEnquiry)
+                  const isCustEmailValid = Boolean(resolvedCustEmail)
+                  const custEmailDisplay = resolvedCustEmail || 'None'
+
+                  return (
+                    <div
+                      className="admin-modal-footer customer-dispatch-footer"
+                      style={{
+                        padding: '14px 20px',
+                        borderTop: '1px solid #e2e8f0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '12px',
+                        flexWrap: 'wrap'
+                      }}
+                    >
+                      {/* Customer Communication Action Group */}
+                      <div
+                        className="customer-communication-actions"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+                      >
+                        {/* 1. Circular Customer WhatsApp Button */}
                         <button
                           type="button"
-                          id="open-rejection-modal-btn"
-                          className="btn-outline btn-sm"
-                          onClick={() => handleOpenRejectionModal(selectedEnquiry)}
-                          style={{ borderColor: '#f59e0b', color: '#b45309', fontSize: '0.82rem' }}
-                          title="Submit a rejection request to head person"
+                          id="customer-whatsapp-btn"
+                          onClick={handleCustomerWhatsApp}
+                          disabled={!isCustWhatsAppValid}
+                          title={
+                            isCustWhatsAppValid
+                              ? `Send to customer on WhatsApp (${custPhoneDisplay})`
+                              : 'No valid customer WhatsApp number registered'
+                          }
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            minWidth: '44px',
+                            minHeight: '44px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: isCustWhatsAppValid ? '#25D366' : '#94a3b8',
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed',
+                            boxShadow: isCustWhatsAppValid ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
+                            padding: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                          aria-label="Send to customer on WhatsApp"
                         >
-                          ⚠️ Request Rejection
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z" />
+                          </svg>
                         </button>
 
+                        {/* 2. Circular Customer Copy / Notepad Button */}
                         <button
                           type="button"
-                          id="open-completion-modal-btn"
-                          className="btn-submit-completion"
-                          onClick={() => handleOpenCompletionModal(selectedEnquiry)}
-                          title="Submit completed work with summary for head-person approval"
+                          id="customer-copy-btn"
+                          onClick={handleCustomerCopy}
+                          title={copyFeedback ? 'Service visit details copied!' : 'Copy customer service details'}
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            minWidth: '44px',
+                            minHeight: '44px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: copyFeedback ? '#16a34a' : '#0284c7',
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
+                            padding: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                          aria-label="Copy customer service details"
                         >
-                          <span>✨</span> Submit for Approval
+                          {copyFeedback ? (
+                            <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>✓</span>
+                          ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          )}
+                        </button>
+
+                        {/* 3. Circular Customer Email Button */}
+                        <button
+                          type="button"
+                          id="customer-email-btn"
+                          onClick={handleCustomerEmail}
+                          disabled={!isCustEmailValid}
+                          title={
+                            isCustEmailValid
+                              ? `Email customer service details (${custEmailDisplay})`
+                              : 'No customer email registered'
+                          }
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            minWidth: '44px',
+                            minHeight: '44px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: isCustEmailValid ? '#ea4335' : '#94a3b8',
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: isCustEmailValid ? 'pointer' : 'not-allowed',
+                            boxShadow: isCustEmailValid ? '0 2px 4px rgba(234, 67, 53, 0.3)' : 'none',
+                            padding: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                          aria-label="Email customer service details"
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                          </svg>
                         </button>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
 
-              {/* Modal Footer: Customer Communication Actions & Close */}
-              {(() => {
-                const rawCustPhone = resolveCustomerPhone(selectedEnquiry)
-                const normCustPhone = normalizeIndianPhoneForWhatsApp(rawCustPhone)
-                const isCustWhatsAppValid = Boolean(normCustPhone)
-                const custPhoneDisplay = rawCustPhone || 'None'
-
-                const resolvedCustEmail = resolveCustomerEmail(selectedEnquiry)
-                const isCustEmailValid = Boolean(resolvedCustEmail)
-                const custEmailDisplay = resolvedCustEmail || 'None'
-
-                return (
-                  <div
-                    className="admin-modal-footer customer-dispatch-footer"
-                    style={{
-                      padding: '14px 20px',
-                      borderTop: '1px solid #e2e8f0',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '12px',
-                      flexWrap: 'wrap'
-                    }}
-                  >
-                    {/* Customer Communication Action Group */}
-                    <div
-                      className="customer-communication-actions"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
-                    >
-                      {/* 1. Circular Customer WhatsApp Button */}
+                      {/* Close Button */}
                       <button
                         type="button"
-                        id="customer-whatsapp-btn"
-                        onClick={handleCustomerWhatsApp}
-                        disabled={!isCustWhatsAppValid}
-                        title={
-                          isCustWhatsAppValid
-                            ? `Send to customer on WhatsApp (${custPhoneDisplay})`
-                            : 'No valid customer WhatsApp number registered'
-                        }
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          minWidth: '44px',
-                          minHeight: '44px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: isCustWhatsAppValid ? '#25D366' : '#94a3b8',
-                          color: '#ffffff',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed',
-                          boxShadow: isCustWhatsAppValid ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
-                          padding: 0,
-                          transition: 'all 0.15s ease'
-                        }}
-                        aria-label="Send to customer on WhatsApp"
+                        className="btn-outline"
+                        onClick={handleCloseDetails}
+                        style={{ minHeight: '44px', minWidth: '88px', padding: '8px 20px', fontSize: '14px' }}
                       >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z"/>
-                        </svg>
-                      </button>
-
-                      {/* 2. Circular Customer Copy / Notepad Button */}
-                      <button
-                        type="button"
-                        id="customer-copy-btn"
-                        onClick={handleCustomerCopy}
-                        title={copyFeedback ? 'Service visit details copied!' : 'Copy customer service details'}
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          minWidth: '44px',
-                          minHeight: '44px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: copyFeedback ? '#16a34a' : '#0284c7',
-                          color: '#ffffff',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
-                          padding: 0,
-                          transition: 'all 0.15s ease'
-                        }}
-                        aria-label="Copy customer service details"
-                      >
-                        {copyFeedback ? (
-                          <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>✓</span>
-                        ) : (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                        )}
-                      </button>
-
-                      {/* 3. Circular Customer Email Button */}
-                      <button
-                        type="button"
-                        id="customer-email-btn"
-                        onClick={handleCustomerEmail}
-                        disabled={!isCustEmailValid}
-                        title={
-                          isCustEmailValid
-                            ? `Email customer service details (${custEmailDisplay})`
-                            : 'No customer email registered'
-                        }
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          minWidth: '44px',
-                          minHeight: '44px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: isCustEmailValid ? '#ea4335' : '#94a3b8',
-                          color: '#ffffff',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: isCustEmailValid ? 'pointer' : 'not-allowed',
-                          boxShadow: isCustEmailValid ? '0 2px 4px rgba(234, 67, 53, 0.3)' : 'none',
-                          padding: 0,
-                          transition: 'all 0.15s ease'
-                        }}
-                        aria-label="Email customer service details"
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                          <polyline points="22,6 12,13 2,6"></polyline>
-                        </svg>
+                        Close
                       </button>
                     </div>
+                  )
+                })()}
+              </div>
+            </div>
+            )
+      })()}
 
-                    {/* Close Button */}
+            {/* 6. Employee Rejection Request Prompt Modal */}
+            {isRejectionModalOpen && selectedEnquiry && isEmployee && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => setIsRejectionModalOpen(false)}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="rejection-modal-title"
+              >
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '500px' }}
+                >
+                  <div className="admin-modal-header">
+                    <h2 id="rejection-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                      Request Enquiry Rejection
+                    </h2>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setIsRejectionModalOpen(false)}
+                      aria-label="Close dialog"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="admin-modal-body">
+                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
+                      Enquiry <strong>{selectedEnquiry.id}</strong> will be moved to the head-person approval queue.
+                      Please provide a mandatory reason explaining why this enquiry should be rejected (minimum 5 characters).
+                    </p>
+                    <textarea
+                      id="rejection-reason-input"
+                      className="modal-textarea"
+                      rows="3"
+                      placeholder="E.g., Hardware model end-of-life, out of service territory, customer uncontactable after 3 calls..."
+                      value={rejectionReasonInput}
+                      onChange={(e) => setRejectionReasonInput(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="admin-modal-footer">
                     <button
                       type="button"
                       className="btn-outline"
-                      onClick={handleCloseDetails}
-                      style={{ minHeight: '44px', minWidth: '88px', padding: '8px 20px', fontSize: '14px' }}
+                      onClick={() => setIsRejectionModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      id="submit-rejection-request-btn"
+                      disabled={isSubmittingRejection || rejectionReasonInput.trim().length < 5}
+                      onClick={handleSubmitRejectionRequest}
+                      style={{ background: '#d97706', borderColor: '#b45309' }}
+                    >
+                      {isSubmittingRejection ? 'Submitting...' : 'Submit to Head-Person'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6B. Superadmin Rejection Decision Confirmation Modal (Quick Review from Table / Card) */}
+            {reviewConfirmTarget && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => setReviewConfirmTarget(null)}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="review-confirm-modal-title"
+              >
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '520px' }}
+                >
+                  <div className="admin-modal-header">
+                    <h2 id="review-confirm-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                      {reviewConfirmTarget.decision === 'approved' ? 'Approve Enquiry Rejection' : 'Deny Rejection Request'}
+                    </h2>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setReviewConfirmTarget(null)}
+                      aria-label="Close dialog"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="admin-modal-body">
+                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
+                      {reviewConfirmTarget.decision === 'approved' ? (
+                        <>
+                          You are approving the staff rejection request for Enquiry{' '}
+                          <strong>{reviewConfirmTarget.enquiry.id}</strong>. The enquiry will be marked as{' '}
+                          <strong style={{ color: '#dc2626' }}>REJECTED</strong> and moved to the rejected/closed records.
+                        </>
+                      ) : (
+                        <>
+                          You are denying the rejection request for Enquiry{' '}
+                          <strong>{reviewConfirmTarget.enquiry.id}</strong>. The enquiry will be restored to its previous operational status{' '}
+                          <strong style={{ color: '#0284c7' }}>
+                            ({reviewConfirmTarget.enquiry.previous_status || 'in_progress'})
+                          </strong>{' '}
+                          so staff can continue working on it.
+                        </>
+                      )}
+                    </p>
+
+                    {/* Display Employee Reason */}
+                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', padding: '10px 12px', marginBottom: '14px' }}>
+                      <span style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#b45309', textTransform: 'uppercase', marginBottom: '3px' }}>
+                        Submitted Rejection Reason:
+                      </span>
+                      <p style={{ margin: 0, fontSize: '0.88rem', color: '#78350f', whiteSpace: 'pre-wrap' }}>
+                        {reviewConfirmTarget.enquiry.rejection_reason || 'No specific reason provided'}
+                      </p>
+                    </div>
+
+                    {/* Optional Review Notes */}
+                    <label htmlFor="review-dialog-notes-input" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                      Head-Person Review Notes (Optional):
+                    </label>
+                    <textarea
+                      id="review-dialog-notes-input"
+                      className="modal-textarea"
+                      rows="2"
+                      placeholder="Add optional notes for the permanent activity log..."
+                      value={reviewNotesInput}
+                      onChange={(e) => setReviewNotesInput(e.target.value)}
+                      maxLength={1000}
+                    />
+                  </div>
+
+                  <div className="admin-modal-footer">
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setReviewConfirmTarget(null)}
+                      disabled={isSubmittingReview}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      id={reviewConfirmTarget.decision === 'approved' ? 'confirm-approve-btn' : 'confirm-deny-btn'}
+                      className={reviewConfirmTarget.decision === 'approved' ? 'btn-danger' : 'btn-primary'}
+                      onClick={() => handleReviewRejection(reviewConfirmTarget.decision, reviewNotesInput, reviewConfirmTarget.enquiry)}
+                      disabled={isSubmittingReview}
+                      style={{
+                        background: reviewConfirmTarget.decision === 'approved' ? '#dc2626' : '#0284c7',
+                        borderColor: reviewConfirmTarget.decision === 'approved' ? '#dc2626' : '#0284c7',
+                        color: '#ffffff'
+                      }}
+                    >
+                      {isSubmittingReview ? 'Processing...' : (reviewConfirmTarget.decision === 'approved' ? '✅ Confirm Approval' : '❌ Confirm Denial')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 7. Status Change Confirmation Dialog (For backward-compatible status picker) */}
+            {statusConfirmTarget && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => setStatusConfirmTarget(null)}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="status-dialog-title"
+              >
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="admin-modal-header">
+                    <h2 id="status-dialog-title" className="admin-modal-title">
+                      Update Lead Status?
+                    </h2>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setStatusConfirmTarget(null)}
+                      aria-label="Close dialog"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="admin-modal-body">
+                    <p>
+                      Change status for <strong>{statusConfirmTarget.enquiry.id}</strong> (
+                      {statusConfirmTarget.enquiry.customer_name || statusConfirmTarget.enquiry.name}) from{' '}
+                      <span className="badge-inline">
+                        {getStatusMeta(statusConfirmTarget.enquiry.status).label}
+                      </span>{' '}
+                      to{' '}
+                      <span className="badge-inline highlight">
+                        {getStatusMeta(statusConfirmTarget.nextStatus).label}
+                      </span>
+                      ?
+                    </p>
+                    <div className="status-confirm-hint">
+                      <span>ℹ️ This operation updates the enquiry lifecycle and records an automated audit log.</span>
+                    </div>
+                  </div>
+
+                  <div className="admin-modal-footer">
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setStatusConfirmTarget(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      id="confirm-status-update-btn"
+                      onClick={handleConfirmStatusChange}
+                    >
+                      Confirm Update
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Upload Signed Job Sheet Modal */}
+            {isUploadProofModalOpen && selectedEnquiry && (
+              <div className="admin-modal-backdrop" style={{ zIndex: 1100 }}>
+                <div className="admin-modal-dialog" style={{ maxWidth: '480px' }}>
+                  <div className="admin-modal-header">
+                    <h3 className="admin-modal-title">Upload Signed Job Sheet</h3>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setIsUploadProofModalOpen(false)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="admin-modal-body" style={{ padding: '16px' }}>
+                    <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#64748b' }}>
+                      Upload the customer-signed physical service sheet or job report for <strong>{selectedEnquiry.enquiry_number || selectedEnquiry.name}</strong>.
+                    </p>
+
+                    {proofUploadError && (
+                      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px 12px', color: '#991b1b', fontSize: '0.82rem', marginBottom: '12px' }}>
+                        {proofUploadError}
+                      </div>
+                    )}
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                        Document Type:
+                      </label>
+                      <input
+                        type="text"
+                        className="admin-input"
+                        value="Customer Signed Job Sheet"
+                        disabled
+                        style={{ background: '#f1f5f9', cursor: 'not-allowed', width: '100%' }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label htmlFor="proof-file-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                        File (JPG, JPEG, PNG, or PDF, max 10 MB):
+                      </label>
+                      <input
+                        id="proof-file-input"
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                        onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                        style={{ fontSize: '0.85rem', width: '100%' }}
+                      />
+                      {proofFile && (
+                        <span style={{ display: 'block', fontSize: '0.78rem', color: '#16a34a', marginTop: '4px' }}>
+                          Selected: {proofFile.name} ({(proofFile.size / 1024).toFixed(1)} KB)
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label htmlFor="proof-desc-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                        Optional Note:
+                      </label>
+                      <textarea
+                        id="proof-desc-input"
+                        className="modal-textarea"
+                        rows="2"
+                        placeholder="E.g., Customer signed after diagnostics & hardware repair..."
+                        value={proofDescription}
+                        onChange={(e) => setProofDescription(e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </div>
+                  <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setIsUploadProofModalOpen(false)}
+                      disabled={isUploadingProof}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      id="confirm-upload-proof-btn"
+                      className="btn-primary"
+                      onClick={handleUploadProofSubmit}
+                      disabled={isUploadingProof || !proofFile}
+                    >
+                      {isUploadingProof ? 'Uploading...' : 'Upload Proof'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Void Proof Modal */}
+            {voidProofTarget && (
+              <div className="admin-modal-backdrop" style={{ zIndex: 1100 }}>
+                <div className="admin-modal-dialog" style={{ maxWidth: '440px' }}>
+                  <div className="admin-modal-header">
+                    <h3 className="admin-modal-title" style={{ color: '#b91c1c' }}>Void Service Proof</h3>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setVoidProofTarget(null)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="admin-modal-body" style={{ padding: '16px' }}>
+                    <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: '#475569' }}>
+                      You are about to void <strong>{voidProofTarget.original_filename}</strong>. This soft-deletes the document from valid completion evidence while preserving an audit record.
+                    </p>
+
+                    {voidProofError && (
+                      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px 12px', color: '#991b1b', fontSize: '0.82rem', marginBottom: '10px' }}>
+                        {voidProofError}
+                      </div>
+                    )}
+
+                    <label htmlFor="void-reason-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                      Mandatory Void Reason (min 5 chars):
+                    </label>
+                    <textarea
+                      id="void-reason-input"
+                      className="modal-textarea"
+                      rows="3"
+                      placeholder="E.g., Incorrect job sheet uploaded for this customer..."
+                      value={voidReasonInput}
+                      onChange={(e) => setVoidReasonInput(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setVoidProofTarget(null)}
+                      disabled={isVoidingProof}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      id="confirm-void-proof-btn"
+                      className="btn-primary"
+                      onClick={handleVoidProofSubmit}
+                      disabled={isVoidingProof || voidReasonInput.trim().length < 5}
+                      style={{ background: '#dc2626', borderColor: '#b91c1c' }}
+                    >
+                      {isVoidingProof ? 'Voiding...' : 'Confirm Void'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Proof Preview Modal */}
+            {previewProof && (
+              <div className="admin-modal-backdrop" style={{ zIndex: 1200 }} onClick={() => setPreviewProof(null)}>
+                <div
+                  className="admin-modal-dialog"
+                  style={{ maxWidth: '750px', width: '92%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="admin-modal-header">
+                    <h3 className="admin-modal-title" style={{ fontSize: '0.95rem' }}>{previewProof.name}</h3>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setPreviewProof(null)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="admin-modal-body" style={{ flex: 1, overflow: 'auto', textAlign: 'center', padding: '16px' }}>
+                    {previewProof.isPdf ? (
+                      <iframe
+                        src={previewProof.url}
+                        title={previewProof.name}
+                        style={{ width: '100%', height: '60vh', border: 'none' }}
+                      />
+                    ) : (
+                      <img
+                        src={previewProof.url}
+                        alt={previewProof.name}
+                        style={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain', borderRadius: '4px' }}
+                      />
+                    )}
+                  </div>
+                  <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
+                    <a
+                      href={previewProof.url}
+                      download={previewProof.name}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-primary"
+                      style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      ⬇️ Download File
+                    </a>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setPreviewProof(null)}
                     >
                       Close
                     </button>
                   </div>
-                )
-              })()}
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* 6. Employee Rejection Request Prompt Modal */}
-      {isRejectionModalOpen && selectedEnquiry && isEmployee && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => setIsRejectionModalOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="rejection-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '500px' }}
-          >
-            <div className="admin-modal-header">
-              <h2 id="rejection-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
-                Request Enquiry Rejection
-              </h2>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setIsRejectionModalOpen(false)}
-                aria-label="Close dialog"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="admin-modal-body">
-              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
-                Enquiry <strong>{selectedEnquiry.id}</strong> will be moved to the head-person approval queue.
-                Please provide a mandatory reason explaining why this enquiry should be rejected (minimum 5 characters).
-              </p>
-              <textarea
-                id="rejection-reason-input"
-                className="modal-textarea"
-                rows="3"
-                placeholder="E.g., Hardware model end-of-life, out of service territory, customer uncontactable after 3 calls..."
-                value={rejectionReasonInput}
-                onChange={(e) => setRejectionReasonInput(e.target.value)}
-              />
-            </div>
-
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setIsRejectionModalOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                id="submit-rejection-request-btn"
-                disabled={isSubmittingRejection || rejectionReasonInput.trim().length < 5}
-                onClick={handleSubmitRejectionRequest}
-                style={{ background: '#d97706', borderColor: '#b45309' }}
-              >
-                {isSubmittingRejection ? 'Submitting...' : 'Submit to Head-Person'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6B. Superadmin Rejection Decision Confirmation Modal (Quick Review from Table / Card) */}
-      {reviewConfirmTarget && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => setReviewConfirmTarget(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="review-confirm-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '520px' }}
-          >
-            <div className="admin-modal-header">
-              <h2 id="review-confirm-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
-                {reviewConfirmTarget.decision === 'approved' ? 'Approve Enquiry Rejection' : 'Deny Rejection Request'}
-              </h2>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setReviewConfirmTarget(null)}
-                aria-label="Close dialog"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="admin-modal-body">
-              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
-                {reviewConfirmTarget.decision === 'approved' ? (
-                  <>
-                    You are approving the staff rejection request for Enquiry{' '}
-                    <strong>{reviewConfirmTarget.enquiry.id}</strong>. The enquiry will be marked as{' '}
-                    <strong style={{ color: '#dc2626' }}>REJECTED</strong> and moved to the rejected/closed records.
-                  </>
-                ) : (
-                  <>
-                    You are denying the rejection request for Enquiry{' '}
-                    <strong>{reviewConfirmTarget.enquiry.id}</strong>. The enquiry will be restored to its previous operational status{' '}
-                    <strong style={{ color: '#0284c7' }}>
-                      ({reviewConfirmTarget.enquiry.previous_status || 'in_progress'})
-                    </strong>{' '}
-                    so staff can continue working on it.
-                  </>
-                )}
-              </p>
-
-              {/* Display Employee Reason */}
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', padding: '10px 12px', marginBottom: '14px' }}>
-                <span style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#b45309', textTransform: 'uppercase', marginBottom: '3px' }}>
-                  Submitted Rejection Reason:
-                </span>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: '#78350f', whiteSpace: 'pre-wrap' }}>
-                  {reviewConfirmTarget.enquiry.rejection_reason || 'No specific reason provided'}
-                </p>
-              </div>
-
-              {/* Optional Review Notes */}
-              <label htmlFor="review-dialog-notes-input" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                Head-Person Review Notes (Optional):
-              </label>
-              <textarea
-                id="review-dialog-notes-input"
-                className="modal-textarea"
-                rows="2"
-                placeholder="Add optional notes for the permanent activity log..."
-                value={reviewNotesInput}
-                onChange={(e) => setReviewNotesInput(e.target.value)}
-                maxLength={1000}
-              />
-            </div>
-
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setReviewConfirmTarget(null)}
-                disabled={isSubmittingReview}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                id={reviewConfirmTarget.decision === 'approved' ? 'confirm-approve-btn' : 'confirm-deny-btn'}
-                className={reviewConfirmTarget.decision === 'approved' ? 'btn-danger' : 'btn-primary'}
-                onClick={() => handleReviewRejection(reviewConfirmTarget.decision, reviewNotesInput, reviewConfirmTarget.enquiry)}
-                disabled={isSubmittingReview}
-                style={{
-                  background: reviewConfirmTarget.decision === 'approved' ? '#dc2626' : '#0284c7',
-                  borderColor: reviewConfirmTarget.decision === 'approved' ? '#dc2626' : '#0284c7',
-                  color: '#ffffff'
-                }}
-              >
-                {isSubmittingReview ? 'Processing...' : (reviewConfirmTarget.decision === 'approved' ? '✅ Confirm Approval' : '❌ Confirm Denial')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 7. Status Change Confirmation Dialog (For backward-compatible status picker) */}
-      {statusConfirmTarget && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => setStatusConfirmTarget(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="status-dialog-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-modal-header">
-              <h2 id="status-dialog-title" className="admin-modal-title">
-                Update Lead Status?
-              </h2>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setStatusConfirmTarget(null)}
-                aria-label="Close dialog"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="admin-modal-body">
-              <p>
-                Change status for <strong>{statusConfirmTarget.enquiry.id}</strong> (
-                {statusConfirmTarget.enquiry.customer_name || statusConfirmTarget.enquiry.name}) from{' '}
-                <span className="badge-inline">
-                  {getStatusMeta(statusConfirmTarget.enquiry.status).label}
-                </span>{' '}
-                to{' '}
-                <span className="badge-inline highlight">
-                  {getStatusMeta(statusConfirmTarget.nextStatus).label}
-                </span>
-                ?
-              </p>
-              <div className="status-confirm-hint">
-                <span>ℹ️ This operation updates the enquiry lifecycle and records an automated audit log.</span>
-              </div>
-            </div>
-
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setStatusConfirmTarget(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                id="confirm-status-update-btn"
-                onClick={handleConfirmStatusChange}
-              >
-                Confirm Update
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: Upload Signed Job Sheet Modal */}
-      {isUploadProofModalOpen && selectedEnquiry && (
-        <div className="admin-modal-backdrop" style={{ zIndex: 1100 }}>
-          <div className="admin-modal-dialog" style={{ maxWidth: '480px' }}>
-            <div className="admin-modal-header">
-              <h3 className="admin-modal-title">Upload Signed Job Sheet</h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setIsUploadProofModalOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="admin-modal-body" style={{ padding: '16px' }}>
-              <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#64748b' }}>
-                Upload the customer-signed physical service sheet or job report for <strong>{selectedEnquiry.enquiry_number || selectedEnquiry.name}</strong>.
-              </p>
-
-              {proofUploadError && (
-                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px 12px', color: '#991b1b', fontSize: '0.82rem', marginBottom: '12px' }}>
-                  {proofUploadError}
                 </div>
-              )}
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                  Document Type:
-                </label>
-                <input
-                  type="text"
-                  className="admin-input"
-                  value="Customer Signed Job Sheet"
-                  disabled
-                  style={{ background: '#f1f5f9', cursor: 'not-allowed', width: '100%' }}
-                />
               </div>
+            )}
 
-              <div style={{ marginBottom: '12px' }}>
-                <label htmlFor="proof-file-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                  File (JPG, JPEG, PNG, or PDF, max 10 MB):
-                </label>
-                <input
-                  id="proof-file-input"
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
-                  onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-                  style={{ fontSize: '0.85rem', width: '100%' }}
-                />
-                {proofFile && (
-                  <span style={{ display: 'block', fontSize: '0.78rem', color: '#16a34a', marginTop: '4px' }}>
-                    Selected: {proofFile.name} ({(proofFile.size / 1024).toFixed(1)} KB)
-                  </span>
-                )}
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label htmlFor="proof-desc-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                  Optional Note:
-                </label>
-                <textarea
-                  id="proof-desc-input"
-                  className="modal-textarea"
-                  rows="2"
-                  placeholder="E.g., Customer signed after diagnostics & hardware repair..."
-                  value={proofDescription}
-                  onChange={(e) => setProofDescription(e.target.value)}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
-            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setIsUploadProofModalOpen(false)}
-                disabled={isUploadingProof}
+            {/* 8. Employee Work-Completion Submission Modal */}
+            {isCompletionModalOpen && selectedEnquiry && isEmployee && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => setIsCompletionModalOpen(false)}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="completion-modal-title"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                id="confirm-upload-proof-btn"
-                className="btn-primary"
-                onClick={handleUploadProofSubmit}
-                disabled={isUploadingProof || !proofFile}
-              >
-                {isUploadingProof ? 'Uploading...' : 'Upload Proof'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '520px' }}
+                >
+                  <div className="admin-modal-header">
+                    <h2 id="completion-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                      Submit Work for Head-Person Approval
+                    </h2>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setIsCompletionModalOpen(false)}
+                      aria-label="Close dialog"
+                    >
+                      ✕
+                    </button>
+                  </div>
 
-      {/* Step 2: Void Proof Modal */}
-      {voidProofTarget && (
-        <div className="admin-modal-backdrop" style={{ zIndex: 1100 }}>
-          <div className="admin-modal-dialog" style={{ maxWidth: '440px' }}>
-            <div className="admin-modal-header">
-              <h3 className="admin-modal-title" style={{ color: '#b91c1c' }}>Void Service Proof</h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setVoidProofTarget(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="admin-modal-body" style={{ padding: '16px' }}>
-              <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: '#475569' }}>
-                You are about to void <strong>{voidProofTarget.original_filename}</strong>. This soft-deletes the document from valid completion evidence while preserving an audit record.
-              </p>
+                  <div className="admin-modal-body">
+                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
+                      Enquiry <strong>{selectedEnquiry.id}</strong> (
+                      {selectedEnquiry.customer_name || selectedEnquiry.name}) will be submitted to the head-person review queue.
+                      Please provide a comprehensive summary of the diagnostics, repair, quotation, or service completed (minimum 10 characters).
+                    </p>
+                    <label
+                      htmlFor="completion-summary-input"
+                      style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
+                    >
+                      Work-Completion Summary (Mandatory):
+                    </label>
+                    <textarea
+                      id="completion-summary-input"
+                      className="modal-textarea"
+                      rows="4"
+                      placeholder="E.g., Tested motherboard power rails, replaced blown 19V MOSFET, verified clean boot to desktop, stress-tested CPU/GPU for 2 hours, cleaned fan vents..."
+                      value={completionSummaryInput}
+                      onChange={(e) => setCompletionSummaryInput(e.target.value)}
+                      maxLength={3000}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                      <span style={{ fontSize: '0.75rem', color: completionSummaryInput.trim().length < 10 ? '#dc2626' : '#16a34a' }}>
+                        {completionSummaryInput.trim().length} / 10 min characters
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                        Max 3000 chars
+                      </span>
+                    </div>
+                  </div>
 
-              {voidProofError && (
-                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px 12px', color: '#991b1b', fontSize: '0.82rem', marginBottom: '10px' }}>
-                  {voidProofError}
+                  <div className="admin-modal-footer">
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setIsCompletionModalOpen(false)}
+                      disabled={isSubmittingCompletion}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      id="submit-completion-request-btn"
+                      disabled={isSubmittingCompletion || completionSummaryInput.trim().length < 10}
+                      onClick={handleSubmitCompletion}
+                      style={{ background: '#2563eb', borderColor: '#1d4ed8' }}
+                    >
+                      {isSubmittingCompletion ? 'Submitting...' : '✨ Submit for Head-Person Approval'}
+                    </button>
+                  </div>
                 </div>
-              )}
-
-              <label htmlFor="void-reason-input" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                Mandatory Void Reason (min 5 chars):
-              </label>
-              <textarea
-                id="void-reason-input"
-                className="modal-textarea"
-                rows="3"
-                placeholder="E.g., Incorrect job sheet uploaded for this customer..."
-                value={voidReasonInput}
-                onChange={(e) => setVoidReasonInput(e.target.value)}
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setVoidProofTarget(null)}
-                disabled={isVoidingProof}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                id="confirm-void-proof-btn"
-                className="btn-primary"
-                onClick={handleVoidProofSubmit}
-                disabled={isVoidingProof || voidReasonInput.trim().length < 5}
-                style={{ background: '#dc2626', borderColor: '#b91c1c' }}
-              >
-                {isVoidingProof ? 'Voiding...' : 'Confirm Void'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: Proof Preview Modal */}
-      {previewProof && (
-        <div className="admin-modal-backdrop" style={{ zIndex: 1200 }} onClick={() => setPreviewProof(null)}>
-          <div
-            className="admin-modal-dialog"
-            style={{ maxWidth: '750px', width: '92%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-modal-header">
-              <h3 className="admin-modal-title" style={{ fontSize: '0.95rem' }}>{previewProof.name}</h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setPreviewProof(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="admin-modal-body" style={{ flex: 1, overflow: 'auto', textAlign: 'center', padding: '16px' }}>
-              {previewProof.isPdf ? (
-                <iframe
-                  src={previewProof.url}
-                  title={previewProof.name}
-                  style={{ width: '100%', height: '60vh', border: 'none' }}
-                />
-              ) : (
-                <img
-                  src={previewProof.url}
-                  alt={previewProof.name}
-                  style={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain', borderRadius: '4px' }}
-                />
-              )}
-            </div>
-            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
-              <a
-                href={previewProof.url}
-                download={previewProof.name}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary"
-                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-              >
-                ⬇️ Download File
-              </a>
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setPreviewProof(null)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 8. Employee Work-Completion Submission Modal */}
-      {isCompletionModalOpen && selectedEnquiry && isEmployee && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => setIsCompletionModalOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="completion-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '520px' }}
-          >
-            <div className="admin-modal-header">
-              <h2 id="completion-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
-                Submit Work for Head-Person Approval
-              </h2>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setIsCompletionModalOpen(false)}
-                aria-label="Close dialog"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="admin-modal-body">
-              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
-                Enquiry <strong>{selectedEnquiry.id}</strong> (
-                {selectedEnquiry.customer_name || selectedEnquiry.name}) will be submitted to the head-person review queue.
-                Please provide a comprehensive summary of the diagnostics, repair, quotation, or service completed (minimum 10 characters).
-              </p>
-              <label
-                htmlFor="completion-summary-input"
-                style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
-              >
-                Work-Completion Summary (Mandatory):
-              </label>
-              <textarea
-                id="completion-summary-input"
-                className="modal-textarea"
-                rows="4"
-                placeholder="E.g., Tested motherboard power rails, replaced blown 19V MOSFET, verified clean boot to desktop, stress-tested CPU/GPU for 2 hours, cleaned fan vents..."
-                value={completionSummaryInput}
-                onChange={(e) => setCompletionSummaryInput(e.target.value)}
-                maxLength={3000}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                <span style={{ fontSize: '0.75rem', color: completionSummaryInput.trim().length < 10 ? '#dc2626' : '#16a34a' }}>
-                  {completionSummaryInput.trim().length} / 10 min characters
-                </span>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                  Max 3000 chars
-                </span>
               </div>
-            </div>
+            )}
 
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setIsCompletionModalOpen(false)}
-                disabled={isSubmittingCompletion}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                id="submit-completion-request-btn"
-                disabled={isSubmittingCompletion || completionSummaryInput.trim().length < 10}
-                onClick={handleSubmitCompletion}
-                style={{ background: '#2563eb', borderColor: '#1d4ed8' }}
-              >
-                {isSubmittingCompletion ? 'Submitting...' : '✨ Submit for Head-Person Approval'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 9. Superadmin Completion Review Confirmation Modal (Approve & Move to Bin OR Return for Rework) */}
-      {completionReviewConfirmTarget && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => setCompletionReviewConfirmTarget(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="completion-review-confirm-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '540px' }}
-          >
-            <div className="admin-modal-header">
-              <h2 id="completion-review-confirm-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
-                {completionReviewConfirmTarget.decision === 'approved'
-                  ? 'Approve Work Completion & Permanently Archive'
-                  : 'Return Task for Employee Rework'}
-              </h2>
-              <button
-                type="button"
-                className="modal-close-btn"
+            {/* 9. Superadmin Completion Review Confirmation Modal (Approve & Move to Bin OR Return for Rework) */}
+            {completionReviewConfirmTarget && (
+              <div
+                className="admin-modal-backdrop"
                 onClick={() => setCompletionReviewConfirmTarget(null)}
-                aria-label="Close dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="completion-review-confirm-modal-title"
               >
-                ✕
-              </button>
-            </div>
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '540px' }}
+                >
+                  <div className="admin-modal-header">
+                    <h2 id="completion-review-confirm-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                      {completionReviewConfirmTarget.decision === 'approved'
+                        ? 'Approve Work Completion & Permanently Archive'
+                        : 'Return Task for Employee Rework'}
+                    </h2>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setCompletionReviewConfirmTarget(null)}
+                      aria-label="Close dialog"
+                    >
+                      ✕
+                    </button>
+                  </div>
 
-            <div className="admin-modal-body">
-              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
-                {completionReviewConfirmTarget.decision === 'approved' ? (
-                  <>
-                    You are approving the completed work for Enquiry{' '}
-                    <strong>{completionReviewConfirmTarget.enquiry.enquiry_number || completionReviewConfirmTarget.enquiry.id}</strong>.
-                    The enquiry will become a <strong style={{ color: '#166534' }}>Permanent Archive Record</strong> with no scheduled deletion,
-                    immune to automated purge, and assigned to the approval month for compliance reporting.
-                  </>
-                ) : (
-                  <>
-                    You are rejecting this completion submission and returning Enquiry{' '}
-                    <strong>{completionReviewConfirmTarget.enquiry.enquiry_number || completionReviewConfirmTarget.enquiry.id}</strong> to active status for{' '}
-                    <strong style={{ color: '#d97706' }}>Employee Rework</strong>. Staff will be instructed to perform additional work and resubmit.
-                  </>
-                )}
-              </p>
+                  <div className="admin-modal-body">
+                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
+                      {completionReviewConfirmTarget.decision === 'approved' ? (
+                        <>
+                          You are approving the completed work for Enquiry{' '}
+                          <strong>{completionReviewConfirmTarget.enquiry.enquiry_number || completionReviewConfirmTarget.enquiry.id}</strong>.
+                          The enquiry will become a <strong style={{ color: '#166534' }}>Permanent Archive Record</strong> with no scheduled deletion,
+                          immune to automated purge, and assigned to the approval month for compliance reporting.
+                        </>
+                      ) : (
+                        <>
+                          You are rejecting this completion submission and returning Enquiry{' '}
+                          <strong>{completionReviewConfirmTarget.enquiry.enquiry_number || completionReviewConfirmTarget.enquiry.id}</strong> to active status for{' '}
+                          <strong style={{ color: '#d97706' }}>Employee Rework</strong>. Staff will be instructed to perform additional work and resubmit.
+                        </>
+                      )}
+                    </p>
 
-              {/* Submitted Completion Summary Display */}
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '10px 12px', marginBottom: '14px' }}>
-                <span style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', marginBottom: '3px' }}>
-                  Submitted Work-Completion Summary:
-                </span>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: '#1e3a8a', whiteSpace: 'pre-wrap' }}>
-                  {completionReviewConfirmTarget.enquiry.completion_summary || 'No summary recorded'}
-                </p>
+                    {/* Submitted Completion Summary Display */}
+                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '10px 12px', marginBottom: '14px' }}>
+                      <span style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', marginBottom: '3px' }}>
+                        Submitted Work-Completion Summary:
+                      </span>
+                      <p style={{ margin: 0, fontSize: '0.88rem', color: '#1e3a8a', whiteSpace: 'pre-wrap' }}>
+                        {completionReviewConfirmTarget.enquiry.completion_summary || 'No summary recorded'}
+                      </p>
+                    </div>
+
+                    {/* Review Notes / Mandatory Rework Reason */}
+                    <label
+                      htmlFor="completion-review-dialog-notes-input"
+                      style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
+                    >
+                      {completionReviewConfirmTarget.decision === 'approved'
+                        ? 'Head-Person Review Notes / Approval Remarks (Optional):'
+                        : 'Mandatory Reason for Return / Rework Instructions (Min 5 chars):'}
+                    </label>
+                    <textarea
+                      id="completion-review-dialog-notes-input"
+                      className="modal-textarea"
+                      rows="3"
+                      placeholder={
+                        completionReviewConfirmTarget.decision === 'approved'
+                          ? 'Add optional sign-off remarks for permanent audit history...'
+                          : 'Specify what parts of the task need further testing, customer contact, or rework before approval...'
+                      }
+                      value={completionReviewNotesInput}
+                      onChange={(e) => setCompletionReviewNotesInput(e.target.value)}
+                      maxLength={1000}
+                    />
+                  </div>
+
+                  <div className="admin-modal-footer">
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setCompletionReviewConfirmTarget(null)}
+                      disabled={isSubmittingCompletionReview}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      id={completionReviewConfirmTarget.decision === 'approved' ? 'confirm-approve-completion-btn' : 'confirm-return-rework-btn'}
+                      className={completionReviewConfirmTarget.decision === 'approved' ? 'btn-primary' : 'btn-warning'}
+                      onClick={() =>
+                        handleReviewCompletion(
+                          completionReviewConfirmTarget.decision,
+                          completionReviewNotesInput,
+                          null,
+                          completionReviewConfirmTarget.enquiry
+                        )
+                      }
+                      disabled={
+                        isSubmittingCompletionReview ||
+                        (completionReviewConfirmTarget.decision === 'returned_for_rework' && completionReviewNotesInput.trim().length < 5)
+                      }
+                      style={{
+                        background: completionReviewConfirmTarget.decision === 'approved' ? '#059669' : '#d97706',
+                        borderColor: completionReviewConfirmTarget.decision === 'approved' ? '#047857' : '#b45309',
+                        color: '#ffffff'
+                      }}
+                    >
+                      {isSubmittingCompletionReview
+                        ? 'Processing...'
+                        : completionReviewConfirmTarget.decision === 'approved'
+                          ? '✅ Confirm Approval & Permanent Archive'
+                          : '🔄 Confirm Return for Rework'}
+                    </button>
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Review Notes / Mandatory Rework Reason */}
-              <label
-                htmlFor="completion-review-dialog-notes-input"
-                style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}
-              >
-                {completionReviewConfirmTarget.decision === 'approved'
-                  ? 'Head-Person Review Notes / Approval Remarks (Optional):'
-                  : 'Mandatory Reason for Return / Rework Instructions (Min 5 chars):'}
-              </label>
-              <textarea
-                id="completion-review-dialog-notes-input"
-                className="modal-textarea"
-                rows="3"
-                placeholder={
-                  completionReviewConfirmTarget.decision === 'approved'
-                    ? 'Add optional sign-off remarks for permanent audit history...'
-                    : 'Specify what parts of the task need further testing, customer contact, or rework before approval...'
-                }
-                value={completionReviewNotesInput}
-                onChange={(e) => setCompletionReviewNotesInput(e.target.value)}
-                maxLength={1000}
-              />
-            </div>
-
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setCompletionReviewConfirmTarget(null)}
-                disabled={isSubmittingCompletionReview}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                id={completionReviewConfirmTarget.decision === 'approved' ? 'confirm-approve-completion-btn' : 'confirm-return-rework-btn'}
-                className={completionReviewConfirmTarget.decision === 'approved' ? 'btn-primary' : 'btn-warning'}
-                onClick={() =>
-                  handleReviewCompletion(
-                    completionReviewConfirmTarget.decision,
-                    completionReviewNotesInput,
-                    null,
-                    completionReviewConfirmTarget.enquiry
-                  )
-                }
-                disabled={
-                  isSubmittingCompletionReview ||
-                  (completionReviewConfirmTarget.decision === 'returned_for_rework' && completionReviewNotesInput.trim().length < 5)
-                }
-                style={{
-                  background: completionReviewConfirmTarget.decision === 'approved' ? '#059669' : '#d97706',
-                  borderColor: completionReviewConfirmTarget.decision === 'approved' ? '#047857' : '#b45309',
-                  color: '#ffffff'
-                }}
-              >
-                {isSubmittingCompletionReview
-                  ? 'Processing...'
-                  : completionReviewConfirmTarget.decision === 'approved'
-                  ? '✅ Confirm Approval & Permanent Archive'
-                  : '🔄 Confirm Return for Rework'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Monthly Enquiries XLSX Export Modal (Available to All Active Staff) */}
+            {/* Monthly Enquiries XLSX Export Modal (Available to All Active Staff) */}
       {isExportModalOpen && (
         <div
           className="admin-modal-backdrop"
@@ -5381,543 +5884,771 @@ export default function AdminEnquiriesPage() {
         </div>
       )}
 
-      {/* 10. Superadmin Bin Restore Confirmation Modal */}
-      {binRestoreTarget && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => setBinRestoreTarget(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="bin-restore-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '500px' }}
-          >
-            <div className="admin-modal-header">
-              <h2 id="bin-restore-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
-                Restore Enquiry from Bin
-              </h2>
-              <button
-                type="button"
-                className="modal-close-btn"
+            {/* 10. Superadmin Bin Restore Confirmation Modal */}
+            {binRestoreTarget && (
+              <div
+                className="admin-modal-backdrop"
                 onClick={() => setBinRestoreTarget(null)}
-                aria-label="Close dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="bin-restore-modal-title"
               >
-                ✕
-              </button>
-            </div>
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '500px' }}
+                >
+                  <div className="admin-modal-header">
+                    <h2 id="bin-restore-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                      Restore Enquiry from Bin
+                    </h2>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setBinRestoreTarget(null)}
+                      aria-label="Close dialog"
+                    >
+                      ✕
+                    </button>
+                  </div>
 
-            <div className="admin-modal-body">
-              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
-                Are you sure you want to restore Enquiry <strong>{binRestoreTarget.enquiry?.id}</strong> from the Bin?
-              </p>
-              <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '10px 12px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.85rem', color: '#065f46' }}>
-                  Restoring will cancel the scheduled permanent deletion and return the enquiry to workable status (<strong>in_progress</strong>). An immutable audit record will log this restoration.
-                </span>
-              </div>
-            </div>
+                  <div className="admin-modal-body">
+                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
+                      Are you sure you want to restore Enquiry <strong>{binRestoreTarget.enquiry?.id}</strong> from the Bin?
+                    </p>
+                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '10px 12px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#065f46' }}>
+                        Restoring will cancel the scheduled permanent deletion and return the enquiry to workable status (<strong>in_progress</strong>). An immutable audit record will log this restoration.
+                      </span>
+                    </div>
+                  </div>
 
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setBinRestoreTarget(null)}
-                disabled={isRestoringFromBin}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                id="confirm-restore-bin-btn"
-                onClick={() => handleRestoreFromBin(binRestoreTarget.enquiry)}
-                disabled={isRestoringFromBin}
-                style={{ background: '#0d9488', borderColor: '#0f766e', color: '#ffffff' }}
-              >
-                {isRestoringFromBin ? 'Restoring...' : '♻️ Confirm Restore from Bin'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 11. Head Assign / Reassign Staff Modal */}
-      {isAssignModalOpen && isSuperadmin && selectedEnquiry && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => !isSubmittingAssignment && setIsAssignModalOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="assign-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '480px' }}
-          >
-            <div className="admin-modal-header">
-              <div>
-                <h2 id="assign-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
-                  {selectedEnquiry.assigned_employee_id ? 'Reassign Enquiry Engineer' : 'Assign Enquiry Engineer'}
-                </h2>
-                <span className="modal-subtitle-note">
-                  Enquiry {selectedEnquiry.enquiry_number || selectedEnquiry.id}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setIsAssignModalOpen(false)}
-                disabled={isSubmittingAssignment}
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveAssignment}>
-              <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
-                <div className="admin-form-group">
-                  <label htmlFor="assign-employee-select" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                    Select Active Employee / Engineer:
-                  </label>
-                  <select
-                    id="assign-employee-select"
-                    className="admin-form-input"
-                    value={selectedAssigneeId}
-                    onChange={(e) => setSelectedAssigneeId(e.target.value)}
-                    disabled={isSubmittingAssignment}
-                    style={{ width: '100%', boxSizing: 'border-box' }}
-                  >
-                    <option value="">-- Unassigned --</option>
-                    {assigneesList.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.full_name || emp.email} {emp.employee_code ? `[${emp.employee_code}]` : ''} ({emp.role}) {emp.phone_number ? `• 📱 ${emp.phone_number}` : '• No phone'}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="admin-modal-footer">
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setBinRestoreTarget(null)}
+                      disabled={isRestoringFromBin}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      id="confirm-restore-bin-btn"
+                      onClick={() => handleRestoreFromBin(binRestoreTarget.enquiry)}
+                      disabled={isRestoringFromBin}
+                      style={{ background: '#0d9488', borderColor: '#0f766e', color: '#ffffff' }}
+                    >
+                      {isRestoringFromBin ? 'Restoring...' : '♻️ Confirm Restore from Bin'}
+                    </button>
+                  </div>
                 </div>
+              </div>
+            )}
 
-                {/* Expected Engineer Arrival & Date */}
-                {selectedAssigneeId && (
-                  <div style={{ marginTop: '12px' }}>
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                      <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
-                        <label htmlFor="assign-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                          Arrival / Visit Date <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
-                        </label>
-                        <input
-                          id="assign-visit-date"
-                          type="date"
-                          className="admin-form-input"
-                          value={assignVisitDate}
-                          onChange={(e) => setAssignVisitDate(e.target.value)}
-                          disabled={isSubmittingAssignment}
-                          style={{ width: '100%', boxSizing: 'border-box' }}
-                        />
+            {/* Step 2: Head Bulk Assign Staff Modal */}
+            {isBulkAssignModalOpen && isSuperadmin && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => !isSubmittingBulkAssign && setIsBulkAssignModalOpen(false)}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="bulk-assign-modal-title"
+              >
+                <div
+                  className="admin-modal-dialog confirm-dialog bulk-assign-dialog-card"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="admin-modal-header">
+                    <div>
+                      <h2 id="bulk-assign-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                        {bulkAssignResults ? 'Bulk Assignment Results' : 'Bulk Assign Enquiries'}
+                      </h2>
+                      <span className="modal-subtitle-note">
+                        {bulkAssignResults
+                          ? `Processed ${bulkAssignResults.total} selected enquiries`
+                          : `Assigning ${selectedEnquiryIds.size} selected enquiries to operational staff`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => {
+                        if (!isSubmittingBulkAssign) {
+                          setIsBulkAssignModalOpen(false)
+                          setBulkAssignResults(null)
+                        }
+                      }}
+                      disabled={isSubmittingBulkAssign}
+                      aria-label="Close dialog"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {bulkAssignResults ? (
+                    <div style={{ padding: '16px 20px' }}>
+                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 14px', marginBottom: '12px' }}>
+                        <strong style={{ color: '#166534', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>✅</span> Successfully Assigned: {bulkAssignResults.succeeded.length} / {bulkAssignResults.total}
+                        </strong>
                       </div>
-                      <div className="admin-form-group" style={{ flex: '1 1 180px' }}>
-                        <label htmlFor="assign-expected-arrival" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                          Expected Engineer Arrival <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+
+                      {bulkAssignResults.failed.length > 0 && (
+                        <div style={{ marginTop: '12px' }}>
+                          <strong style={{ color: '#991b1b', fontSize: '0.86rem', display: 'block', marginBottom: '6px' }}>
+                            ⚠️ {bulkAssignResults.failed.length} enquiries could not be assigned:
+                          </strong>
+                          <div className="bulk-assign-results-list">
+                            {bulkAssignResults.failed.map((fail, idx) => (
+                              <div key={idx} className="bulk-assign-result-item error">
+                                <strong>{fail.enquiryNumber}</strong>
+                                <span style={{ fontSize: '0.78rem' }}>{fail.reason}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="admin-modal-footer" style={{ marginTop: '18px', padding: 0 }}>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => {
+                            setIsBulkAssignModalOpen(false)
+                            setBulkAssignResults(null)
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={(e) => { e.preventDefault(); handleExecuteBulkAssign(); }} style={{ padding: '16px 20px' }}>
+                      {(() => {
+                        const selectedList = enquiries.filter((e) => selectedEnquiryIds.has(e.id))
+                        const ineligibleList = selectedList.filter((e) => {
+                          const c = classifyEnquiry(e)
+                          return e.is_archived || c.isCompleted || e.is_in_bin || c.isInBin || ['completion_requested', 'rejection_requested', 'closed', 'rejected'].includes(e.status)
+                        })
+                        const eligibleCount = selectedList.length - ineligibleList.length
+
+                        return (
+                          <>
+                            <div className="bulk-assign-summary-box">
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span>Total Selected:</span>
+                                <strong>{selectedList.length}</strong>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#15803d', marginBottom: '4px' }}>
+                                <span>Eligible for Assignment:</span>
+                                <strong>{eligibleCount}</strong>
+                              </div>
+                              {ineligibleList.length > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b91c1c' }}>
+                                  <span>Ineligible (Completed/Archived/Bin/In Review):</span>
+                                  <strong>{ineligibleList.length}</strong>
+                                </div>
+                              )}
+                            </div>
+
+                            {ineligibleList.length > 0 && (
+                              <div style={{ background: '#fef2f2', border: '1px solid #fecdd3', borderRadius: '6px', padding: '10px 12px', marginBottom: '14px', fontSize: '0.8rem', color: '#991b1b' }}>
+                                ℹ️ Note: {ineligibleList.length} completed, archived, bin, or pending-review enquiries will be skipped automatically to protect workflow integrity.
+                              </div>
+                            )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              <div>
+                                <label htmlFor="bulk-assign-employee-select" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                                  Assign to Operational Employee: <span style={{ color: '#dc2626' }}>*</span>
+                                </label>
+                                <select
+                                  id="bulk-assign-employee-select"
+                                  className="admin-select"
+                                  value={bulkAssigneeId}
+                                  onChange={(e) => setBulkAssigneeId(e.target.value)}
+                                  required
+                                  style={{ width: '100%', height: '38px' }}
+                                  disabled={isSubmittingBulkAssign}
+                                >
+                                  <option value="">-- Select Employee --</option>
+                                  {eligibleStaffList.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>
+                                      {emp.full_name || emp.name || emp.email} ({emp.role}){emp.employee_code ? ` [${emp.employee_code}]` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                <div>
+                                  <label htmlFor="bulk-assign-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155', fontSize: '0.82rem' }}>
+                                    Expected Visit Date (Optional):
+                                  </label>
+                                  <input
+                                    type="date"
+                                    id="bulk-assign-visit-date"
+                                    className="admin-input"
+                                    value={bulkVisitDate}
+                                    onChange={(e) => setBulkVisitDate(e.target.value)}
+                                    disabled={isSubmittingBulkAssign}
+                                    style={{ width: '100%' }}
+                                  />
+                                </div>
+                                <div>
+                                  <label htmlFor="bulk-assign-expected-arrival" className="admin-form-label" style={{ fontWeight: 600, color: '#334155', fontSize: '0.82rem' }}>
+                                    Expected Arrival (Optional):
+                                  </label>
+                                  <input
+                                    type="text"
+                                    id="bulk-assign-expected-arrival"
+                                    className="admin-input"
+                                    placeholder="e.g. 10:30 AM - 12:00 PM"
+                                    value={bulkExpectedArrival}
+                                    onChange={(e) => setBulkExpectedArrival(e.target.value)}
+                                    disabled={isSubmittingBulkAssign}
+                                    style={{ width: '100%' }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label htmlFor="bulk-assign-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155', fontSize: '0.82rem' }}>
+                                  Visit / Customer Note (Optional):
+                                </label>
+                                <textarea
+                                  id="bulk-assign-visit-note"
+                                  className="admin-textarea"
+                                  rows={2}
+                                  placeholder="Optional instructions for engineer or customer-facing note..."
+                                  value={bulkVisitNote}
+                                  onChange={(e) => setBulkVisitNote(e.target.value)}
+                                  disabled={isSubmittingBulkAssign}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+
+                              <div>
+                                <label htmlFor="bulk-assign-reason-input" className="admin-form-label" style={{ fontWeight: 600, color: '#334155', fontSize: '0.82rem' }}>
+                                  Assignment Reason (Internal Audit Log):
+                                </label>
+                                <input
+                                  type="text"
+                                  id="bulk-assign-reason-input"
+                                  className="admin-input"
+                                  placeholder="e.g. Batch assigned for hardware diagnostic visit"
+                                  value={bulkAssignReason}
+                                  onChange={(e) => setBulkAssignReason(e.target.value)}
+                                  disabled={isSubmittingBulkAssign}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="admin-modal-footer" style={{ marginTop: '18px', padding: 0 }}>
+                              <button
+                                type="button"
+                                className="btn-outline"
+                                onClick={() => setIsBulkAssignModalOpen(false)}
+                                disabled={isSubmittingBulkAssign}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                id="confirm-bulk-assign-btn"
+                                className="btn-primary"
+                                disabled={isSubmittingBulkAssign || !bulkAssigneeId || eligibleCount === 0}
+                                style={{ background: '#2563eb', borderColor: '#1d4ed8' }}
+                              >
+                                {isSubmittingBulkAssign ? 'Assigning...' : `Confirm Bulk Assignment (${eligibleCount})`}
+                              </button>
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 11. Head Assign / Reassign Staff Modal */}
+            {isAssignModalOpen && isSuperadmin && selectedEnquiry && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => !isSubmittingAssignment && setIsAssignModalOpen(false)}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="assign-modal-title"
+              >
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '480px' }}
+                >
+                  <div className="admin-modal-header">
+                    <div>
+                      <h2 id="assign-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                        {selectedEnquiry.assigned_employee_id ? 'Reassign Enquiry Engineer' : 'Assign Enquiry Engineer'}
+                      </h2>
+                      <span className="modal-subtitle-note">
+                        Enquiry {selectedEnquiry.enquiry_number || selectedEnquiry.id}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setIsAssignModalOpen(false)}
+                      disabled={isSubmittingAssignment}
+                      aria-label="Close modal"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveAssignment}>
+                    <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
+                      <div className="admin-form-group">
+                        <label htmlFor="assign-employee-select" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                          Select Active Employee / Engineer:
                         </label>
                         <select
-                          id="assign-expected-arrival"
+                          id="assign-employee-select"
                           className="admin-form-input"
-                          value={assignExpectedArrival}
-                          onChange={(e) => setAssignExpectedArrival(e.target.value)}
+                          value={selectedAssigneeId}
+                          onChange={(e) => setSelectedAssigneeId(e.target.value)}
                           disabled={isSubmittingAssignment}
                           style={{ width: '100%', boxSizing: 'border-box' }}
                         >
-                          <option value="">-- Select expected arrival (Optional) --</option>
-                          <option value="Within 1 hour">Within 1 hour</option>
-                          <option value="Within 2 hours">Within 2 hours</option>
-                          <option value="Within 4 hours">Within 4 hours</option>
-                          <option value="Within 6 hours">Within 6 hours</option>
-                          <option value="Within 12 hours">Within 12 hours</option>
-                          <option value="Within 24 hours">Within 24 hours</option>
-                          <option value="Tomorrow">Tomorrow</option>
-                          <option value="To be confirmed">To be confirmed</option>
+                          <option value="">-- Unassigned --</option>
+                          {assigneesList.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.full_name || emp.email} {emp.employee_code ? `[${emp.employee_code}]` : ''} ({emp.role}) {emp.phone_number ? `• 📱 ${emp.phone_number}` : '• No phone'}
+                            </option>
+                          ))}
                         </select>
                       </div>
+
+                      {/* Expected Engineer Arrival & Date */}
+                      {selectedAssigneeId && (
+                        <div style={{ marginTop: '12px' }}>
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
+                              <label htmlFor="assign-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                                Arrival / Visit Date <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                              </label>
+                              <input
+                                id="assign-visit-date"
+                                type="date"
+                                className="admin-form-input"
+                                value={assignVisitDate}
+                                onChange={(e) => setAssignVisitDate(e.target.value)}
+                                disabled={isSubmittingAssignment}
+                                style={{ width: '100%', boxSizing: 'border-box' }}
+                              />
+                            </div>
+                            <div className="admin-form-group" style={{ flex: '1 1 180px' }}>
+                              <label htmlFor="assign-expected-arrival" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                                Expected Engineer Arrival <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                              </label>
+                              <select
+                                id="assign-expected-arrival"
+                                className="admin-form-input"
+                                value={assignExpectedArrival}
+                                onChange={(e) => setAssignExpectedArrival(e.target.value)}
+                                disabled={isSubmittingAssignment}
+                                style={{ width: '100%', boxSizing: 'border-box' }}
+                              >
+                                <option value="">-- Select expected arrival (Optional) --</option>
+                                <option value="Within 1 hour">Within 1 hour</option>
+                                <option value="Within 2 hours">Within 2 hours</option>
+                                <option value="Within 4 hours">Within 4 hours</option>
+                                <option value="Within 6 hours">Within 6 hours</option>
+                                <option value="Within 12 hours">Within 12 hours</option>
+                                <option value="Within 24 hours">Within 24 hours</option>
+                                <option value="Tomorrow">Tomorrow</option>
+                                <option value="To be confirmed">To be confirmed</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="admin-form-group" style={{ marginTop: '8px' }}>
+                            <label htmlFor="assign-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                              Visit Note <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                            </label>
+                            <textarea
+                              id="assign-visit-note"
+                              className="admin-form-input"
+                              placeholder="e.g. Customer requested afternoon slot, bring thermal paste..."
+                              value={assignVisitNote}
+                              onChange={(e) => setAssignVisitNote(e.target.value)}
+                              disabled={isSubmittingAssignment}
+                              maxLength={300}
+                              rows={2}
+                              style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="admin-form-group" style={{ marginTop: '12px' }}>
+                        <label htmlFor="assign-reason-input" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                          Assignment / Reassignment Reason <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>:
+                        </label>
+                        <input
+                          id="assign-reason-input"
+                          type="text"
+                          className="admin-form-input"
+                          placeholder="e.g. Workload balancing, onsite hardware technician needed..."
+                          value={assignReason}
+                          onChange={(e) => setAssignReason(e.target.value)}
+                          disabled={isSubmittingAssignment}
+                          maxLength={200}
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                        />
+                      </div>
+
+                      {assignmentError && (
+                        <div
+                          style={{
+                            background: '#fef2f2',
+                            border: '1px solid #fecaca',
+                            color: '#991b1b',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            marginTop: '12px',
+                            fontSize: '0.85rem'
+                          }}
+                          role="alert"
+                        >
+                          ⚠️ {assignmentError}
+                        </div>
+                      )}
                     </div>
-                    <div className="admin-form-group" style={{ marginTop: '8px' }}>
-                      <label htmlFor="assign-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                        Visit Note <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
-                      </label>
-                      <textarea
-                        id="assign-visit-note"
-                        className="admin-form-input"
-                        placeholder="e.g. Customer requested afternoon slot, bring thermal paste..."
-                        value={assignVisitNote}
-                        onChange={(e) => setAssignVisitNote(e.target.value)}
+
+                    <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+                      <button
+                        type="button"
+                        className="btn-outline btn-sm"
+                        onClick={() => setIsAssignModalOpen(false)}
                         disabled={isSubmittingAssignment}
-                        maxLength={300}
-                        rows={2}
-                        style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
-                      />
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={isSubmittingAssignment}
+                      >
+                        {isSubmittingAssignment ? 'Saving...' : 'Save Assignment'}
+                      </button>
                     </div>
-                  </div>
-                )}
-
-                <div className="admin-form-group" style={{ marginTop: '12px' }}>
-                  <label htmlFor="assign-reason-input" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                    Assignment / Reassignment Reason <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>:
-                  </label>
-                  <input
-                    id="assign-reason-input"
-                    type="text"
-                    className="admin-form-input"
-                    placeholder="e.g. Workload balancing, onsite hardware technician needed..."
-                    value={assignReason}
-                    onChange={(e) => setAssignReason(e.target.value)}
-                    disabled={isSubmittingAssignment}
-                    maxLength={200}
-                    style={{ width: '100%', boxSizing: 'border-box' }}
-                  />
+                  </form>
                 </div>
-
-                {assignmentError && (
-                  <div
-                    style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
-                      color: '#991b1b',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      marginTop: '12px',
-                      fontSize: '0.85rem'
-                    }}
-                    role="alert"
-                  >
-                    ⚠️ {assignmentError}
-                  </div>
-                )}
               </div>
+            )}
 
-              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
-                <button
-                  type="button"
-                  className="btn-outline btn-sm"
-                  onClick={() => setIsAssignModalOpen(false)}
-                  disabled={isSubmittingAssignment}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={isSubmittingAssignment}
-                >
-                  {isSubmittingAssignment ? 'Saving...' : 'Save Assignment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            {/* 6. Advanced Excel-like Live Enquiry Register Modal */}
+            {isLiveRegisterOpen && (
+              <Suspense fallback={null}>
+                <LiveEnquiryRegisterModal
+                  isOpen={isLiveRegisterOpen}
+                  onClose={() => setIsLiveRegisterOpen(false)}
+                  enquiries={enquiries}
+                  onSelectEnquiry={(enq) => {
+                    setSelectedEnquiry(enq)
+                  }}
+                  onRefresh={() => loadAdminEnquiries && loadAdminEnquiries()}
+                  isLoading={isLoadingEnquiries}
+                  adminUser={adminUser}
+                />
+              </Suspense>
+            )}
 
-      {/* 6. Advanced Excel-like Live Enquiry Register Modal */}
-      {isLiveRegisterOpen && (
-        <Suspense fallback={null}>
-          <LiveEnquiryRegisterModal
-            isOpen={isLiveRegisterOpen}
-            onClose={() => setIsLiveRegisterOpen(false)}
-            enquiries={enquiries}
-            onSelectEnquiry={(enq) => {
-              setSelectedEnquiry(enq)
-            }}
-            onRefresh={() => loadAdminEnquiries && loadAdminEnquiries()}
-            isLoading={isLoadingEnquiries}
-            adminUser={adminUser}
-          />
-        </Suspense>
-      )}
-
-      {/* 12. Employee Self-Assign Confirmation Modal (visit time optional) */}
-      {isSelfAssignModalOpen && isEmployee && selectedEnquiry && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => !isSelfAssigning && setIsSelfAssignModalOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="self-assign-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '440px' }}
-          >
-            <div className="admin-modal-header">
-              <div>
-                <h2 id="self-assign-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
-                  Take This Enquiry
-                </h2>
-                <span className="modal-subtitle-note">
-                  Enquiry {selectedEnquiry.enquiry_number || selectedEnquiry.id}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setIsSelfAssignModalOpen(false)}
-                disabled={isSelfAssigning}
-                aria-label="Close modal"
+            {/* 12. Employee Self-Assign Confirmation Modal (visit time optional) */}
+            {isSelfAssignModalOpen && isEmployee && selectedEnquiry && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => !isSelfAssigning && setIsSelfAssignModalOpen(false)}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="self-assign-modal-title"
               >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleConfirmSelfAssign}>
-              <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
-                <p style={{ margin: '0 0 14px 0', fontSize: '0.88rem', color: '#475569', lineHeight: 1.5 }}>
-                  You are about to take responsibility for this enquiry. Your identity will be recorded server-side from your authenticated session.
-                </p>
-
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                  <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
-                    <label htmlFor="self-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                      Arrival / Visit Date <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
-                    </label>
-                    <input
-                      id="self-visit-date"
-                      type="date"
-                      className="admin-form-input"
-                      value={selfVisitDate}
-                      onChange={(e) => setSelfVisitDate(e.target.value)}
-                      disabled={isSelfAssigning}
-                      style={{ width: '100%', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div className="admin-form-group" style={{ flex: '1 1 180px' }}>
-                    <label htmlFor="self-expected-arrival" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                      Expected Engineer Arrival <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
-                    </label>
-                    <select
-                      id="self-expected-arrival"
-                      className="admin-form-input"
-                      value={selfExpectedArrival}
-                      onChange={(e) => setSelfExpectedArrival(e.target.value)}
-                      disabled={isSelfAssigning}
-                      style={{ width: '100%', boxSizing: 'border-box' }}
-                    >
-                      <option value="">-- Select expected arrival (Optional) --</option>
-                      <option value="Within 1 hour">Within 1 hour</option>
-                      <option value="Within 2 hours">Within 2 hours</option>
-                      <option value="Within 4 hours">Within 4 hours</option>
-                      <option value="Within 6 hours">Within 6 hours</option>
-                      <option value="Within 12 hours">Within 12 hours</option>
-                      <option value="Within 24 hours">Within 24 hours</option>
-                      <option value="Tomorrow">Tomorrow</option>
-                      <option value="To be confirmed">To be confirmed</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="admin-form-group">
-                  <label htmlFor="self-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
-                    Visit Note <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
-                  </label>
-                  <textarea
-                    id="self-visit-note"
-                    className="admin-form-input"
-                    placeholder="e.g. Will bring replacement HDD, scheduled for AM..."
-                    value={selfVisitNote}
-                    onChange={(e) => setSelfVisitNote(e.target.value)}
-                    disabled={isSelfAssigning}
-                    maxLength={300}
-                    rows={2}
-                    style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
-                  />
-                </div>
-
-                <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '6px', padding: '8px 12px', marginTop: '10px', fontSize: '0.79rem', color: '#0369a1' }}>
-                  ℹ️ Your name, employee code, phone, and Aadhaar are captured server-side. You cannot modify your own identity.
-                </div>
-              </div>
-
-              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
-                <button
-                  type="button"
-                  className="btn-outline btn-sm"
-                  onClick={() => setIsSelfAssignModalOpen(false)}
-                  disabled={isSelfAssigning}
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '440px' }}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={isSelfAssigning}
-                >
-                  {isSelfAssigning ? 'Assigning...' : '✋ Confirm Self-Assignment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 13. Superadmin Fake/Spam Current-Month Soft-Removal Modal */}
-      {(removalTarget || (removalTargets && removalTargets.length > 0)) && isSuperadmin && (
-        <div
-          className="admin-modal-backdrop"
-          onClick={() => !isRemoving && (setRemovalTargets([]), setRemovalTarget(null))}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="removal-modal-title"
-        >
-          <div
-            className="admin-modal-dialog confirm-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '520px' }}
-          >
-            <div className="admin-modal-header" style={{ borderBottom: '1px solid #fee2e2' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.25rem' }}>🚫</span>
-                <h2 id="removal-modal-title" className="admin-modal-title" style={{ margin: 0, color: '#991b1b' }}>
-                  {removalTargets.length > 1
-                    ? `Soft-Remove ${removalTargets.length} Current-Month Enquiries`
-                    : 'Soft-Remove Current-Month Enquiry'}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => { setRemovalTargets([]); setRemovalTarget(null); }}
-                disabled={isRemoving}
-                aria-label="Close dialog"
-              >
-                &times;
-              </button>
-            </div>
-
-            <form onSubmit={handleConfirmRemoval}>
-              <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
-                {removalTargets.length === 1 ? (
-                  <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#334155' }}>
-                    Soft-removing enquiry <strong>{removalTargets[0].enquiry_number || removalTargets[0].id}</strong> ({removalTargets[0].customer_name || removalTargets[0].name || 'Anonymous Customer'}).
-                  </p>
-                ) : (
-                  <div style={{ marginBottom: '12px' }}>
-                    <p style={{ margin: '0 0 8px', fontSize: '0.9rem', color: '#334155' }}>
-                      Soft-removing <strong>{removalTargets.length}</strong> selected enquiries:
-                    </p>
-                    <div
-                      style={{
-                        maxHeight: '130px',
-                        overflowY: 'auto',
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                        padding: '8px 12px'
-                      }}
-                    >
-                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.82rem', color: '#334155' }}>
-                        {removalTargets.map((t) => (
-                          <li key={t.id} style={{ marginBottom: '3px' }}>
-                            <strong style={{ color: '#0f172a' }}>{t.enquiry_number || t.id}</strong> — {t.customer_name || t.name || 'Anonymous Customer'}
-                          </li>
-                        ))}
-                      </ul>
+                  <div className="admin-modal-header">
+                    <div>
+                      <h2 id="self-assign-modal-title" className="admin-modal-title" style={{ margin: 0 }}>
+                        Take This Enquiry
+                      </h2>
+                      <span className="modal-subtitle-note">
+                        Enquiry {selectedEnquiry.enquiry_number || selectedEnquiry.id}
+                      </span>
                     </div>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => setIsSelfAssignModalOpen(false)}
+                      disabled={isSelfAssigning}
+                      aria-label="Close modal"
+                    >
+                      ✕
+                    </button>
                   </div>
-                )}
 
-                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '10px 12px', marginBottom: '16px', fontSize: '0.82rem', color: '#991b1b' }}>
-                  ⚠️ <strong>Head-Only Safe Removal:</strong> The record will NOT be physically deleted. It will be excluded from all active enquiry lists, operational counts, and reports. Audit history and actor attribution are permanently recorded.
-                </div>
+                  <form onSubmit={handleConfirmSelfAssign}>
+                    <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
+                      <p style={{ margin: '0 0 14px 0', fontSize: '0.88rem', color: '#475569', lineHeight: 1.5 }}>
+                        You are about to take responsibility for this enquiry. Your identity will be recorded server-side from your authenticated session.
+                      </p>
 
-                {removalError && (
-                  <div style={{ background: '#fee2e2', border: '1px solid #ef4444', color: '#991b1b', padding: '8px 12px', borderRadius: '6px', marginBottom: '12px', fontSize: '0.85rem', whiteSpace: 'pre-line' }}>
-                    {removalError}
-                  </div>
-                )}
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                        <div className="admin-form-group" style={{ flex: '1 1 160px' }}>
+                          <label htmlFor="self-visit-date" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                            Arrival / Visit Date <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                          </label>
+                          <input
+                            id="self-visit-date"
+                            type="date"
+                            className="admin-form-input"
+                            value={selfVisitDate}
+                            onChange={(e) => setSelfVisitDate(e.target.value)}
+                            disabled={isSelfAssigning}
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div className="admin-form-group" style={{ flex: '1 1 180px' }}>
+                          <label htmlFor="self-expected-arrival" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                            Expected Engineer Arrival <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                          </label>
+                          <select
+                            id="self-expected-arrival"
+                            className="admin-form-input"
+                            value={selfExpectedArrival}
+                            onChange={(e) => setSelfExpectedArrival(e.target.value)}
+                            disabled={isSelfAssigning}
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                          >
+                            <option value="">-- Select expected arrival (Optional) --</option>
+                            <option value="Within 1 hour">Within 1 hour</option>
+                            <option value="Within 2 hours">Within 2 hours</option>
+                            <option value="Within 4 hours">Within 4 hours</option>
+                            <option value="Within 6 hours">Within 6 hours</option>
+                            <option value="Within 12 hours">Within 12 hours</option>
+                            <option value="Within 24 hours">Within 24 hours</option>
+                            <option value="Tomorrow">Tomorrow</option>
+                            <option value="To be confirmed">To be confirmed</option>
+                          </select>
+                        </div>
+                      </div>
 
-                <div className="admin-form-group" style={{ marginBottom: '12px' }}>
-                  <label htmlFor="removal-category" className="admin-form-label" style={{ fontWeight: 600, color: '#0f172a' }}>
-                    Removal Category <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <select
-                    id="removal-category"
-                    className="admin-form-input"
-                    value={removalCategory}
-                    onChange={(e) => setRemovalCategory(e.target.value)}
-                    disabled={isRemoving}
-                    required
-                    style={{ width: '100%', boxSizing: 'border-box' }}
-                  >
-                    <option value="spam">Spam</option>
-                    <option value="fake_enquiry">Fake enquiry</option>
-                    <option value="duplicate">Duplicate enquiry</option>
-                    <option value="invalid_contact">Invalid contact details</option>
-                    <option value="test_enquiry">Test enquiry</option>
-                    <option value="other">Other (with explanation)</option>
-                  </select>
-                </div>
+                      <div className="admin-form-group">
+                        <label htmlFor="self-visit-note" className="admin-form-label" style={{ fontWeight: 600, color: '#334155' }}>
+                          Visit Note <span style={{ color: '#64748b', fontWeight: 400 }}>(Optional)</span>
+                        </label>
+                        <textarea
+                          id="self-visit-note"
+                          className="admin-form-input"
+                          placeholder="e.g. Will bring replacement HDD, scheduled for AM..."
+                          value={selfVisitNote}
+                          onChange={(e) => setSelfVisitNote(e.target.value)}
+                          disabled={isSelfAssigning}
+                          maxLength={300}
+                          rows={2}
+                          style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                        />
+                      </div>
 
-                <div className="admin-form-group">
-                  <label htmlFor="removal-reason" className="admin-form-label" style={{ fontWeight: 600, color: '#0f172a' }}>
-                    Mandatory Reason / Details <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <textarea
-                    id="removal-reason"
-                    className="admin-form-input"
-                    placeholder="Provide mandatory explanation for removal (e.g., bot submission, duplicate of ARS-ENQ-01004, invalid digits...)"
-                    value={removalReason}
-                    onChange={(e) => setRemovalReason(e.target.value)}
-                    disabled={isRemoving}
-                    required
-                    minLength={3}
-                    maxLength={500}
-                    rows={3}
-                    style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
-                  />
+                      <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '6px', padding: '8px 12px', marginTop: '10px', fontSize: '0.79rem', color: '#0369a1' }}>
+                        ℹ️ Your name, employee code, phone, and Aadhaar are captured server-side. You cannot modify your own identity.
+                      </div>
+                    </div>
+
+                    <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+                      <button
+                        type="button"
+                        className="btn-outline btn-sm"
+                        onClick={() => setIsSelfAssignModalOpen(false)}
+                        disabled={isSelfAssigning}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={isSelfAssigning}
+                      >
+                        {isSelfAssigning ? 'Assigning...' : '✋ Confirm Self-Assignment'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
+            )}
 
-              <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
-                <button
-                  type="button"
-                  className="btn-outline btn-sm"
-                  onClick={() => { setRemovalTargets([]); setRemovalTarget(null); }}
-                  disabled={isRemoving}
+            {/* 13. Superadmin Fake/Spam Current-Month Soft-Removal Modal */}
+            {(removalTarget || (removalTargets && removalTargets.length > 0)) && isSuperadmin && (
+              <div
+                className="admin-modal-backdrop"
+                onClick={() => !isRemoving && (setRemovalTargets([]), setRemovalTarget(null))}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="removal-modal-title"
+              >
+                <div
+                  className="admin-modal-dialog confirm-dialog"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '520px' }}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  id="confirm-soft-removal-btn"
-                  className="btn-danger btn-sm"
-                  disabled={isRemoving}
-                  style={{ background: '#dc2626', borderColor: '#b91c1c', color: '#ffffff' }}
-                >
-                  {isRemoving
-                    ? 'Removing...'
-                    : removalTargets.length > 1
-                    ? `🚫 Confirm Removal (${removalTargets.length})`
-                    : '🚫 Confirm Soft-Removal'}
-                </button>
+                  <div className="admin-modal-header" style={{ borderBottom: '1px solid #fee2e2' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.25rem' }}>🚫</span>
+                      <h2 id="removal-modal-title" className="admin-modal-title" style={{ margin: 0, color: '#991b1b' }}>
+                        {removalTargets.length > 1
+                          ? `Soft-Remove ${removalTargets.length} Current-Month Enquiries`
+                          : 'Soft-Remove Current-Month Enquiry'}
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      className="modal-close-btn"
+                      onClick={() => { setRemovalTargets([]); setRemovalTarget(null); }}
+                      disabled={isRemoving}
+                      aria-label="Close dialog"
+                    >
+                      &times;
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleConfirmRemoval}>
+                    <div className="admin-modal-body" style={{ padding: '16px 20px' }}>
+                      {removalTargets.length === 1 ? (
+                        <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#334155' }}>
+                          Soft-removing enquiry <strong>{removalTargets[0].enquiry_number || removalTargets[0].id}</strong> ({removalTargets[0].customer_name || removalTargets[0].name || 'Anonymous Customer'}).
+                        </p>
+                      ) : (
+                        <div style={{ marginBottom: '12px' }}>
+                          <p style={{ margin: '0 0 8px', fontSize: '0.9rem', color: '#334155' }}>
+                            Soft-removing <strong>{removalTargets.length}</strong> selected enquiries:
+                          </p>
+                          <div
+                            style={{
+                              maxHeight: '130px',
+                              overflowY: 'auto',
+                              background: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '6px',
+                              padding: '8px 12px'
+                            }}
+                          >
+                            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.82rem', color: '#334155' }}>
+                              {removalTargets.map((t) => (
+                                <li key={t.id} style={{ marginBottom: '3px' }}>
+                                  <strong style={{ color: '#0f172a' }}>{t.enquiry_number || t.id}</strong> — {t.customer_name || t.name || 'Anonymous Customer'}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '10px 12px', marginBottom: '16px', fontSize: '0.82rem', color: '#991b1b' }}>
+                        ⚠️ <strong>Head-Only Safe Removal:</strong> The record will NOT be physically deleted. It will be excluded from all active enquiry lists, operational counts, and reports. Audit history and actor attribution are permanently recorded.
+                      </div>
+
+                      {removalError && (
+                        <div style={{ background: '#fee2e2', border: '1px solid #ef4444', color: '#991b1b', padding: '8px 12px', borderRadius: '6px', marginBottom: '12px', fontSize: '0.85rem', whiteSpace: 'pre-line' }}>
+                          {removalError}
+                        </div>
+                      )}
+
+                      <div className="admin-form-group" style={{ marginBottom: '12px' }}>
+                        <label htmlFor="removal-category" className="admin-form-label" style={{ fontWeight: 600, color: '#0f172a' }}>
+                          Removal Category <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <select
+                          id="removal-category"
+                          className="admin-form-input"
+                          value={removalCategory}
+                          onChange={(e) => setRemovalCategory(e.target.value)}
+                          disabled={isRemoving}
+                          required
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                        >
+                          <option value="spam">Spam</option>
+                          <option value="fake_enquiry">Fake enquiry</option>
+                          <option value="duplicate">Duplicate enquiry</option>
+                          <option value="invalid_contact">Invalid contact details</option>
+                          <option value="test_enquiry">Test enquiry</option>
+                          <option value="other">Other (with explanation)</option>
+                        </select>
+                      </div>
+
+                      <div className="admin-form-group">
+                        <label htmlFor="removal-reason" className="admin-form-label" style={{ fontWeight: 600, color: '#0f172a' }}>
+                          Mandatory Reason / Details <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <textarea
+                          id="removal-reason"
+                          className="admin-form-input"
+                          placeholder="Provide mandatory explanation for removal (e.g., bot submission, duplicate of ARS-ENQ-01004, invalid digits...)"
+                          value={removalReason}
+                          onChange={(e) => setRemovalReason(e.target.value)}
+                          disabled={isRemoving}
+                          required
+                          minLength={3}
+                          maxLength={500}
+                          rows={3}
+                          style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="admin-modal-footer" style={{ padding: '12px 20px' }}>
+                      <button
+                        type="button"
+                        className="btn-outline btn-sm"
+                        onClick={() => { setRemovalTargets([]); setRemovalTarget(null); }}
+                        disabled={isRemoving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        id="confirm-soft-removal-btn"
+                        className="btn-danger btn-sm"
+                        disabled={isRemoving}
+                        style={{ background: '#dc2626', borderColor: '#b91c1c', color: '#ffffff' }}
+                      >
+                        {isRemoving
+                          ? 'Removing...'
+                          : removalTargets.length > 1
+                            ? `🚫 Confirm Removal (${removalTargets.length})`
+                            : '🚫 Confirm Soft-Removal'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            )}
 
-      {isCustomerEmailModalOpen && selectedEnquiry && (
-        <CustomerEmailModal
-          isOpen={isCustomerEmailModalOpen}
-          onClose={() => setIsCustomerEmailModalOpen(false)}
-          title="Customer Email Preview — Service Enquiry"
-          recipientEmail={resolveCustomerEmail(selectedEnquiry)}
-          subject={buildCustomerEmailSubject(selectedEnquiry)}
-          bodyText={formatEnquiryCustomerDispatch(selectedEnquiry)}
-          shareableAttachments={enquiryProofs.filter((p) => !p.is_voided && p.is_customer_shareable)}
-          totalAttachmentCount={enquiryProofs.filter((p) => !p.is_voided).length}
-        />
-      )}
-    </AdminLayout>
-  )
-}
+            {isCustomerEmailModalOpen && selectedEnquiry && (
+              <CustomerEmailModal
+                isOpen={isCustomerEmailModalOpen}
+                onClose={() => setIsCustomerEmailModalOpen(false)}
+                title="Customer Email Preview — Service Enquiry"
+                recipientEmail={resolveCustomerEmail(selectedEnquiry)}
+                subject={buildCustomerEmailSubject(selectedEnquiry)}
+                bodyText={formatEnquiryCustomerDispatch(selectedEnquiry)}
+                shareableAttachments={enquiryProofs.filter((p) => !p.is_voided && p.is_customer_shareable)}
+                totalAttachmentCount={enquiryProofs.filter((p) => !p.is_voided).length}
+              />
+            )}
+          </AdminLayout>
+        )
+      }

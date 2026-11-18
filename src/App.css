@@ -12126,6 +12126,10 @@
     min-width: 140px;
   }
 
+  .enquiries-table-wrap .enquiry-assignee-heading {
+    min-width: 175px;
+  }
+
   .enquiries-table-wrap .enquiry-submitted-heading {
     min-width: 105px;
   }
@@ -13362,3 +13366,376 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================================
+   ARS Computers — Step 2: Easy Enquiry Management Styles
+   ============================================================================ */
+.enquiry-assignee-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.enquiry-assignee-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.enquiry-assignee-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #1e3a8a;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.enquiry-assignee-badge.assigned-to-me {
+  color: #1e40af;
+  background: #dbeafe;
+  border-color: #93c5fd;
+  font-weight: 700;
+}
+
+.enquiry-unassigned-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.enquiry-unassigned-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.quick-reassign-btn,
+.quick-assign-btn,
+.quick-self-assign-btn {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  height: 24px;
+  line-height: 1.2;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.quick-reassign-btn {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+
+.quick-reassign-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.quick-assign-btn {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.quick-assign-btn:hover {
+  background: #dbeafe;
+}
+
+.quick-self-assign-btn {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-weight: 600;
+}
+
+.quick-self-assign-btn:hover {
+  background: #d1fae5;
+}
+
+.enquiry-visit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.74rem;
+  color: #475569;
+}
+
+.enquiry-visit-date {
+  font-size: 0.73rem;
+  color: #334155;
+}
+
+.enquiry-overdue-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  padding: 1px 6px;
+  border-radius: 4px;
+  animation: pulseOverdue 2s infinite ease-in-out;
+}
+
+@keyframes pulseOverdue {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Mobile Card Assignment Row */
+.mobile-card-assignment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  margin: 8px 0;
+  font-size: 0.82rem;
+}
+
+.mobile-assignment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-assignee-pill {
+  font-weight: 600;
+  color: #1e3a8a;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-assignee-pill.assigned-to-me {
+  color: #1e40af;
+  font-weight: 700;
+}
+
+.mobile-unassigned-pill {
+  font-weight: 600;
+  color: #b45309;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-visit-date {
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.mobile-overdue-alert {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* Unified Activity & Tracking Timeline */
+.unified-timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.timeline-event-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.timeline-event-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.timeline-event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.timeline-event-author {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.timeline-event-time {
+  font-size: 0.73rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.timeline-event-body {
+  font-size: 0.84rem;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+/* Client-Side Pagination Bar */
+.enquiry-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.86rem;
+}
+
+.pagination-count-info {
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.pagination-controls-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-size-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.pagination-page-size-select {
+  height: 32px;
+  padding: 2px 8px;
+  font-size: 0.82rem;
+  border-radius: 6px;
+}
+
+.pagination-nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 0.82rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination-current-page {
+  margin: 0 8px;
+  font-size: 0.84rem;
+  color: #334155;
+  white-space: nowrap;
+}
+
+/* Bulk Assignment Modal & Results */
+.bulk-assign-dialog-card {
+  max-width: 620px;
+  width: 100%;
+}
+
+.bulk-assign-summary-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+}
+
+.bulk-assign-results-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px;
+  background: #f8fafc;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bulk-assign-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #ffffff;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.82rem;
+}
+
+.bulk-assign-result-item.error {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
