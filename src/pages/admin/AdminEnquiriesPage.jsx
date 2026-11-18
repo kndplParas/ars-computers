@@ -1768,16 +1768,16 @@ export default function AdminEnquiriesPage() {
 
       <div className="admin-products-view-container enquiries-page-container">
         {/* Top Page Header */}
-        <div className="admin-view-header">
+        <div className="admin-view-header" style={{ marginBottom: '8px', gap: '8px' }}>
           <div>
-            <div className="admin-page-title-wrap" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <h1 className="admin-view-title" style={{ margin: 0 }}>Customer Enquiries &amp; Leads</h1>
+            <div className="admin-page-title-wrap" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h1 className="admin-view-title" style={{ margin: 0, fontSize: '1.25rem' }}>Customer Enquiries &amp; Leads</h1>
               {isLiveDatabase ? (
-                <span className="live-db-pill" style={{ background: '#dcfce7', color: '#15803d', fontWeight: 600, padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem' }} title="Connected to Supabase public.enquiries table">
+                <span className="live-db-pill" style={{ background: '#dcfce7', color: '#15803d', fontWeight: 600, padding: '1px 8px', borderRadius: '10px', fontSize: '0.72rem' }} title="Connected to Supabase public.enquiries table">
                   🟢 Supabase Live
                 </span>
               ) : (
-                <span className="demo-badge-pill" title="Local mock state only">
+                <span className="demo-badge-pill" style={{ padding: '1px 8px', fontSize: '0.72rem' }} title="Local mock state only">
                   🟡 Demo UI
                 </span>
               )}
@@ -1788,13 +1788,13 @@ export default function AdminEnquiriesPage() {
                     color: '#0369a1',
                     border: '1px solid #bae6fd',
                     fontWeight: 600,
-                    padding: '2px 10px',
-                    borderRadius: '12px',
-                    fontSize: '0.8rem'
+                    padding: '1px 8px',
+                    borderRadius: '10px',
+                    fontSize: '0.72rem'
                   }}
                   title="Admin Employee has operational workflow permissions (notes, progress, rejection requests)"
                 >
-                  👤 Employee Mode (Workflow Active)
+                  👤 Employee Mode
                 </span>
               ) : (
                 <span
@@ -1803,9 +1803,9 @@ export default function AdminEnquiriesPage() {
                     color: '#92400e',
                     border: '1px solid #fde68a',
                     fontWeight: 600,
-                    padding: '2px 10px',
-                    borderRadius: '12px',
-                    fontSize: '0.8rem'
+                    padding: '1px 8px',
+                    borderRadius: '10px',
+                    fontSize: '0.72rem'
                   }}
                   title="Head-Person (Superadmin) has full approval, terminal review, and archive authority"
                 >
@@ -1813,12 +1813,12 @@ export default function AdminEnquiriesPage() {
                 </span>
               )}
             </div>
-            <p className="admin-view-subtitle">
+            <p className="admin-view-subtitle" style={{ margin: '2px 0 0', fontSize: '0.8rem' }}>
               Manage customer leads, employee assignments, and service workflow.
             </p>
           </div>
 
-          <div className="admin-view-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="admin-view-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               type="button"
               id="open-live-register-modal-btn"
@@ -1827,11 +1827,15 @@ export default function AdminEnquiriesPage() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '5px',
                 background: '#1e40af',
                 borderColor: '#1e3a8a',
                 color: '#ffffff',
-                fontWeight: 600
+                fontWeight: 600,
+                padding: '4px 10px',
+                fontSize: '0.78rem',
+                height: '30px',
+                borderRadius: '5px'
               }}
               title="Open Advanced Live Enquiry Register (Spreadsheet View)"
             >
@@ -1845,11 +1849,15 @@ export default function AdminEnquiriesPage() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '5px',
                 background: '#047857',
                 borderColor: '#065f46',
                 color: '#ffffff',
-                fontWeight: 600
+                fontWeight: 600,
+                padding: '4px 10px',
+                fontSize: '0.78rem',
+                height: '30px',
+                borderRadius: '5px'
               }}
               title="Download Monthly Audit Report in XLSX format (available to all authorized staff)"
             >
@@ -1861,6 +1869,7 @@ export default function AdminEnquiriesPage() {
                 className="btn-outline btn-sm"
                 onClick={() => loadAdminEnquiries && loadAdminEnquiries()}
                 disabled={isLoadingEnquiries}
+                style={{ padding: '4px 10px', fontSize: '0.78rem', height: '30px', borderRadius: '5px' }}
                 title="Fetch latest enquiries from Supabase"
               >
                 {isLoadingEnquiries ? 'Refreshing...' : '🔄 Refresh Enquiries'}
@@ -1874,11 +1883,11 @@ export default function AdminEnquiriesPage() {
           className="admin-workflow-tabs-bar"
           style={{
             display: 'flex',
-            gap: '8px',
-            marginBottom: '16px',
-            borderBottom: '2px solid #e2e8f0',
-            paddingBottom: '8px',
-            overflowX: 'auto'
+            gap: '5px',
+            marginBottom: '8px',
+            borderBottom: '1px solid #e2e8f0',
+            paddingBottom: '5px',
+            flexWrap: 'wrap'
           }}
           role="tablist"
         >
@@ -1888,10 +1897,10 @@ export default function AdminEnquiriesPage() {
             aria-selected={activeWorkflowTab === 'all_active'}
             onClick={() => handleWorkflowTabChange('all_active')}
             style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '4px 9px',
+              borderRadius: '5px',
               fontWeight: 600,
-              fontSize: '0.9rem',
+              fontSize: '0.78rem',
               border: 'none',
               cursor: 'pointer',
               background: activeWorkflowTab === 'all_active' ? '#0f172a' : '#f1f5f9',
@@ -1910,10 +1919,10 @@ export default function AdminEnquiriesPage() {
             aria-selected={activeWorkflowTab === 'pending_completion'}
             onClick={() => handleWorkflowTabChange('pending_completion')}
             style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '4px 9px',
+              borderRadius: '5px',
               fontWeight: 600,
-              fontSize: '0.9rem',
+              fontSize: '0.78rem',
               border: metrics.pendingCompletion > 0 ? '1px solid #7c3aed' : 'none',
               cursor: 'pointer',
               background: activeWorkflowTab === 'pending_completion' ? '#7c3aed' : (metrics.pendingCompletion > 0 ? '#f5f3ff' : '#f1f5f9'),
@@ -1921,7 +1930,7 @@ export default function AdminEnquiriesPage() {
               transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '4px',
               flexShrink: 0
             }}
           >
@@ -1931,9 +1940,9 @@ export default function AdminEnquiriesPage() {
                 style={{
                   background: activeWorkflowTab === 'pending_completion' ? '#ffffff' : '#7c3aed',
                   color: activeWorkflowTab === 'pending_completion' ? '#7c3aed' : '#ffffff',
-                  fontSize: '0.75rem',
-                  padding: '2px 7px',
-                  borderRadius: '10px',
+                  fontSize: '0.7rem',
+                  padding: '1px 5px',
+                  borderRadius: '8px',
                   fontWeight: 700
                 }}
               >
@@ -1949,18 +1958,18 @@ export default function AdminEnquiriesPage() {
             aria-selected={activeWorkflowTab === 'pending_rejection'}
             onClick={() => handleWorkflowTabChange('pending_rejection')}
             style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '4px 9px',
+              borderRadius: '5px',
               fontWeight: 600,
-              fontSize: '0.9rem',
+              fontSize: '0.78rem',
               border: metrics.pendingRejection > 0 ? '1px solid #f59e0b' : 'none',
               cursor: 'pointer',
               background: activeWorkflowTab === 'pending_rejection' ? '#d97706' : (metrics.pendingRejection > 0 ? '#fef3c7' : '#f1f5f9'),
-              color: activeWorkflowTab === 'pending_rejection' ? '#ffffff' : (metrics.pendingRejection > 0 ? '#92400e' : '#475569'),
+              color: activeWorkflowTab === 'pending_rejection' ? '#ffffff' : (metrics.pendingRejection > 0 ? '#b91c1c' : '#475569'),
               transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '4px',
               flexShrink: 0
             }}
           >
@@ -1970,9 +1979,9 @@ export default function AdminEnquiriesPage() {
                 style={{
                   background: activeWorkflowTab === 'pending_rejection' ? '#ffffff' : '#b45309',
                   color: activeWorkflowTab === 'pending_rejection' ? '#b45309' : '#ffffff',
-                  fontSize: '0.75rem',
-                  padding: '2px 7px',
-                  borderRadius: '10px',
+                  fontSize: '0.7rem',
+                  padding: '1px 5px',
+                  borderRadius: '8px',
                   fontWeight: 700
                 }}
               >
@@ -1987,10 +1996,10 @@ export default function AdminEnquiriesPage() {
             aria-selected={activeWorkflowTab === 'quoted'}
             onClick={() => handleWorkflowTabChange('quoted')}
             style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '4px 9px',
+              borderRadius: '5px',
               fontWeight: 600,
-              fontSize: '0.9rem',
+              fontSize: '0.78rem',
               border: 'none',
               cursor: 'pointer',
               background: activeWorkflowTab === 'quoted' ? '#0f172a' : '#f1f5f9',
@@ -2008,10 +2017,10 @@ export default function AdminEnquiriesPage() {
             aria-selected={activeWorkflowTab === 'rejected_closed'}
             onClick={() => handleWorkflowTabChange('rejected_closed')}
             style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '4px 9px',
+              borderRadius: '5px',
               fontWeight: 600,
-              fontSize: '0.9rem',
+              fontSize: '0.78rem',
               border: 'none',
               cursor: 'pointer',
               background: activeWorkflowTab === 'rejected_closed' ? '#0f172a' : '#f1f5f9',
@@ -2031,10 +2040,10 @@ export default function AdminEnquiriesPage() {
               aria-selected={activeWorkflowTab === 'bin'}
               onClick={() => handleWorkflowTabChange('bin')}
               style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
+                padding: '4px 9px',
+                borderRadius: '5px',
                 fontWeight: 600,
-                fontSize: '0.9rem',
+                fontSize: '0.78rem',
                 border: metrics.binCount > 0 ? '1px solid #94a3b8' : 'none',
                 cursor: 'pointer',
                 background: activeWorkflowTab === 'bin' ? '#475569' : (metrics.binCount > 0 ? '#f1f5f9' : '#f8fafc'),
@@ -2042,7 +2051,7 @@ export default function AdminEnquiriesPage() {
                 transition: 'all 0.2s',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '4px',
                 flexShrink: 0
               }}
             >
@@ -2052,9 +2061,9 @@ export default function AdminEnquiriesPage() {
                   style={{
                     background: activeWorkflowTab === 'bin' ? '#ffffff' : '#475569',
                     color: activeWorkflowTab === 'bin' ? '#475569' : '#ffffff',
-                    fontSize: '0.75rem',
-                    padding: '2px 7px',
-                    borderRadius: '10px',
+                    fontSize: '0.7rem',
+                    padding: '1px 5px',
+                    borderRadius: '8px',
                     fontWeight: 700
                   }}
                 >
@@ -2070,10 +2079,10 @@ export default function AdminEnquiriesPage() {
             aria-selected={activeWorkflowTab === 'archived'}
             onClick={() => handleWorkflowTabChange('archived')}
             style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '4px 9px',
+              borderRadius: '5px',
               fontWeight: 600,
-              fontSize: '0.9rem',
+              fontSize: '0.78rem',
               border: 'none',
               cursor: 'pointer',
               background: activeWorkflowTab === 'archived' ? '#334155' : '#f1f5f9',
@@ -2093,10 +2102,10 @@ export default function AdminEnquiriesPage() {
               aria-selected={activeWorkflowTab === 'removed'}
               onClick={() => handleWorkflowTabChange('removed')}
               style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
+                padding: '4px 9px',
+                borderRadius: '5px',
                 fontWeight: 600,
-                fontSize: '0.9rem',
+                fontSize: '0.78rem',
                 border: metrics.removedCount > 0 ? '1px solid #f87171' : 'none',
                 cursor: 'pointer',
                 background: activeWorkflowTab === 'removed' ? '#dc2626' : (metrics.removedCount > 0 ? '#fef2f2' : '#f8fafc'),
@@ -2104,7 +2113,7 @@ export default function AdminEnquiriesPage() {
                 transition: 'all 0.2s',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '4px',
                 flexShrink: 0
               }}
             >
@@ -2114,9 +2123,9 @@ export default function AdminEnquiriesPage() {
                   style={{
                     background: activeWorkflowTab === 'removed' ? '#ffffff' : '#dc2626',
                     color: activeWorkflowTab === 'removed' ? '#dc2626' : '#ffffff',
-                    fontSize: '0.75rem',
-                    padding: '2px 7px',
-                    borderRadius: '10px',
+                    fontSize: '0.7rem',
+                    padding: '1px 5px',
+                    borderRadius: '8px',
                     fontWeight: 700
                   }}
                 >

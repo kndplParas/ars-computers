@@ -12285,9 +12285,17 @@
 /* ==========================================================================
    Enquiry Filter Toolbar (Single-line Compact Layout)
    ========================================================================== */
+.enquiries-page-container {
+  gap: 6px !important;
+}
+
+.admin-content-pane:has(.enquiries-page-container) {
+  padding: 14px 18px;
+}
+
 .enquiries-filter-toolbar {
-  padding: 10px 14px;
-  gap: 8px;
+  padding: 6px 10px;
+  gap: 6px;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -12301,10 +12309,15 @@
   width: auto;
 }
 
+.enquiries-filter-toolbar .toolbar-search-wrap .search-icon {
+  left: 10px;
+  font-size: 0.82rem;
+}
+
 .enquiries-filter-toolbar .toolbar-search-wrap .admin-search-input {
-  height: 36px;
-  padding: 6px 30px 6px 34px;
-  font-size: 0.84rem;
+  height: 32px;
+  padding: 4px 26px 4px 28px;
+  font-size: 0.82rem;
 }
 
 .enquiries-filter-toolbar .toolbar-filters-group {
@@ -12312,7 +12325,7 @@
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
   width: auto;
 }
@@ -12320,54 +12333,54 @@
 .enquiries-filter-toolbar .filter-select-wrap {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
   flex: 0 0 auto;
   white-space: nowrap;
 }
 
 .enquiries-filter-toolbar .filter-select-wrap .filter-label-inline {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: #64748b;
   font-weight: 600;
   margin: 0;
 }
 
 .enquiries-filter-toolbar .filter-select-wrap .admin-select {
-  height: 36px;
-  padding: 4px 8px;
-  font-size: 0.82rem;
-  border-radius: 6px;
+  height: 32px;
+  padding: 2px 4px;
+  font-size: 0.78rem;
+  border-radius: 5px;
   box-sizing: border-box;
 }
 
 .enquiries-filter-toolbar #enquiry-status-filter {
-  width: 118px;
+  width: 102px;
 }
 
 .enquiries-filter-toolbar #enquiry-category-filter {
-  width: 138px;
+  width: 118px;
 }
 
 .enquiries-filter-toolbar #enquiry-staff-filter {
-  width: 120px;
+  width: 102px;
 }
 
 .enquiries-filter-toolbar #enquiry-date-filter {
-  width: 105px;
+  width: 95px;
 }
 
 .enquiries-filter-toolbar .btn-clear-filters {
-  height: 36px;
-  padding: 4px 10px;
-  font-size: 0.8rem;
+  height: 32px;
+  padding: 2px 8px;
+  font-size: 0.74rem;
   white-space: nowrap;
 }
 
 @media (max-width: 900px) {
   .enquiries-filter-toolbar {
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 12px;
+    gap: 6px;
+    padding: 8px;
   }
   .enquiries-filter-toolbar .toolbar-search-wrap {
     flex: 1 1 100%;
@@ -12376,11 +12389,11 @@
   .enquiries-filter-toolbar .toolbar-filters-group {
     flex-wrap: wrap;
     width: 100%;
-    gap: 8px;
+    gap: 6px;
   }
   .enquiries-filter-toolbar .filter-select-wrap {
-    flex: 1 1 calc(50% - 4px);
-    width: calc(50% - 4px);
+    flex: 1 1 calc(50% - 3px);
+    width: calc(50% - 3px);
   }
   .enquiries-filter-toolbar .filter-select-wrap .admin-select {
     width: 100%;
@@ -13740,59 +13753,60 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 8px;
+  padding: 4px 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  font-size: 0.86rem;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  min-height: 32px;
 }
 
 .pagination-count-info {
   color: #475569;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
 }
 
 .pagination-controls-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .page-size-selector {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .page-size-label {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
 }
 
 .pagination-page-size-select {
-  height: 32px;
-  padding: 2px 8px;
-  font-size: 0.82rem;
-  border-radius: 6px;
+  height: 28px;
+  padding: 1px 6px;
+  font-size: 0.78rem;
+  border-radius: 5px;
 }
 
 .pagination-nav-buttons {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .pagination-btn {
-  min-width: 32px;
-  height: 32px;
-  padding: 0 8px;
-  font-size: 0.82rem;
-  border-radius: 6px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  font-size: 0.76rem;
+  border-radius: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
