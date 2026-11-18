@@ -1814,7 +1814,7 @@ export default function AdminEnquiriesPage() {
               )}
             </div>
             <p className="admin-view-subtitle">
-              Manage customer leads, record operational progress, submit rejection requests, and review approval queues.
+              Manage customer leads, employee assignments, and service workflow.
             </p>
           </div>
 
@@ -3451,7 +3451,6 @@ export default function AdminEnquiriesPage() {
                   </div>
                   <span className="modal-subtitle-note" style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
                     Submitted on {formatDateTime(selectedEnquiry.created_at)}
-                    {selectedEnquiry.enquiry_number && ` | UUID: ${selectedEnquiry.id}`}
                   </span>
                 </div>
                 <button
@@ -3904,10 +3903,6 @@ export default function AdminEnquiriesPage() {
                       <span className="info-val" style={{ fontWeight: 600, color: '#1e293b' }}>{requirement}</span>
                     </div>
 
-                    <div className="info-block">
-                      <span className="info-label">Enquiry ID</span>
-                      <span className="info-val" style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#64748b' }}>{selectedEnquiry.id}</span>
-                    </div>
                   </div>
 
                   {(() => {
@@ -4017,21 +4012,16 @@ export default function AdminEnquiriesPage() {
                     background: '#f8fafc',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
-                    padding: '14px 16px',
-                    marginBottom: '14px'
+                    padding: '12px 14px',
+                    marginBottom: '12px'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '1.1rem' }}>👤</span>
-                      <div>
-                        <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>
-                          Assigned Employee / Engineer
-                        </strong>
-                        <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>
-                          Responsible personnel for diagnosis, servicing, and client communication
-                        </span>
-                      </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '1rem' }}>👤</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                        Assigned Engineer
+                      </strong>
                     </div>
 
                     {/* Assignment Status Pill */}
@@ -4041,13 +4031,13 @@ export default function AdminEnquiriesPage() {
                           background: selectedEnquiry.assigned_employee_id === adminUser?.id ? '#dbeafe' : '#f1f5f9',
                           color: selectedEnquiry.assigned_employee_id === adminUser?.id ? '#1e40af' : '#334155',
                           border: `1px solid ${selectedEnquiry.assigned_employee_id === adminUser?.id ? '#bfdbfe' : '#cbd5e1'}`,
-                          padding: '3px 10px',
+                          padding: '2px 8px',
                           borderRadius: '12px',
-                          fontSize: '0.8rem',
+                          fontSize: '0.78rem',
                           fontWeight: 700
                         }}
                       >
-                        {selectedEnquiry.assigned_employee_id === adminUser?.id ? '👤 Assigned to You' : '👤 Assigned'}
+                        {selectedEnquiry.assigned_employee_id === adminUser?.id ? 'Assigned to You' : 'Assigned'}
                       </span>
                     ) : (
                       <span
@@ -4055,9 +4045,9 @@ export default function AdminEnquiriesPage() {
                           background: '#fef3c7',
                           color: '#92400e',
                           border: '1px solid #fde68a',
-                          padding: '3px 10px',
+                          padding: '2px 8px',
                           borderRadius: '12px',
-                          fontSize: '0.8rem',
+                          fontSize: '0.78rem',
                           fontWeight: 700
                         }}
                       >
@@ -4068,197 +4058,180 @@ export default function AdminEnquiriesPage() {
 
                   {/* Assignment Details or Action Prompts */}
                   {selectedEnquiry.assigned_employee_id ? (
-                    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px 14px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', fontSize: '0.84rem' }}>
+                    <div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', fontSize: '0.84rem' }}>
                         <div>
-                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                            Engineer Name:
+                          <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Engineer:
                           </span>
-                          <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>
+                          <strong style={{ color: '#0f172a' }}>
                             {selectedEnquiry.assigned_employee_name || 'Staff Member'}
                           </strong>
                           {selectedEnquiry.assigned_employee_code && (
-                            <span style={{ display: 'block', fontSize: '0.75rem', color: '#0369a1', fontWeight: 600, marginTop: '2px' }}>
-                              Employee Code: {selectedEnquiry.assigned_employee_code}
+                            <span style={{ display: 'block', fontSize: '0.74rem', color: '#0369a1', fontWeight: 600 }}>
+                              Code: {selectedEnquiry.assigned_employee_code}
                             </span>
                           )}
                         </div>
 
                         <div>
-                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                            Contact / WhatsApp:
+                          <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Phone / WhatsApp:
                           </span>
                           {selectedEnquiry.assigned_employee_phone ? (
-                            <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.88rem' }}>
+                            <a href={`tel:${selectedEnquiry.assigned_employee_phone}`} style={{ color: '#16a34a', fontWeight: 600, textDecoration: 'none' }}>
                               📱 {selectedEnquiry.assigned_employee_phone}
-                            </span>
+                            </a>
                           ) : (
-                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>
-                              No phone configured
-                            </span>
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.8rem' }}>None</span>
                           )}
-                          {selectedEnquiry.assigned_at && (
-                            <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                              Assigned: {formatDateTime(selectedEnquiry.assigned_at)}
+                          {selectedEnquiry.assigned_employee_role && (
+                            <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', textTransform: 'capitalize' }}>
+                              Role: {selectedEnquiry.assigned_employee_role}
                             </span>
                           )}
                         </div>
 
                         {/* Aadhaar snapshot — only shown to superadmin */}
-                        {isSuperadmin && (
+                        {isSuperadmin && selectedEnquiry.assigned_employee_aadhaar && (
                           <div>
-                            <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                              Aadhaar:
+                            <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                              Aadhaar (Confidential):
                             </span>
-                            <span style={{ color: '#475569', fontSize: '0.84rem', fontFamily: 'monospace' }}>
-                              {selectedEnquiry.assigned_employee_aadhaar
-                                ? formatAadhaarDisplay(selectedEnquiry.assigned_employee_aadhaar)
-                                : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Not provided</span>}
+                            <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#0f172a', fontWeight: 600 }}>
+                              •••• •••• {selectedEnquiry.assigned_employee_aadhaar.replace(/\s+/g, '').slice(-4)}
                             </span>
                           </div>
                         )}
 
                         {/* Expected Visit / Arrival */}
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                            Expected Arrival:
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                            Expected Visit:
                           </span>
                           {selectedEnquiry.expected_arrival && selectedEnquiry.expected_visit_at ? (
-                            <span style={{ color: '#0369a1', fontWeight: 600, fontSize: '0.88rem' }}>
-                              📅 {new Date(selectedEnquiry.expected_visit_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} • ⏱️ {selectedEnquiry.expected_arrival}
+                            <span style={{ color: '#0369a1', fontWeight: 600 }}>
+                              📅 {new Date(selectedEnquiry.expected_visit_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} • {selectedEnquiry.expected_arrival}
                             </span>
                           ) : selectedEnquiry.expected_arrival ? (
-                            <span style={{ color: '#0369a1', fontWeight: 600, fontSize: '0.88rem' }}>
+                            <span style={{ color: '#0369a1', fontWeight: 600 }}>
                               ⏱️ {selectedEnquiry.expected_arrival}
                             </span>
                           ) : selectedEnquiry.expected_visit_at ? (
-                            <span style={{ color: '#0369a1', fontWeight: 600, fontSize: '0.88rem' }}>
+                            <span style={{ color: '#0369a1', fontWeight: 600 }}>
                               📅 {formatDateTime(selectedEnquiry.expected_visit_at)}
                             </span>
                           ) : (
-                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.82rem' }}>Not specified</span>
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.8rem' }}>Not scheduled</span>
                           )}
                           {selectedEnquiry.assignment_visit_note && (
-                            <span style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginTop: '2px' }}>
+                            <span style={{ display: 'block', fontSize: '0.76rem', color: '#475569', marginTop: '2px' }}>
                               Note: {selectedEnquiry.assignment_visit_note}
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {selectedEnquiry.assigned_by_name && (
-                        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', fontSize: '0.75rem', color: '#64748b' }}>
-                          Assigned by: <strong>{selectedEnquiry.assigned_by_name}</strong>
-                          {selectedEnquiry.assigned_by_employee_code && ` [${selectedEnquiry.assigned_by_employee_code}]`}
-                        </div>
-                      )}
-
-                      {/* Head Reassign / Unassign Controls (Eligible enquiries only) */}
-                      {isSuperadmin && isAssignmentEligible && (
-                        <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {/* Head Reassign / Unassign Controls & Dispatch row */}
+                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
+                            Dispatch:
+                          </span>
                           <button
                             type="button"
-                            className="btn-outline btn-sm"
-                            onClick={handleOpenAssignModal}
-                            style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                            id="engineer-whatsapp-dispatch-btn"
+                            className="btn-outline btn-xs"
+                            onClick={handleEngineerWhatsAppDispatch}
+                            title={selectedEnquiry.assigned_employee_phone ? `Send details to engineer via WhatsApp` : 'No phone configured'}
+                            disabled={!selectedEnquiry.assigned_employee_phone}
+                            style={{ fontSize: '0.76rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           >
-                            🔄 Reassign Engineer
+                            <span>📱</span> WhatsApp
                           </button>
                           <button
                             type="button"
-                            className="btn-outline btn-sm"
-                            onClick={() => {
-                              if (window.confirm(`Unassign this enquiry from ${selectedEnquiry.assigned_employee_name}?`)) {
-                                unassignEnquiryEmployee(selectedEnquiry.id, 'Unassigned by Head of Store')
-                                  .then(() => {
-                                    showNotification('Enquiry unassigned.', 'success')
-                                    setSelectedEnquiry((prev) => ({
-                                      ...prev,
-                                      assigned_employee_id: null,
-                                      assigned_employee_name: null,
-                                      assigned_employee_code: null,
-                                      assigned_employee_phone: null,
-                                      assigned_employee_aadhaar: null,
-                                      assigned_at: null,
-                                      expected_visit_at: null,
-                                      assignment_visit_note: null
-                                    }))
-                                    reloadActivities(selectedEnquiry.id)
-                                  })
-                                  .catch((err) => showNotification(err.message, 'error'))
-                              }
-                            }}
-                            style={{ borderColor: '#fca5a5', color: '#b91c1c', fontSize: '0.8rem', padding: '4px 10px' }}
+                            id="engineer-copy-dispatch-btn"
+                            className="btn-outline btn-xs"
+                            onClick={handleEngineerCopyDispatch}
+                            title="Copy engineer dispatch details"
+                            style={{ fontSize: '0.76rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           >
-                            ✕ Unassign
+                            <span>📋</span> Copy
+                          </button>
+                          <button
+                            type="button"
+                            id="engineer-email-dispatch-btn"
+                            className="btn-outline btn-xs"
+                            onClick={handleEngineerEmailDispatch}
+                            title="Email job details to engineer"
+                            style={{ fontSize: '0.76rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <span>✉️</span> Email
                           </button>
                         </div>
-                      )}
 
-                      {/* Internal Technical Job Dispatch to Engineer */}
-                      <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                          Internal Job Dispatch:
-                        </span>
-                        <button
-                          type="button"
-                          id="engineer-whatsapp-dispatch-btn"
-                          className="btn-outline btn-sm"
-                          onClick={handleEngineerWhatsAppDispatch}
-                          title={
-                            selectedEnquiry.assigned_employee_phone
-                              ? `Send technical job details to ${selectedEnquiry.assigned_employee_name || 'Engineer'} via WhatsApp (${selectedEnquiry.assigned_employee_phone})`
-                              : 'Engineer has no phone configured'
-                          }
-                          disabled={!selectedEnquiry.assigned_employee_phone}
-                          style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-                        >
-                          <span>📱</span> Send to Engineer
-                        </button>
-                        <button
-                          type="button"
-                          id="engineer-copy-dispatch-btn"
-                          className="btn-outline btn-sm"
-                          onClick={handleEngineerCopyDispatch}
-                          title="Copy internal engineer job dispatch to clipboard"
-                          style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-                        >
-                          <span>📋</span> Copy Engineer Dispatch
-                        </button>
-                        <button
-                          type="button"
-                          id="engineer-email-dispatch-btn"
-                          className="btn-outline btn-sm"
-                          onClick={handleEngineerEmailDispatch}
-                          title={
-                            selectedEnquiry.assigned_employee_email
-                              ? `Email job details to ${selectedEnquiry.assigned_employee_name || 'Engineer'} (${selectedEnquiry.assigned_employee_email})`
-                              : 'Email job details'
-                          }
-                          style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-                        >
-                          <span>✉️</span> Email Dispatch
-                        </button>
+                        {/* Head Reassign / Unassign Controls (Eligible enquiries only) */}
+                        {isSuperadmin && isAssignmentEligible && (
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn-outline btn-xs"
+                              onClick={handleOpenAssignModal}
+                              style={{ fontSize: '0.76rem', padding: '3px 8px' }}
+                            >
+                              ✏️ Reassign
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-outline btn-xs"
+                              onClick={() => {
+                                if (window.confirm(`Unassign this enquiry from ${selectedEnquiry.assigned_employee_name}?`)) {
+                                  unassignEnquiryEmployee(selectedEnquiry.id, 'Unassigned by Head of Store')
+                                    .then(() => {
+                                      showNotification('Enquiry unassigned.', 'success')
+                                      setSelectedEnquiry((prev) => ({
+                                        ...prev,
+                                        assigned_employee_id: null,
+                                        assigned_employee_name: null,
+                                        assigned_employee_code: null,
+                                        assigned_employee_phone: null,
+                                        assigned_employee_aadhaar: null,
+                                        assigned_at: null,
+                                        expected_visit_at: null,
+                                        assignment_visit_note: null
+                                      }))
+                                      reloadActivities(selectedEnquiry.id)
+                                    })
+                                    .catch((err) => showNotification(err.message, 'error'))
+                                }
+                              }}
+                              style={{ borderColor: '#fca5a5', color: '#b91c1c', fontSize: '0.76rem', padding: '3px 8px' }}
+                            >
+                              ✕ Unassign
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
                     /* UNASSIGNED BRANCH */
-                    <div style={{ background: '#ffffff', border: '1px solid #fde68a', borderRadius: '6px', padding: '12px 14px' }}>
-                      <p style={{ margin: '0 0 10px 0', fontSize: '0.86rem', color: '#78350f' }}>
-                        No staff member or engineer is currently assigned to this enquiry.
-                      </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '6px 0' }}>
+                      <span style={{ fontSize: '0.84rem', color: '#78350f' }}>
+                        No staff member or engineer is currently assigned.
+                      </span>
 
                       {/* Employee self-assignment button */}
                       {isEmployee && isAssignmentEligible && (
                         <button
                           type="button"
                           id="take-enquiry-btn"
-                          className="btn-primary"
+                          className="btn-primary btn-sm"
                           onClick={handleSelfAssign}
                           disabled={isSelfAssigning}
-                          style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          style={{ fontSize: '0.82rem', padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
-                          <span>✋</span> {isSelfAssigning ? 'Assigning to you...' : 'Take This Enquiry'}
+                          <span>✋</span> {isSelfAssigning ? 'Assigning...' : 'Take This Enquiry'}
                         </button>
                       )}
 
@@ -4267,16 +4240,16 @@ export default function AdminEnquiriesPage() {
                         <button
                           type="button"
                           id="head-assign-btn"
-                          className="btn-primary"
+                          className="btn-primary btn-sm"
                           onClick={handleOpenAssignModal}
-                          style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          style={{ fontSize: '0.82rem', padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
                           <span>👤</span> Assign Employee
                         </button>
                       )}
 
                       {!isAssignmentEligible && (
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>
                           Assignment cannot be changed in current status or archive state.
                         </span>
                       )}
@@ -4421,26 +4394,21 @@ export default function AdminEnquiriesPage() {
                   )}
                 </div>
 
-                {/* Customer Tracking — shown only on the public Services page */}
+                {/* Customer Tracking & Visit Details */}
                 <div
                   className="customer-tracking-admin-card"
                   style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
+                    background: '#f0f9ff',
+                    border: '1px solid #bae6fd',
                     borderRadius: '8px',
-                    padding: '14px 16px',
-                    marginBottom: '14px'
+                    padding: '12px 14px',
+                    marginBottom: '12px'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '1.2rem' }} aria-hidden="true">🔎</span>
-                      <div>
-                        <strong style={{ color: '#1e3a8a', fontSize: '0.94rem' }}>Customer Tracking</strong>
-                        <span style={{ display: 'block', color: '#475569', fontSize: '0.78rem', marginTop: '2px' }}>
-                          Shown on the Services page. Does not change Head approval, assignment or completion status.
-                        </span>
-                      </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '1rem' }} aria-hidden="true">🔎</span>
+                      <strong style={{ color: '#0369a1', fontSize: '0.9rem' }}>Customer Tracking &amp; Visit Details</strong>
                     </div>
                     <span className={`customer-tracking-admin-pill tracking-${selectedEnquiry.customer_tracking_status || 'received'}`}>
                       {TRACKING_OPTIONS.find((option) => option.value === (selectedEnquiry.customer_tracking_status || 'received'))?.icon || '📥'}{' '}
@@ -4448,312 +4416,292 @@ export default function AdminEnquiriesPage() {
                     </span>
                   </div>
 
-                  <div className="customer-tracking-grid">
+                  <div className="customer-tracking-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
                     <div>
-                      <label htmlFor="customer-tracking-status" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                      <label htmlFor="customer-tracking-status" style={{ display: 'block', color: '#0369a1', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
                         Customer-facing Status
                       </label>
-                      <select
-                        id="customer-tracking-status"
-                        className="admin-select"
-                        value={trackingDraft}
-                        onChange={(event) => setTrackingDraft(event.target.value)}
-                        disabled={isUpdatingCustomerTracking}
-                        style={{ width: '100%' }}
-                      >
-                        {TRACKING_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.icon} {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="btn-primary btn-sm"
-                        onClick={handleCustomerTrackingSave}
-                        disabled={
-                          isUpdatingCustomerTracking ||
-                          (selectedEnquiry.customer_tracking_status || 'received') === trackingDraft
-                        }
-                        style={{ marginTop: '8px' }}
-                      >
-                        {isUpdatingCustomerTracking ? 'Updating…' : 'Update Tracking'}
-                      </button>
-                    </div>
-
-                    <div style={{ background: '#ffffff', border: '1px solid #dbeafe', borderRadius: '8px', padding: '10px 12px' }}>
-                      <span style={{ display: 'block', color: '#64748b', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
-                        Last Customer Tracking Update
-                      </span>
-                      {selectedEnquiry.customer_tracking_updated_by_name ? (
-                        <>
-                          <strong style={{ color: '#0f172a', fontSize: '0.88rem' }}>
-                            {selectedEnquiry.customer_tracking_updated_by_name}
-                          </strong>
-                          {selectedEnquiry.customer_tracking_updated_by_code && (
-                            <span style={{ display: 'block', color: '#0369a1', fontSize: '0.76rem', fontWeight: 600 }}>
-                              Code: {selectedEnquiry.customer_tracking_updated_by_code}
-                            </span>
-                          )}
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>
-                            {formatDateTime(selectedEnquiry.customer_tracking_updated_at)}
-                          </span>
-                        </>
-                      ) : (
-                        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>
-                          No staff update recorded yet.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Customer-facing visit details (engineer display contact, visit status, note) */}
-                  <div style={{ marginTop: '12px', borderTop: '1px solid #dbeafe', paddingTop: '10px' }}>
-                    <span style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
-                      Visit & Engineer Customer Details
-                    </span>
-                    <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', marginBottom: '8px' }}>
-                      The assigned engineer's registered phone number is shown to the customer automatically. Enter a number here only to override it, or leave it blank and save to hide the customer-visible contact. Private staff phone details are never exposed.
-                    </span>
-                    <div className="customer-tracking-grid" style={{ marginBottom: '8px' }}>
-                      <div>
-                        <label htmlFor="engineer-contact-display" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
-                          Engineer Contact (Customer-visible)
-                        </label>
-                        <input
-                          id="engineer-contact-display"
-                          type="text"
-                          className="admin-input"
-                          placeholder="Auto: engineer's registered phone. Enter to override, or blank to hide"
-                          value={visitDetailDraft.contact}
-                          maxLength={40}
-                          onChange={(event) => handleVisitDetailChange('contact', event.target.value)}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="visit-status-select" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
-                          Visit Status
-                        </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
                         <select
-                          id="visit-status-select"
+                          id="customer-tracking-status"
                           className="admin-select"
-                          value={visitDetailDraft.visitStatus}
-                          onChange={(event) => handleVisitDetailChange('visitStatus', event.target.value)}
-                          style={{ width: '100%' }}
-                          disabled={isSavingVisitDetails}
+                          value={trackingDraft}
+                          onChange={(event) => setTrackingDraft(event.target.value)}
+                          disabled={isUpdatingCustomerTracking}
+                          style={{ flex: 1, height: '34px', fontSize: '0.84rem' }}
                         >
-                          {VISIT_STATUS_OPTIONS.map((option) => (
+                          {TRACKING_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
-                              {option.label}
+                              {option.icon} {option.label}
                             </option>
                           ))}
                         </select>
-                      </div>
-                    </div>
-                    <label htmlFor="visit-progress-note" style={{ display: 'block', color: '#1e40af', fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
-                      Customer-facing Visit Note (optional)
-                    </label>
-                    <textarea
-                      id="visit-progress-note"
-                      className="admin-textarea"
-                      placeholder="Optional short note shown to the customer (max 400 characters)…"
-                      value={visitDetailDraft.note}
-                      maxLength={400}
-                      rows={2}
-                      onChange={(event) => handleVisitDetailChange('note', event.target.value)}
-                      style={{ width: '100%', resize: 'vertical' }}
-                      disabled={isSavingVisitDetails}
-                    />
-                    <button
-                      type="button"
-                      className="btn-primary btn-sm"
-                      onClick={handleVisitDetailsSave}
-                      disabled={isSavingVisitDetails || !hasVisitDetailChanges}
-                      style={{ marginTop: '8px' }}
-                    >
-                      {isSavingVisitDetails ? 'Saving…' : 'Save Visit Details'}
-                    </button>
-                  </div>
-
-                  {/* Step 2: Unified Chronological Timeline (Tracking History + Internal Activities) */}
-                  <div style={{ marginTop: '14px', borderTop: '1px solid #dbeafe', paddingTop: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        🕒 Unified Activity &amp; Tracking Timeline
-                      </span>
-                      <div style={{ display: 'flex', gap: '4px' }}>
                         <button
                           type="button"
-                          className="btn-outline btn-xs"
-                          onClick={() => setTimelineTab('all')}
-                          style={{
-                            fontSize: '0.74rem',
-                            padding: '2px 8px',
-                            background: timelineTab === 'all' ? '#dbeafe' : '#ffffff',
-                            color: timelineTab === 'all' ? '#1e40af' : '#64748b',
-                            fontWeight: timelineTab === 'all' ? 700 : 500,
-                            borderColor: timelineTab === 'all' ? '#93c5fd' : '#cbd5e1'
-                          }}
+                          className="btn-primary btn-sm"
+                          onClick={handleCustomerTrackingSave}
+                          disabled={
+                            isUpdatingCustomerTracking ||
+                            (selectedEnquiry.customer_tracking_status || 'received') === trackingDraft
+                          }
+                          style={{ whiteSpace: 'nowrap', height: '34px', padding: '0 10px', fontSize: '0.8rem' }}
                         >
-                          All ({unifiedTimeline.length})
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-outline btn-xs"
-                          onClick={() => setTimelineTab('tracking')}
-                          style={{
-                            fontSize: '0.74rem',
-                            padding: '2px 8px',
-                            background: timelineTab === 'tracking' ? '#dbeafe' : '#ffffff',
-                            color: timelineTab === 'tracking' ? '#1e40af' : '#64748b',
-                            fontWeight: timelineTab === 'tracking' ? 700 : 500,
-                            borderColor: timelineTab === 'tracking' ? '#93c5fd' : '#cbd5e1'
-                          }}
-                        >
-                          Customer Tracking ({customerTrackingHistory.length})
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-outline btn-xs"
-                          onClick={() => setTimelineTab('internal')}
-                          style={{
-                            fontSize: '0.74rem',
-                            padding: '2px 8px',
-                            background: timelineTab === 'internal' ? '#dbeafe' : '#ffffff',
-                            color: timelineTab === 'internal' ? '#1e40af' : '#64748b',
-                            fontWeight: timelineTab === 'internal' ? 700 : 500,
-                            borderColor: timelineTab === 'internal' ? '#93c5fd' : '#cbd5e1'
-                          }}
-                        >
-                          Internal Activities ({enquiryActivities.length})
+                          {isUpdatingCustomerTracking ? 'Updating…' : 'Update'}
                         </button>
                       </div>
-                    </div>
-
-                    {/* Compact Activity & Tracking Timeline Feed */}
-                    <div
-                      className="enquiry-activities-timeline unified-timeline-wrap"
-                      style={{
-                        maxHeight: '260px',
-                        overflowY: 'auto',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                        padding: '10px',
-                        background: '#f8fafc',
-                        marginBottom: '10px'
-                      }}
-                    >
-                      {isLoadingActivities ? (
-                        <div style={{ textAlign: 'center', padding: '12px', color: '#64748b', fontSize: '0.85rem' }}>
-                          ⏳ Loading activity timeline...
-                        </div>
-                      ) : unifiedTimeline.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '12px', color: '#94a3b8', fontSize: '0.85rem' }}>
-                          No activity or tracking records logged yet.
-                        </div>
-                      ) : (
-                        unifiedTimeline
-                          .filter((event) => timelineTab === 'all' || event.source === timelineTab)
-                          .map((ev) => (
-                            <div
-                              key={ev.id}
-                              className="timeline-event-card"
-                              style={{
-                                padding: '8px 10px',
-                                background: '#ffffff',
-                                borderRadius: '5px',
-                                border: '1px solid #e2e8f0',
-                                marginBottom: '6px'
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap', gap: '4px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span>{ev.icon}</span>
-                                  <span
-                                    style={{
-                                      fontSize: '0.7rem',
-                                      fontWeight: 700,
-                                      textTransform: 'uppercase',
-                                      color: ev.badgeColor,
-                                      background: ev.badgeBg,
-                                      padding: '1px 6px',
-                                      borderRadius: '3px'
-                                    }}
-                                  >
-                                    {ev.category}
-                                  </span>
-                                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>
-                                    {ev.author}
-                                  </span>
-                                  {ev.role && (
-                                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{ev.role}</span>
-                                  )}
-                                </div>
-                                <span style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-                                  {formatDateTime(ev.timestamp)}
-                                </span>
-                              </div>
-                              <p style={{ margin: 0, fontSize: '0.83rem', color: '#1e293b', whiteSpace: 'pre-wrap' }}>
-                                {ev.content}
-                              </p>
-                            </div>
-                          ))
+                      {selectedEnquiry.customer_tracking_updated_by_name && (
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '0.72rem', marginTop: '4px' }}>
+                          Updated by {selectedEnquiry.customer_tracking_updated_by_name} • {formatDateTime(selectedEnquiry.customer_tracking_updated_at)}
+                        </span>
                       )}
                     </div>
 
-                    {/* Add Follow-Up Note Form */}
-                    <form onSubmit={handleAddNote} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <textarea
-                        id="new-enquiry-note-input"
-                        className="modal-textarea"
-                        rows="1"
-                        placeholder="Record follow-up note (phone call, quotation reference, hardware availability)..."
-                        value={newNoteText}
-                        onChange={(e) => setNewNoteText(e.target.value)}
-                        style={{ flex: 1, resize: 'vertical', minHeight: '36px', fontSize: '0.84rem' }}
+                    <div>
+                      <label htmlFor="engineer-contact-display" style={{ display: 'block', color: '#0369a1', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                        Customer-visible Engineer Contact
+                      </label>
+                      <input
+                        id="engineer-contact-display"
+                        type="text"
+                        className="admin-input"
+                        placeholder="Auto: registered phone (blank hides contact)"
+                        value={visitDetailDraft.contact}
+                        maxLength={40}
+                        onChange={(event) => handleVisitDetailChange('contact', event.target.value)}
+                        style={{ width: '100%', height: '34px', fontSize: '0.84rem' }}
                       />
-                      <button
-                        type="submit"
-                        className="btn-primary btn-sm"
-                        id="save-new-note-btn"
-                        disabled={isSavingNote || !newNoteText.trim()}
-                        style={{ whiteSpace: 'nowrap', height: '36px', padding: '0 12px' }}
-                      >
-                        {isSavingNote ? 'Saving...' : '💾 Add Note'}
-                      </button>
-                    </form>
+                    </div>
+                  </div>
 
-                    {/* Hidden compatibility block preserving RBAC security test assertions */}
-                    <div style={{ display: 'none' }} aria-hidden="true">
-                      <div className="status-selector-row">
-                        {ENQUIRY_STATUSES.map((st) => (
-                          <button
-                            key={st.id}
-                            type="button"
-                            disabled={!isSuperadmin}
-                            className="status-select-btn"
-                            onClick={() => handleOpenStatusConfirm(selectedEnquiry, st.id)}
-                          >
-                            {st.label}
-                          </button>
+                  {/* Visit status & note row */}
+                  <div style={{ marginTop: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+                    <div>
+                      <label htmlFor="visit-status-select" style={{ display: 'block', color: '#0369a1', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                        Visit Status
+                      </label>
+                      <select
+                        id="visit-status-select"
+                        className="admin-select"
+                        value={visitDetailDraft.visitStatus}
+                        onChange={(event) => handleVisitDetailChange('visitStatus', event.target.value)}
+                        style={{ width: '100%', height: '34px', fontSize: '0.84rem' }}
+                        disabled={isSavingVisitDetails}
+                      >
+                        {VISIT_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="visit-progress-note" style={{ display: 'block', color: '#0369a1', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '4px' }}>
+                        Customer-facing Visit Note (optional)
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <input
+                          id="visit-progress-note"
+                          type="text"
+                          className="admin-input"
+                          placeholder="Short note shown to customer (max 400 chars)…"
+                          value={visitDetailDraft.note}
+                          maxLength={400}
+                          onChange={(event) => handleVisitDetailChange('note', event.target.value)}
+                          style={{ flex: 1, height: '34px', fontSize: '0.84rem' }}
+                          disabled={isSavingVisitDetails}
+                        />
+                        <button
+                          type="button"
+                          className="btn-primary btn-sm"
+                          onClick={handleVisitDetailsSave}
+                          disabled={isSavingVisitDetails || !hasVisitDetailChanges}
+                          style={{ whiteSpace: 'nowrap', height: '34px', padding: '0 10px', fontSize: '0.8rem' }}
+                        >
+                          {isSavingVisitDetails ? 'Saving…' : 'Save Details'}
+                        </button>
                       </div>
-                      <textarea
-                        id="enquiry-admin-notes-input"
-                        value={editingNotes}
-                        readOnly={!isSuperadmin}
-                        disabled={!isSuperadmin}
-                        onChange={(e) => setEditingNotes(e.target.value)}
-                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 2: Unified Chronological Timeline (Tracking History + Internal Activities) */}
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      🕒 Activity &amp; Tracking Timeline
+                    </span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
                       <button
                         type="button"
-                        id="save-notes-btn"
-                        onClick={handleSaveNotes}
+                        className="btn-outline btn-xs"
+                        onClick={() => setTimelineTab('all')}
+                        style={{
+                          fontSize: '0.72rem',
+                          padding: '2px 8px',
+                          background: timelineTab === 'all' ? '#dbeafe' : '#ffffff',
+                          color: timelineTab === 'all' ? '#1e40af' : '#64748b',
+                          fontWeight: timelineTab === 'all' ? 700 : 500,
+                          borderColor: timelineTab === 'all' ? '#93c5fd' : '#cbd5e1'
+                        }}
                       >
-                        Save Notes
+                        All ({unifiedTimeline.length})
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline btn-xs"
+                        onClick={() => setTimelineTab('tracking')}
+                        style={{
+                          fontSize: '0.72rem',
+                          padding: '2px 8px',
+                          background: timelineTab === 'tracking' ? '#dbeafe' : '#ffffff',
+                          color: timelineTab === 'tracking' ? '#1e40af' : '#64748b',
+                          fontWeight: timelineTab === 'tracking' ? 700 : 500,
+                          borderColor: timelineTab === 'tracking' ? '#93c5fd' : '#cbd5e1'
+                        }}
+                      >
+                        Customer Tracking ({customerTrackingHistory.length})
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline btn-xs"
+                        onClick={() => setTimelineTab('internal')}
+                        style={{
+                          fontSize: '0.72rem',
+                          padding: '2px 8px',
+                          background: timelineTab === 'internal' ? '#dbeafe' : '#ffffff',
+                          color: timelineTab === 'internal' ? '#1e40af' : '#64748b',
+                          fontWeight: timelineTab === 'internal' ? 700 : 500,
+                          borderColor: timelineTab === 'internal' ? '#93c5fd' : '#cbd5e1'
+                        }}
+                      >
+                        Internal Notes ({enquiryActivities.length})
                       </button>
                     </div>
+                  </div>
+
+                  {/* Compact Activity & Tracking Timeline Feed */}
+                  <div
+                    className="enquiry-activities-timeline unified-timeline-wrap"
+                    style={{
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '6px',
+                      padding: '8px',
+                      background: '#ffffff',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    {isLoadingActivities ? (
+                      <div style={{ textAlign: 'center', padding: '12px', color: '#64748b', fontSize: '0.85rem' }}>
+                        ⏳ Loading activity timeline...
+                      </div>
+                    ) : unifiedTimeline.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '12px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                        No activity or tracking records logged yet.
+                      </div>
+                    ) : (
+                      unifiedTimeline
+                        .filter((event) => timelineTab === 'all' || event.source === timelineTab)
+                        .map((ev) => (
+                          <div
+                            key={ev.id}
+                            className="timeline-event-card"
+                            style={{
+                              padding: '6px 10px',
+                              background: '#f8fafc',
+                              borderRadius: '5px',
+                              border: '1px solid #e2e8f0',
+                              marginBottom: '5px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px', flexWrap: 'wrap', gap: '4px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span>{ev.icon}</span>
+                                <span
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                    color: ev.badgeColor,
+                                    background: ev.badgeBg,
+                                    padding: '1px 5px',
+                                    borderRadius: '3px'
+                                  }}
+                                >
+                                  {ev.category}
+                                </span>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>
+                                  {ev.author}
+                                </span>
+                                {ev.role && (
+                                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{ev.role}</span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                                {formatDateTime(ev.timestamp)}
+                              </span>
+                            </div>
+                            <p style={{ margin: 0, fontSize: '0.82rem', color: '#1e293b', whiteSpace: 'pre-wrap' }}>
+                              {ev.content}
+                            </p>
+                          </div>
+                        ))
+                    )}
+                  </div>
+
+                  {/* Add Follow-Up Note Form */}
+                  <form onSubmit={handleAddNote} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      id="new-enquiry-note-input"
+                      type="text"
+                      className="admin-input"
+                      placeholder="Add internal follow-up note (phone call, quotation, availability)..."
+                      value={newNoteText}
+                      onChange={(e) => setNewNoteText(e.target.value)}
+                      style={{ flex: 1, height: '34px', fontSize: '0.84rem' }}
+                    />
+                    <button
+                      type="submit"
+                      className="btn-primary btn-sm"
+                      id="save-new-note-btn"
+                      disabled={isSavingNote || !newNoteText.trim()}
+                      style={{ whiteSpace: 'nowrap', height: '34px', padding: '0 12px', fontSize: '0.8rem' }}
+                    >
+                      {isSavingNote ? 'Saving...' : '💾 Add Note'}
+                    </button>
+                  </form>
+
+                  {/* Hidden compatibility block preserving RBAC security test assertions */}
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <div className="status-selector-row">
+                      {ENQUIRY_STATUSES.map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          disabled={!isSuperadmin}
+                          className="status-select-btn"
+                          onClick={() => handleOpenStatusConfirm(selectedEnquiry, st.id)}
+                        >
+                          {st.label}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      id="enquiry-admin-notes-input"
+                      value={editingNotes}
+                      readOnly={!isSuperadmin}
+                      disabled={!isSuperadmin}
+                      onChange={(e) => setEditingNotes(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      id="save-notes-btn"
+                      onClick={handleSaveNotes}
+                    >
+                      Save Notes
+                    </button>
                   </div>
                 </div>
 
@@ -4887,24 +4835,24 @@ export default function AdminEnquiriesPage() {
                     <div
                       className="admin-modal-footer customer-dispatch-footer"
                       style={{
-                        padding: '14px 20px',
+                        padding: '12px 18px',
                         borderTop: '1px solid #e2e8f0',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        gap: '12px',
+                        gap: '10px',
                         flexWrap: 'wrap'
                       }}
                     >
                       {/* Customer Communication Action Group */}
                       <div
                         className="customer-communication-actions"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}
                       >
-                        {/* 1. Circular Customer WhatsApp Button */}
                         <button
                           type="button"
                           id="customer-whatsapp-btn"
+                          className="btn-outline btn-sm"
                           onClick={handleCustomerWhatsApp}
                           disabled={!isCustWhatsAppValid}
                           title={
@@ -4913,68 +4861,42 @@ export default function AdminEnquiriesPage() {
                               : 'No valid customer WhatsApp number registered'
                           }
                           style={{
-                            width: '44px',
-                            height: '44px',
-                            minWidth: '44px',
-                            minHeight: '44px',
-                            borderRadius: '50%',
-                            border: 'none',
-                            background: isCustWhatsAppValid ? '#25D366' : '#94a3b8',
-                            color: '#ffffff',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: isCustWhatsAppValid ? 'pointer' : 'not-allowed',
-                            boxShadow: isCustWhatsAppValid ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
-                            padding: 0,
-                            transition: 'all 0.15s ease'
+                            gap: '5px',
+                            color: isCustWhatsAppValid ? '#15803d' : '#94a3b8',
+                            borderColor: isCustWhatsAppValid ? '#86efac' : '#e2e8f0',
+                            background: isCustWhatsAppValid ? '#f0fdf4' : '#f8fafc',
+                            fontWeight: 600,
+                            padding: '6px 12px',
+                            fontSize: '0.82rem'
                           }}
-                          aria-label="Send to customer on WhatsApp"
                         >
-                          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.974.554 1.777.818 2.796.818 3.182 0 5.767-2.587 5.768-5.767.001-3.182-2.585-5.768-5.768-5.768zm3.364 8.163c-.144.405-.837.774-1.17.822-.312.043-.687.065-2.039-.516-1.579-.679-2.617-2.313-2.696-2.417-.078-.104-.645-.859-.645-1.636 0-.777.408-1.161.553-1.32.145-.158.316-.198.421-.198.106 0 .211.002.303.007.098.005.228-.037.357.273.132.316.449 1.093.489 1.172.04.079.066.171.013.276-.052.106-.079.172-.158.264-.079.092-.167.206-.238.277-.079.079-.161.165-.07.321.092.158.409.675.877 1.092.602.537 1.109.704 1.267.783.158.079.25.066.342-.04.092-.105.395-.461.501-.619.105-.158.211-.132.356-.079.145.053.921.434 1.08.513.158.079.263.118.303.184.039.066.039.382-.105.787zm-3.364-10.335c-5.523 0-10 4.477-10 10 0 1.768.459 3.485 1.332 5.006l-1.417 5.176 5.309-1.392c1.47.803 3.129 1.226 4.776 1.226 5.522 0 10-4.477 10-10s-4.478-10-10-10zm0 18.232c-1.521 0-3.013-.41-4.316-1.184l-.309-.184-3.21.842.857-3.129-.202-.321c-.854-1.359-1.306-2.937-1.306-4.555 0-4.542 3.694-8.236 8.236-8.236 4.541 0 8.236 3.694 8.236 8.236 0 4.543-3.695 8.236-8.236 8.236z" />
-                          </svg>
+                          <span>💬</span> WhatsApp Customer
                         </button>
 
-                        {/* 2. Circular Customer Copy / Notepad Button */}
                         <button
                           type="button"
                           id="customer-copy-btn"
+                          className="btn-outline btn-sm"
                           onClick={handleCustomerCopy}
                           title={copyFeedback ? 'Service visit details copied!' : 'Copy customer service details'}
                           style={{
-                            width: '44px',
-                            height: '44px',
-                            minWidth: '44px',
-                            minHeight: '44px',
-                            borderRadius: '50%',
-                            border: 'none',
-                            background: copyFeedback ? '#16a34a' : '#0284c7',
-                            color: '#ffffff',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 4px rgba(2, 132, 199, 0.3)',
-                            padding: 0,
-                            transition: 'all 0.15s ease'
+                            gap: '5px',
+                            fontWeight: 600,
+                            padding: '6px 12px',
+                            fontSize: '0.82rem'
                           }}
-                          aria-label="Copy customer service details"
                         >
-                          {copyFeedback ? (
-                            <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>✓</span>
-                          ) : (
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                          )}
+                          <span>📋</span> {copyFeedback ? 'Copied!' : 'Copy Details'}
                         </button>
 
-                        {/* 3. Circular Customer Email Button */}
                         <button
                           type="button"
                           id="customer-email-btn"
+                          className="btn-outline btn-sm"
                           onClick={handleCustomerEmail}
                           disabled={!isCustEmailValid}
                           title={
@@ -4983,46 +4905,36 @@ export default function AdminEnquiriesPage() {
                               : 'No customer email registered'
                           }
                           style={{
-                            width: '44px',
-                            height: '44px',
-                            minWidth: '44px',
-                            minHeight: '44px',
-                            borderRadius: '50%',
-                            border: 'none',
-                            background: isCustEmailValid ? '#ea4335' : '#94a3b8',
-                            color: '#ffffff',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: isCustEmailValid ? 'pointer' : 'not-allowed',
-                            boxShadow: isCustEmailValid ? '0 2px 4px rgba(234, 67, 53, 0.3)' : 'none',
-                            padding: 0,
-                            transition: 'all 0.15s ease'
+                            gap: '5px',
+                            color: isCustEmailValid ? '#b91c1c' : '#94a3b8',
+                            borderColor: isCustEmailValid ? '#fca5a5' : '#e2e8f0',
+                            background: isCustEmailValid ? '#fef2f2' : '#f8fafc',
+                            fontWeight: 600,
+                            padding: '6px 12px',
+                            fontSize: '0.82rem'
                           }}
-                          aria-label="Email customer service details"
                         >
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                            <polyline points="22,6 12,13 2,6"></polyline>
-                          </svg>
+                          <span>✉️</span> Email Customer
                         </button>
                       </div>
 
                       {/* Close Button */}
                       <button
                         type="button"
-                        className="btn-outline"
+                        className="btn-outline btn-sm"
                         onClick={handleCloseDetails}
-                        style={{ minHeight: '44px', minWidth: '88px', padding: '8px 20px', fontSize: '14px' }}
+                        style={{ minWidth: '80px', padding: '6px 16px', fontWeight: 600, fontSize: '0.84rem' }}
                       >
                         Close
                       </button>
                     </div>
                   )
                 })()}
-              </div>
             </div>
-            )
+          </div>
+        )
       })()}
 
             {/* 6. Employee Rejection Request Prompt Modal */}
