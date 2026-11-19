@@ -77,6 +77,17 @@ export const APPROVED_PUBLIC_CATEGORY_COLUMNS = [
   'updated_at'
 ].join(', ')
 
+/**
+ * Product slug aliases for variant-grouped products.
+ * Seamlessly routes legacy/individual variant URLs to the canonical family product with the variant pre-selected.
+ */
+export const PRODUCT_SLUG_ALIASES = {
+  'cat6-rj45-gigabit-network-cable-10m': {
+    targetSlug: 'cat6-rj45-gigabit-ethernet-patch-cable-grey',
+    defaultVariantId: '10m'
+  }
+}
+
 // In-memory cache configuration
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 const REQUEST_TIMEOUT_MS = 10000 // 10 seconds network timeout to ensure reliable database responses
@@ -188,6 +199,23 @@ export function normalizeStaticCategories(categories) {
       badge: cat.badge || 'Popular',
       products: (cat.products || []).map((p) => {
         const merged = mergeProductContentFields({ ...p, staticDescription: p.description })
+        const productImages = Array.isArray(p.images) && p.images.length > 0 ? p.images : []
+        const rawVariants = Array.isArray(p.variants) && p.variants.length > 0 ? p.variants : null
+
+        const normalizedVariants = rawVariants
+          ? rawVariants.map((v) => {
+              const imgIndex =
+                typeof v.imageIndex === 'number' && v.imageIndex >= 0 && v.imageIndex < productImages.length
+                  ? v.imageIndex
+                  : 0
+              const variantImage = v.image || productImages[imgIndex] || productImages[0] || null
+              return {
+                ...v,
+                image: variantImage,
+                imageIndex: imgIndex
+              }
+            })
+          : null
 
         return {
           id: p.slug,
@@ -217,7 +245,10 @@ export function normalizeStaticCategories(categories) {
           categoryId: catSlug,
           categoryTitle: cat.title,
           categoryIcon: cat.icon || '💻',
-          images: Array.isArray(p.images) && p.images.length > 0 ? p.images : []
+          images: productImages,
+          variantSelectorLabel: p.variantSelectorLabel || null,
+          variantType: p.variantType || null,
+          variants: normalizedVariants
         }
       })
     }
@@ -353,6 +384,8 @@ export function getInstantCategoryBySlug(rawSlug) {
  */
 export function getInstantProductBySlug(productSlug) {
   if (!productSlug) return null
+  const alias = PRODUCT_SLUG_ALIASES[productSlug]
+  const targetSlug = alias?.targetSlug || productSlug
   const catalog = getInstantCatalog()
 
   if (!catalog || catalog.isEmpty || !catalog.categories || catalog.categories.length === 0) {
@@ -360,11 +393,12 @@ export function getInstantProductBySlug(productSlug) {
   }
 
   for (const cat of catalog.categories || []) {
-    const found = (cat.products || []).find((p) => p.slug === productSlug)
+    const found = (cat.products || []).find((p) => p.slug === targetSlug)
     if (found) {
       return {
         product: {
           ...found,
+          defaultVariantId: alias?.defaultVariantId || null,
           categoryId: cat.slug || cat.id,
           categoryTitle: cat.title,
           categoryIcon: cat.icon
@@ -641,14 +675,17 @@ export async function fetchCategoryBySlug(rawSlug, options = {}) {
  * Fetches a single product and its parent category by product slug.
  */
 export async function fetchProductBySlug(productSlug, options = {}) {
+  const alias = PRODUCT_SLUG_ALIASES[productSlug]
+  const targetSlug = alias?.targetSlug || productSlug
   const catalog = await fetchPublicCatalog(options)
 
   for (const cat of catalog.categories || []) {
-    const found = (cat.products || []).find((p) => p.slug === productSlug)
+    const found = (cat.products || []).find((p) => p.slug === targetSlug)
     if (found) {
       return {
         product: {
           ...found,
+          defaultVariantId: alias?.defaultVariantId || null,
           categoryId: cat.slug || cat.id,
           categoryTitle: cat.title,
           categoryIcon: cat.icon

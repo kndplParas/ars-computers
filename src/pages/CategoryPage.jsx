@@ -301,6 +301,14 @@ export default function CategoryPage() {
 
                             <p className="product-card-spec">{item.spec}</p>
 
+                            {item.variants && item.variants.length > 0 && (
+                              <div className="product-card-variants-badge">
+                                <span className="variants-badge-text">
+                                  {item.variantSelectorLabel ? item.variantSelectorLabel.replace(/^Select\s+/i, '') : 'Options'}: {item.variants.length} available ({item.variants.map((v) => v.label).slice(0, 3).join(', ')}{item.variants.length > 3 ? '…' : ''})
+                                </span>
+                              </div>
+                            )}
+
                             {((typeof item.price === 'number' && item.price > 0) ||
                               (typeof item.stock === 'number' && item.stock > 0)) && (
                               <div className="product-card-pricing-row">

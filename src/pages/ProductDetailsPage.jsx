@@ -49,14 +49,66 @@ export default function ProductDetailsPage() {
   const [isLoading, setIsLoading] = useState(() => !initialData?.product)
   const [error, setError] = useState(null)
   const [isRetrying, setIsRetrying] = useState(false)
-  const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [selectedVariantId, setSelectedVariantId] = useState(() => {
+    return initialData?.product?.defaultVariantId || initialData?.product?.variants?.[0]?.id || null
+  })
+  const [activeImageIndex, setActiveImageIndex] = useState(() => {
+    const defaultVarId = initialData?.product?.defaultVariantId
+    if (defaultVarId && Array.isArray(initialData?.product?.variants)) {
+      const v = initialData.product.variants.find((item) => item.id === defaultVarId)
+      if (typeof v?.imageIndex === 'number') return v.imageIndex
+    }
+    return 0
+  })
   const [prevSlug, setPrevSlug] = useState(slug)
   const { selected, isSelected, toggle, clear, isFull, maxSelection } = useProductSelection()
 
-  // Reset gallery selection when navigating to a new product
+  // Reset gallery and variant selection when navigating to a new product
   if (prevSlug !== slug) {
     setPrevSlug(slug)
-    setActiveImageIndex(0)
+    const defaultVarId = initialData?.product?.defaultVariantId
+    let initialImgIdx = 0
+    if (defaultVarId && Array.isArray(initialData?.product?.variants)) {
+      const v = initialData.product.variants.find((item) => item.id === defaultVarId)
+      if (typeof v?.imageIndex === 'number') initialImgIdx = v.imageIndex
+    }
+    setActiveImageIndex(initialImgIdx)
+    setSelectedVariantId(defaultVarId || initialData?.product?.variants?.[0]?.id || null)
+  }
+
+  // Synchronize variant when product data changes or receives defaultVariantId
+  useEffect(() => {
+    if (product?.variants && product.variants.length > 0) {
+      const targetVarId = product.defaultVariantId || selectedVariantId || product.variants[0].id
+      setSelectedVariantId(targetVarId)
+      const targetVar = product.variants.find((v) => v.id === targetVarId) || product.variants[0]
+      if (typeof targetVar?.imageIndex === 'number' && product?.images?.[targetVar.imageIndex]) {
+        setActiveImageIndex(targetVar.imageIndex)
+      }
+    } else {
+      setSelectedVariantId(null)
+    }
+  }, [product?.slug, product?.defaultVariantId, product?.variants])
+
+  const activeVariant =
+    product?.variants?.find((v) => v.id === selectedVariantId) ||
+    product?.variants?.[0] ||
+    null
+
+  const handleSelectVariant = (variant) => {
+    setSelectedVariantId(variant.id)
+    if (typeof variant.imageIndex === 'number' && product?.images?.[variant.imageIndex]) {
+      setActiveImageIndex(variant.imageIndex)
+    } else if (variant.image && Array.isArray(product?.images)) {
+      const idx = product.images.findIndex((img) => img === variant.image)
+      if (idx !== -1) setActiveImageIndex(idx)
+    }
+  }
+
+  const currentSpec = activeVariant?.spec || product?.spec
+  if (product && activeVariant) {
+    product.selectedVariant = activeVariant
+    product.currentSpec = currentSpec
   }
 
   // Retry handler for user clicks
@@ -367,6 +419,46 @@ export default function ProductDetailsPage() {
                     </p>
                   </div>
 
+                  {/* Variant Selector */}
+                  {product.variants && product.variants.length > 0 && (
+                    <div className="product-variant-selector-card">
+                      <div className="variant-selector-header">
+                        <span className="variant-selector-label">
+                          {product.variantSelectorLabel || 'Select Option'}:
+                        </span>
+                        <span className="variant-active-badge">
+                          {activeVariant?.label}
+                        </span>
+                      </div>
+                      <div
+                        className="variant-options-grid"
+                        role="radiogroup"
+                        aria-label={product.variantSelectorLabel || 'Product Options'}
+                      >
+                        {product.variants.map((v) => {
+                          const isSelectedOption = v.id === activeVariant?.id
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              className={`variant-option-chip ${isSelectedOption ? 'active' : ''}`}
+                              onClick={() => handleSelectVariant(v)}
+                              role="radio"
+                              aria-checked={isSelectedOption}
+                            >
+                              {v.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {activeVariant?.spec && (
+                        <p className="variant-active-spec-hint">
+                          <strong>Selected variant:</strong> {activeVariant.spec}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Primary CTA Buttons */}
                   <div className="product-cta-bar">
                     <WhatsAppButton
@@ -426,10 +518,10 @@ export default function ProductDetailsPage() {
                     ) : (
                       <p className="product-description-text muted">Product description is being updated by the admin.</p>
                     )}
-                    {product.spec && (
+                    {currentSpec && (
                       <div className="config-summary-callout">
                         <span className="config-summary-label">Configuration Summary</span>
-                        <p>{product.spec}</p>
+                        <p>{currentSpec}</p>
                       </div>
                     )}
                   </div>

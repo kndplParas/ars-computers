@@ -78,6 +78,19 @@ function buildProductBlock(product, { category = null, baseUrl, quantity = 1, in
     index ? `${index}. Product: ${name}` : `Product: ${name}`
   ]
 
+  if (product?.selectedVariant) {
+    const selectorLabel = clean(product?.variantSelectorLabel)
+    const variantLabel = selectorLabel.replace(/^Select\s+/i, '') || 'Option'
+    const variantVal = clean(
+      product.selectedVariant.label ||
+      product.selectedVariant.name ||
+      product.selectedVariant.id
+    )
+    if (variantVal) {
+      lines.push(`Selected ${variantLabel}: ${variantVal}`)
+    }
+  }
+
   if (reference) lines.push(`Product ID: ${reference}`)
   if (categoryLabel) lines.push(`Category: ${categoryLabel}`)
   if (brandModel) lines.push(`Brand/Model: ${brandModel}`)

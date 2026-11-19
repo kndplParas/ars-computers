@@ -881,6 +881,1039 @@ export const CATEGORIES = [
         description: 'High-grade BNC compression video connectors engineered for CCTV coaxial video termination, providing corrosion resistance and clean video transmission.',
         isGeneric: true,
         images: PRODUCT_IMAGES['heavy-duty-bnc-compression-video-connectors'] || []
+      },
+      // --- Extended Accessory & Hardware Products (76 Verified Items from 102 Assets) ---
+      {
+        slug: 'hdmi-to-micro-hdmi-cable',
+        name: 'HDMI to Micro-HDMI (Type-D) High-Speed Cable',
+        brand: 'Generic',
+        model: 'Type-A to Type-D High-Speed Cable',
+        spec: 'Full HD / 4K Video Output, Gold-Plated Connectors, 1.5m',
+        description: 'High-speed HDMI Type-A male to Micro-HDMI Type-D male cable for connecting cameras, action cams, tablets, and portable devices to monitors and TVs.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['hdmi-to-micro-hdmi-cable'] || []
+      },
+      {
+        slug: 'standard-male-to-male-hdmi-cable',
+        name: 'Standard High-Speed HDMI Male-to-Male Cable',
+        brand: 'Generic',
+        model: 'High-Speed 1080p/4K HDMI Series',
+        spec: 'Gold-Plated Connectors, 4K UHD 60Hz Support, Multi-Length Shielded',
+        description: 'High-speed HDMI male-to-male digital audio/video cable with gold-plated connectors and durable PVC shielding for PCs, laptops, consoles, and monitors.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['standard-male-to-male-hdmi-cable'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m',
+            label: '1.5m',
+            spec: '1.5m High-Speed HDMI Cable, 4K UHD 60Hz, Gold-Plated Plugs',
+            imageIndex: 0
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m High-Speed HDMI Cable, 4K UHD 60Hz, Gold-Plated Plugs',
+            imageIndex: 1
+          },
+          {
+            id: '5m',
+            label: '5m',
+            spec: '5m High-Speed HDMI Cable, 4K UHD 60Hz, Gold-Plated Plugs',
+            imageIndex: 2
+          },
+          {
+            id: '10m',
+            label: '10m',
+            spec: '10m High-Speed HDMI Cable, 4K UHD 60Hz, Double Shielded',
+            imageIndex: 3
+          },
+          {
+            id: '20m',
+            label: '20m',
+            spec: '20m Long-Distance HDMI Cable, 4K UHD 60Hz, Triple Shielded Heavy-Duty',
+            imageIndex: 4
+          }
+        ]
+      },
+      {
+        slug: 'terabyte-hd-2-0v-premium-hdmi-cable',
+        name: 'Terabyte HD 2.0V Premium High-Speed HDTV Cable 4K',
+        brand: 'Terabyte',
+        model: 'HD 2.0V Premium Series',
+        spec: 'HDMI 2.0 4K@60Hz, 18Gbps, HDR, ARC, 2160p Deep Color Support',
+        description: 'Terabyte certified high-speed HDMI 2.0 retail-packaged cable delivering 4K Ultra HD video, Audio Return Channel (ARC), and high dynamic range performance.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['terabyte-hd-2-0v-premium-hdmi-cable'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m',
+            label: '1.5m',
+            spec: '1.5m HDMI 2.0 4K@60Hz, 18Gbps, HDR, ARC, 2160p Deep Color',
+            imageIndex: 0
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m HDMI 2.0 4K@60Hz, 18Gbps, HDR, ARC, 2160p Deep Color',
+            imageIndex: 1
+          },
+          {
+            id: '5m',
+            label: '5m',
+            spec: '5m HDMI 2.0 4K@60Hz, 18Gbps, HDR, ARC, 2160p Deep Color',
+            imageIndex: 2
+          }
+        ]
+      },
+      {
+        slug: 'adnet-ad-001-laptop-power-cable',
+        name: 'ADNet 3-Pin Laptop Power Cable (AD-001)',
+        brand: 'ADNet',
+        model: 'AD-001',
+        spec: '3-Pin Indian Wall Plug to C5 Cloverleaf / Mickey Connector, Copper Core',
+        description: 'Genuine ADNet AD-001 3-pin laptop charger power cord with cloverleaf C5 connector, built with high-grade copper conductors for laptop adapter power delivery.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['adnet-ad-001-laptop-power-cable'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m',
+            label: '1.5m',
+            spec: '1.5m 3-Pin Indian Wall Plug to C5 Cloverleaf / Mickey Connector',
+            imageIndex: 0
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m 3-Pin Indian Wall Plug to C5 Cloverleaf / Mickey Connector',
+            imageIndex: 1
+          }
+        ]
+      },
+      {
+        slug: 'laptop-power-cable-c5-cloverleaf',
+        name: 'Universal 3-Pin C5 Cloverleaf Laptop Adapter Power Cord',
+        brand: 'Generic',
+        model: '3-Pin to C5 Cloverleaf Cord',
+        spec: 'Molded 3-Pin Indian Plug, C5 IEC Connector, 250V 6A Rated',
+        description: 'Universal replacement 3-pin power cord with C5 cloverleaf connector designed for laptop power adapters, desktop mini-PCs, and compatible electronics.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['laptop-power-cable-c5-cloverleaf'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m',
+            label: '1.5m',
+            spec: '1.5m Molded 3-Pin Indian Plug, C5 IEC Connector, 250V 6A Rated',
+            imageIndex: 0
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m Molded 3-Pin Indian Plug, C5 IEC Connector, 250V 6A Rated',
+            imageIndex: 1
+          }
+        ]
+      },
+      {
+        slug: 'desktop-pc-monitor-iec-c13-power-cable',
+        name: 'Heavy-Duty 3-Pin Desktop PC & Monitor Power Cable (IEC C13)',
+        brand: 'Generic',
+        model: '3-Pin to IEC C13 Power Cord',
+        spec: 'Molded Indian 3-Pin Plug to Female IEC C13, 250V 10A Heavy-Duty',
+        description: 'Standard 3-pin to IEC C13 heavy-duty power cable for desktop computer power supplies (SMPS), LED monitors, laser printers, and UPS connections.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['desktop-pc-monitor-iec-c13-power-cable'] || [],
+        variantSelectorLabel: 'Select Rating / Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m-standard',
+            label: '1.5m (10A)',
+            spec: '1.5m Molded Indian 3-Pin Plug to Female IEC C13, 250V 10A',
+            imageIndex: 0
+          },
+          {
+            id: '3m-standard',
+            label: '3m (10A)',
+            spec: '3m Molded Indian 3-Pin Plug to Female IEC C13, 250V 10A',
+            imageIndex: 1
+          },
+          {
+            id: '3m-heavy-duty',
+            label: '3m (16A Heavy-Duty)',
+            spec: '3m Heavy-Duty 16A Indian Plug to IEC C13, Server / High-Wattage SMPS',
+            imageIndex: 2
+          }
+        ]
+      },
+      {
+        slug: 'usb-2-0-type-a-male-to-female-extension-cable',
+        name: 'USB 2.0 Type-A Male to Female Extension Cable (White)',
+        brand: 'Generic',
+        model: 'USB 2.0 Extension Cable Series',
+        spec: 'USB 2.0 High-Speed 480Mbps, Nickel/Gold-Plated Connectors, White Jacket',
+        description: 'USB 2.0 extension cable allowing easy peripheral extension for mouse, keyboard, Wi-Fi dongles, pen drives, and printer cables.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-2-0-type-a-male-to-female-extension-cable'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m',
+            label: '1.5m',
+            spec: '1.5m USB 2.0 High-Speed 480Mbps, Nickel-Plated Connectors, White',
+            imageIndex: 0
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m USB 2.0 High-Speed 480Mbps, Nickel-Plated Connectors, White',
+            imageIndex: 1
+          },
+          {
+            id: '5m',
+            label: '5m',
+            spec: '5m USB 2.0 High-Speed 480Mbps, Signal Booster Choke, White',
+            imageIndex: 2
+          }
+        ]
+      },
+      {
+        slug: 'usb-2-0-type-a-to-type-b-printer-cable',
+        name: 'USB 2.0 Type-A to Type-B High-Speed Printer Cable',
+        brand: 'Generic',
+        model: 'USB-A to USB-B Printer Cable with Ferrite Core',
+        spec: 'USB 2.0 480Mbps Transmission, Dual Molded Ferrite Core Noise Suppression',
+        description: 'Reliable USB Type-A to Type-B printer and scanner cable featuring integrated ferrite core suppression to protect against EMI and signal loss during printing.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-2-0-type-a-to-type-b-printer-cable'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m',
+            label: '1.5m',
+            spec: '1.5m USB 2.0 480Mbps, Molded Ferrite Core Noise Suppression',
+            imageIndex: 0
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m USB 2.0 480Mbps, Dual Molded Ferrite Core Noise Suppression',
+            imageIndex: 1
+          },
+          {
+            id: '5m',
+            label: '5m',
+            spec: '5m USB 2.0 480Mbps, Dual Molded Ferrite Core Noise Suppression',
+            imageIndex: 2
+          }
+        ]
+      },
+      {
+        slug: 'usb-3-0-type-a-male-to-female-extension-cable',
+        name: 'USB 3.0 SuperSpeed Type-A Male to Female Extension Cable',
+        brand: 'Generic',
+        model: 'SuperSpeed USB 3.0 Extension Cable',
+        spec: 'USB 3.0 5Gbps Transfer Rate, Blue Core Connector, Foil & Braid Shielding',
+        description: 'SuperSpeed USB 3.0 extension cord offering up to 5Gbps data transfer speeds, backwards compatible with USB 2.0 for external hard drives and high-speed flash drives.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-3-0-type-a-male-to-female-extension-cable'] || []
+      },
+      {
+        slug: 'standard-15-pin-vga-monitor-cable-blue',
+        name: 'Standard 15-Pin SVGA / VGA Male-to-Male Monitor Cable',
+        brand: 'Generic',
+        model: '15-Pin D-Sub VGA Cable',
+        spec: '15-Pin D-Sub Male Connectors, Blue Molded Thumbscrews, 1080p Analog Video',
+        description: 'Standard 15-pin VGA cable for transmitting analog video signals between computers, graphics cards, projectors, and monitors.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['standard-15-pin-vga-monitor-cable-blue'] || []
+      },
+      {
+        slug: 'shielded-white-vga-cable-dual-ferrite',
+        name: 'Heavy-Duty Shielded VGA Monitor Cable with Dual Ferrite Cores (White)',
+        brand: 'Generic',
+        model: 'White Shielded VGA Monitor Cable',
+        spec: 'Dual Ferrite Choke Cores, Fully Shielded Coaxial Lines, White Molded Casing',
+        description: 'High-density shielded white VGA video cable equipped with dual ferrite noise-suppression chokes for flicker-free display output on CRT and LCD displays.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['shielded-white-vga-cable-dual-ferrite'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1-5m',
+            label: '1.5m',
+            spec: '1.5m Dual Ferrite Choke Cores, Fully Shielded Coaxial Lines, White',
+            imageIndex: 0
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m Dual Ferrite Choke Cores, Fully Shielded Coaxial Lines, White',
+            imageIndex: 1
+          }
+        ]
+      },
+      {
+        slug: 'gold-plated-15-pin-vga-cable-black',
+        name: 'Gold-Plated 15-Pin VGA Monitor Cable (Black)',
+        brand: 'Generic',
+        model: 'Gold-Plated 15-Pin SVGA Video Cable',
+        spec: 'Corrosion-Resistant Gold-Plated Contacts, Dual Thumbscrews, 1080p FHD Support',
+        description: 'Premium gold-plated 15-pin VGA video cable engineered for reliable contact conductivity and clear RGB analog display transmission.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['gold-plated-15-pin-vga-cable-black'] || []
+      },
+      {
+        slug: 'dlink-cat6-utp-patch-cable-2m',
+        name: 'D-Link CAT6 UTP Gigabit Network Patch Cable (2m)',
+        brand: 'D-Link',
+        model: 'NCB-C6UGRYR-2',
+        spec: 'CAT6 UTP 24 AWG, 1000Mbps Gigabit Transfer, 250MHz Bandwidth, 2m Length',
+        description: 'Genuine D-Link 2-meter Cat6 UTP network patch cord with RJ45 snagless connectors, factory verified for Gigabit ethernet speed in office and home networks.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['dlink-cat6-utp-patch-cable-2m'] || []
+      },
+      {
+        slug: 'cat6-rj45-gigabit-ethernet-patch-cable-grey',
+        name: 'CAT6 RJ45 Gigabit Ethernet Patch Cable (Grey)',
+        brand: 'Generic',
+        model: 'CAT6 UTP Patch Cord Series',
+        spec: 'Unshielded Twisted Pair (UTP), Molded Strain Relief RJ45 Plugs, Gigabit Rated',
+        description: 'Durable grey Cat6 RJ45 network patch cable designed for connecting routers, switches, patch panels, desktop computers, and network printers.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['cat6-rj45-gigabit-ethernet-patch-cable-grey'] || [],
+        variantSelectorLabel: 'Select Length',
+        variantType: 'length',
+        variants: [
+          {
+            id: '1m',
+            label: '1m',
+            spec: '1m Length, Molded Strain Relief RJ45 Plugs, Gigabit Rated',
+            imageIndex: 0
+          },
+          {
+            id: '2m',
+            label: '2m',
+            spec: '2m Length, Molded Strain Relief RJ45 Plugs, Gigabit Rated',
+            imageIndex: 1
+          },
+          {
+            id: '3m',
+            label: '3m',
+            spec: '3m Length, Molded Strain Relief RJ45 Plugs, Gigabit Rated',
+            imageIndex: 2
+          },
+          {
+            id: '10m',
+            label: '10m',
+            spec: '10m Long Distance Run, Molded RJ45 Plugs, Gigabit Rated',
+            imageIndex: 3
+          }
+        ]
+      },
+      {
+        slug: 'usb-to-internal-5pin-terminal-data-cable',
+        name: 'USB Type-A to Internal 5-Pin Terminal / Barcode Scanner Cable',
+        brand: 'Generic',
+        model: 'USB to 5-Pin JST Terminal Interface Cable',
+        spec: 'USB 2.0 Type-A Male to 5-Pin JST Connector, 1.8m Flexible Black Cable',
+        description: 'Specialized internal interface cable connecting USB Type-A host ports to internal 5-pin headers or compatible handheld POS barcode scanners.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-to-internal-5pin-terminal-data-cable'] || []
+      },
+      {
+        slug: 'amazonbasics-hdmi-male-to-female-extension-cable',
+        name: 'AmazonBasics High-Speed HDMI Extension Cable (Male to Female)',
+        brand: 'AmazonBasics',
+        model: 'High-Speed HDMI Extension Series',
+        spec: 'HDMI Male to HDMI Female Extender, Gold-Plated Connectors, 4K Video Support',
+        description: 'Genuine AmazonBasics high-speed HDMI male-to-female extension cord for extending reach of streaming sticks, gaming consoles, and TV wall mounts.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['amazonbasics-hdmi-male-to-female-extension-cable'] || []
+      },
+            {
+        slug: 'cctv-3-plus-1-coaxial-video-power-cable-roll',
+        name: 'CCTV 3+1 Shielded Coaxial Video & Power Cable Roll (White)',
+        brand: 'Generic',
+        model: 'RG59 3+1 Surveillance Coaxial Cable Roll',
+        spec: 'Solid Copper Coax Video Core, 3 Insulated Power Wires, High-Grade PVC Sheath',
+        description: 'Specialized 3+1 CCTV composite cable roll designed for analogue and HD-TVI/AHD/CVI CCTV installations, delivering crystal video and camera power over a single run.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['cctv-3-plus-1-coaxial-video-power-cable-roll'] || []
+      },
+      {
+        slug: 'hdmi-male-to-vga-female-adapter-with-audio',
+        name: 'HDMI Male to VGA Female Converter Adapter with 3.5mm Audio',
+        brand: 'Generic',
+        model: 'Active HDMI to VGA Audio Converter Dongle',
+        spec: 'Input HDMI Male, Output VGA Female + 3.5mm Stereo Audio Jack, 1080p Active IC',
+        description: 'Active digital HDMI to analog VGA video converter adapter with separate 3.5mm audio jack, enabling modern laptops and PCs to connect to VGA monitors and projectors.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['hdmi-male-to-vga-female-adapter-with-audio'] || []
+      },
+      {
+        slug: 'compact-hdmi-female-to-vga-male-adapter-converter',
+        name: 'Compact HDMI Female to VGA Male Direct-Plug Adapter with Audio & Power',
+        brand: 'Generic',
+        model: 'Direct Plug HDMI-In to VGA-Out Converter',
+        spec: 'HDMI Female Input, VGA Male Output, 3.5mm Audio Port, Micro-USB 5V Power Jack',
+        description: 'Compact direct-plug video converter turning HDMI signals into VGA display input, with built-in auxiliary audio port and micro-USB 5V power support.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['compact-hdmi-female-to-vga-male-adapter-converter'] || [],
+        variantSelectorLabel: 'Select Colour',
+        variantType: 'colour',
+        variants: [
+          {
+            id: 'black',
+            label: 'Black',
+            spec: 'Black Enclosure, HDMI Female to VGA Male, 3.5mm Audio Port, Micro-USB 5V',
+            imageIndex: 0
+          },
+          {
+            id: 'white',
+            label: 'White',
+            spec: 'White Enclosure, HDMI Female to VGA Male, 3.5mm Audio Port, Micro-USB 5V',
+            imageIndex: 1
+          }
+        ]
+      },
+      {
+        slug: 'usb-3-0-to-hdmi-1080p-display-adapter',
+        name: 'USB 3.0 to HDMI 1080P External Graphic Card Video Adapter',
+        brand: 'Generic',
+        model: 'USB 3.0 Multi-Display HDMI Converter',
+        spec: 'USB 3.0 5Gbps Host Interface, 1080p FHD 60Hz HDMI Output, Metal Casing',
+        description: 'External USB 3.0 display graphics adapter for adding a second HDMI monitor, TV, or projector to laptops and desktop PCs without needing an internal graphics card upgrade.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-3-0-to-hdmi-1080p-display-adapter'] || []
+      },
+      {
+        slug: 'hdmi-female-to-female-coupler-extender',
+        name: 'HDMI Female to Female Coupler Gender Changer Extender Adapter',
+        brand: 'Generic',
+        model: 'Gold-Plated HDMI F/F Joiner Adapter',
+        spec: 'Dual HDMI Type-A Female Ports, Gold-Plated Contacts, Molded Grip Casing',
+        description: 'Compact gold-plated HDMI female-to-female barrel coupler joiner designed to join two HDMI cables together for extended length without signal degradation.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['hdmi-female-to-female-coupler-extender'] || []
+      },
+      {
+        slug: 'vga-1-male-to-2-female-y-splitter-cable',
+        name: 'VGA 1 Male to 2 Female Dual Monitor Y-Splitter Video Cable',
+        brand: 'Generic',
+        model: '15-Pin VGA Screen Mirroring Y-Cable',
+        spec: '1x VGA 15-Pin Male to 2x VGA 15-Pin Female, Integrated Ferrite Cores',
+        description: 'VGA Y-splitter cable designed to replicate and send identical video signals from one computer VGA port to two separate VGA monitors or projectors simultaneously.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['vga-1-male-to-2-female-y-splitter-cable'] || []
+      },
+      {
+        slug: 'rca-3-male-to-3-female-av-extension-cable',
+        name: '3 RCA Male to 3 RCA Female Composite Audio/Video Extension Cable',
+        brand: 'Generic',
+        model: 'Triple RCA AV Extension Cable',
+        spec: 'Yellow (Video), Red & White (Stereo Audio), Molded Strain Relief Connectors',
+        description: 'Composite 3-RCA male to female audio/video extension cable for extending set-top box, DVD, CCTV monitor, and home entertainment system connections.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['rca-3-male-to-3-female-av-extension-cable'] || []
+      },
+      {
+        slug: 'mini-vga-to-hdmi-1080p-video-converter-box',
+        name: 'Mini VGA to HDMI 1080P Scaler Video Converter Box (VGA2HDMI)',
+        brand: 'Generic',
+        model: 'VGA2HDMI Mini Video Scaler Box',
+        spec: 'VGA + 3.5mm Audio Input to HDMI 720p/1080p Output, USB 5V Powered',
+        description: 'Mini VGA2HDMI converter box that up-scales analog PC VGA video and 3.5mm audio into pure digital HDMI output for modern smart TVs and monitors.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['mini-vga-to-hdmi-1080p-video-converter-box'] || []
+      },
+      {
+        slug: 'mini-hdmi-to-av-rca-video-converter-box',
+        name: 'Mini HDMI to AV RCA Composite Video Audio Converter Box (HDMI2AV)',
+        brand: 'Generic',
+        model: 'HDMI2AV Mini Video Converter Box',
+        spec: 'HDMI Digital Input, 3-RCA Composite Output, PAL/NTSC Switch, USB 5V Powered',
+        description: 'HDMI2AV converter box converting high-definition digital HDMI signals into standard composite RCA (Yellow/Red/White) for older CRT TVs and AV receivers.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['mini-hdmi-to-av-rca-video-converter-box'] || []
+      },
+      {
+        slug: 'mini-av-rca-to-vga-video-converter-box',
+        name: 'Mini AV RCA Composite to VGA Video Converter Box (AV2VGA)',
+        brand: 'Generic',
+        model: 'AV2VGA Mini Video Converter Box',
+        spec: 'RCA Composite Video Input (CVBS + L/R), VGA Output, USB 5V Powered',
+        description: 'Compact AV2VGA converter box allowing CCTV cameras, gaming consoles, and set-top boxes with RCA output to connect directly to standard PC VGA monitors.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['mini-av-rca-to-vga-video-converter-box'] || []
+      },
+      {
+        slug: 'mini-av-rca-to-hdmi-1080p-scaler-converter-box',
+        name: 'Mini AV RCA to HDMI 1080P Up Scaler Video Converter Box (AV2HDMI)',
+        brand: 'Generic',
+        model: 'AV2HDMI Mini Video Scaler Box',
+        spec: 'Composite RCA Audio/Video Input, HDMI 720p/1080p Output, 5V USB Powered',
+        description: 'Mini AV2HDMI video converter processing legacy analog composite RCA signals into crisp 1080p HDMI digital output for modern displays.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['mini-av-rca-to-hdmi-1080p-scaler-converter-box'] || []
+      },
+      {
+        slug: 'hdmi-1-male-to-2-female-dual-splitter-cable',
+        name: 'HDMI 1 Male to 2 Female Dual Port Splitter Adapter Cable (30cm)',
+        brand: 'Generic',
+        model: '1 In 2 Out HDMI Video Splitter Cable',
+        spec: '1x HDMI Male to 2x HDMI Female, Gold-Plated Ports, 30cm Cable Length',
+        description: 'Short HDMI dual-output splitter adapter cable designed to distribute a single HDMI video source to two connected display ports.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['hdmi-1-male-to-2-female-dual-splitter-cable'] || []
+      },
+      {
+        slug: 'usb-type-c-3-in-1-multiport-adapter-silver',
+        name: 'USB Type-C 3-in-1 Multiport Hub Adapter (4K HDMI + USB 3.0 + Type-C PD)',
+        brand: 'Generic',
+        model: 'Type-C 3-in-1 Aluminum Adapter',
+        spec: '4K UHD HDMI Output, USB 3.0 5Gbps Port, USB-C 60W Power Delivery Pass-Through',
+        description: 'Sleek aluminum USB-C hub offering simultaneous 4K HDMI video out, USB 3.0 flash drive connection, and fast USB-C PD device charging.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-type-c-3-in-1-multiport-adapter-silver'] || []
+      },
+      {
+        slug: 'fentico-displayport-male-to-vga-female-adapter',
+        name: 'Fentico DisplayPort Male to VGA Female Active Converter Adapter',
+        brand: 'Fentico',
+        model: 'DP to VGA Active Converter',
+        spec: 'Gold-Plated DisplayPort Male, 15-Pin VGA Female, 1080p FHD 60Hz Support',
+        description: 'Fentico branded active DisplayPort to VGA converter adapter enabling DisplayPort-equipped desktop towers and laptops to display video on VGA monitors.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['fentico-displayport-male-to-vga-female-adapter'] || []
+      },
+      {
+        slug: 'usb-type-c-to-hdmi-4k-display-adapter-silver',
+        name: 'USB Type-C to HDMI 4K UHD Video Display Adapter (Silver Aluminum)',
+        brand: 'Generic',
+        model: 'Type-C to HDMI Video Converter Dongle',
+        spec: 'USB 3.1 Type-C Input, 4K@30Hz / 1080p@60Hz HDMI Output, Aluminum Alloy Shell',
+        description: 'Portable aluminum USB Type-C to HDMI converter dongle for mirroring or extending MacBook, Windows laptop, or smartphone screens to 4K displays.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-type-c-to-hdmi-4k-display-adapter-silver'] || []
+      },
+      {
+        slug: 'displayport-male-to-hdmi-female-adapter-cable',
+        name: 'DisplayPort Male to HDMI Female Video Converter Adapter Cable',
+        brand: 'Generic',
+        model: 'DP Male to HDMI Female Converter Cable',
+        spec: 'Latching DisplayPort Connector, HDMI Female Jack, 1080p FHD Audio/Video Pass',
+        description: 'DisplayPort to HDMI adapter cable with secure latching DP plug, facilitating easy connection between PC graphics cards and standard HDMI monitor cables.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['displayport-male-to-hdmi-female-adapter-cable'] || []
+      },
+      {
+        slug: 'usb-2-0-hdmi-1080p-video-capture-card-dongle',
+        name: 'USB 2.0 Full HD 1080P HDMI Video Capture Card Dongle',
+        brand: 'Generic',
+        model: 'HDMI to USB 2.0 Video Capture Dongle',
+        spec: 'HDMI Video Input (up to 4K), USB 2.0 1080p Recording Output, UVC/UAC Compliant',
+        description: 'Compact USB HDMI video capture dongle for live streaming, console gameplay capture, DSLR camera web-conferencing, and medical/educational recording.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-2-0-hdmi-1080p-video-capture-card-dongle'] || []
+      },
+      {
+        slug: 'usb-2-0-4-port-hub-with-switches',
+        name: '4-Port USB 2.0 Hub with Individual Power Switches & LED Indicators',
+        brand: 'Generic',
+        model: '4-Port Switched USB 2.0 Hub',
+        spec: '4x USB 2.0 480Mbps Ports, Individual Toggle Switches, Power Status LEDs',
+        description: 'Multi-port USB 2.0 desktop hub featuring independent on/off rocker switches and LED indicators for each port, eliminating frequent unplugging.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-2-0-4-port-hub-with-switches'] || []
+      },
+      {
+        slug: 'sata-2-5-inch-hdd-ssd-enclosure-black',
+        name: '2.5-Inch SATA to USB External Hard Drive / SSD Enclosure Casing (Black)',
+        brand: 'Generic',
+        model: '2.5" SATA External HDD/SSD Enclosure',
+        spec: 'SATA I/II/III Interface, USB 2.0/3.0 Connection, Tool-Free Slide Design',
+        description: 'Protective black external hard drive enclosure case converting any 2.5-inch laptop SATA HDD or solid-state drive into a portable plug-and-play external drive.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['sata-2-5-inch-hdd-ssd-enclosure-black'] || [],
+        variantSelectorLabel: 'Select Interface',
+        variantType: 'interface',
+        variants: [
+          {
+            id: 'usb-2-0',
+            label: 'USB 2.0 (480Mbps)',
+            spec: 'SATA I/II to USB 2.0 480Mbps Interface, Tool-Free Slide Enclosure',
+            imageIndex: 0
+          },
+          {
+            id: 'usb-3-0',
+            label: 'USB 3.0 (SuperSpeed 5Gbps)',
+            spec: 'SATA III to USB 3.0 5Gbps with UASP Support, Tool-Free Slide Enclosure',
+            imageIndex: 2
+          }
+        ]
+      },
+      {
+        slug: 'transparent-2-5-inch-sata-usb-3-0-enclosure',
+        name: 'Transparent 2.5-Inch SATA to USB 3.0 Tool-Free HDD/SSD Enclosure',
+        brand: 'Generic',
+        model: 'Clear Acrylic 2.5" SATA Hard Drive Case',
+        spec: 'SuperSpeed USB 3.0 5Gbps, Transparent PC Body, SATA III 6Gbps UASP Support',
+        description: 'Crystal clear 2.5-inch SATA hard drive enclosure made of transparent shockproof polycarbonate, featuring tool-free slide installation and USB 3.0 transfer rates.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['transparent-2-5-inch-sata-usb-3-0-enclosure'] || []
+      },
+      {
+        slug: 'cr2032-3v-lithium-coin-cell-batteries-pack',
+        name: 'CR2032 3V Lithium Coin Cell Motherboard CMOS Batteries (Pack of 5)',
+        brand: 'Generic',
+        model: 'CR2032 3V Lithium Cell',
+        spec: '3.0V Nominal Voltage, 220mAh Capacity, Anti-Leak Lithium Technology',
+        description: 'High-reliability CR2032 3V lithium coin cell batteries ideal for desktop motherboard CMOS BIOS backup, digital weighing scales, car key fobs, and calculators.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['cr2032-3v-lithium-coin-cell-batteries-pack'] || []
+      },
+      {
+        slug: 'compact-4-port-usb-hub-block-expander',
+        name: 'Compact 4-Port USB 2.0 Hub Block Expander',
+        brand: 'Generic',
+        model: '4-Port Multi-Angle USB Expander',
+        spec: '4x USB 2.0 Type-A Ports (1 Top + 3 Side), Ultra-Compact Black Block Housing',
+        description: 'Ultra-compact rectangular 4-port USB 2.0 splitter hub designed to expand crowded laptop USB ports for mice, keyboards, and flash drives.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['compact-4-port-usb-hub-block-expander'] || []
+      },
+      {
+        slug: 'usb-to-rs232-db9-serial-adapter-cable',
+        name: 'USB 2.0 to RS232 DB9 9-Pin Serial COM Port Adapter Cable (Translucent Blue)',
+        brand: 'Generic',
+        model: 'USB to DB9 Serial Adapter (CH340 / HL-340)',
+        spec: 'USB Type-A Male to DB9 Male Serial Port, Gold-Plated Pins, Transparent Blue Mold',
+        description: 'USB to RS-232 9-pin serial COM port converter cable for connecting CNC machines, modems, barcode scanners, PLCs, and network routers to modern PCs.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['usb-to-rs232-db9-serial-adapter-cable'] || []
+      },
+      {
+        slug: 'ranz-3-in-1-screen-cleaning-kit',
+        name: 'Ranz 3-in-1 Screen & Laptop Cleaning Kit (Spray + Cloth + Brush)',
+        brand: 'Ranz',
+        model: 'Expert on Cleaning Screen 3-in-1 Kit',
+        spec: 'Anti-Static Liquid Cleaner Spray, Soft Microfiber Cloth, Antistatic Keyboard Brush',
+        description: 'Genuine Ranz 3-in-1 professional screen cleaning kit safely removing fingerprints, dust, and grime from laptop screens, LED monitors, and mobile displays.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['ranz-3-in-1-screen-cleaning-kit'] || []
+      },
+      {
+        slug: 'super-clean-high-tech-cleaning-gel-pouch',
+        name: 'Super Clean High-Tech Keyboard & Laptop Cleaning Compound Gel',
+        brand: 'Super Clean',
+        model: 'High-Tech Cleaning Compound Pouch',
+        spec: '80g Biodegradable Dust-Absorbing Compound, Reusable Gel Formula',
+        description: 'Super Clean flexible keyboard cleaning slime gel designed to reach deep inside keyboard keys, car air vents, and delicate computer equipment to capture trapped dust.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['super-clean-high-tech-cleaning-gel-pouch'] || []
+      },
+      {
+        slug: 'kizma-3-in-1-super-cleaning-kit',
+        name: 'Kizma 3-in-1 Super Cleaning Kit with 100ml Screen Spray',
+        brand: 'Kizma',
+        model: '3-in-1 Super Cleaning Kit',
+        spec: '100ml Screen & Shine Spray, Large Microfiber Towel, Ergonomic Dust Brush',
+        description: 'Kizma 3-in-1 multi-device cleaning kit designed for sanitizing and polishing laptop screens, television monitors, cameras, and computer keyboards.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['kizma-3-in-1-super-cleaning-kit'] || []
+      },
+      {
+        slug: 'passive-hdcvi-tvi-ahd-cctv-video-balun-pair',
+        name: 'Passive HDCVI / HDTVI / AHD CCTV Video Balun Transceiver Pair',
+        brand: 'Generic',
+        model: '1-Channel Passive HD Video Balun Pair',
+        spec: 'BNC Male with Pigtail to Push-Pin Terminal, Supports AHD/CVI/TVI up to 4MP/5MP',
+        description: 'Passive 1-channel HD CCTV video balun transceiver pair allowing high-definition security camera transmission over standard CAT5/CAT6 UTP cables over long distances.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['passive-hdcvi-tvi-ahd-cctv-video-balun-pair'] || []
+      },
+      {
+        slug: 'wireless-n-950m-mini-usb-wifi-adapter',
+        name: '802.11N 950M Wireless-N Mini USB Wi-Fi Nano Adapter',
+        brand: 'Generic',
+        model: 'OT-WUA950NM',
+        spec: '802.11b/g/n 2.4GHz Band, Up to 950Mbps Theoretical Throughput, USB 2.0 Nano Dongle',
+        description: 'Ultra-compact 802.11N USB Wi-Fi adapter providing wireless desktop internet connectivity and high-speed local network access with soft-AP support.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['wireless-n-950m-mini-usb-wifi-adapter'] || []
+      },
+      {
+        slug: 'microfiber-cleaning-cloths-multi-color-pack',
+        name: 'Soft Microfiber Cleaning & Polishing Cloths (Multi-Color Pack)',
+        brand: 'Generic',
+        model: 'Serrated Edge Microfiber Cleaning Cloth Pack',
+        spec: 'Non-Abrasive Lint-Free Microfiber Fabric, Zigzag Edge Weave, Multi-Color Assortment',
+        description: 'Premium lint-free microfiber cleaning cloths engineered for scratch-free wiping of laptop screens, smartphone glass, camera lenses, and monitor displays.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['microfiber-cleaning-cloths-multi-color-pack'] || []
+      },
+      {
+        slug: 'bluetooth-5-0-usb-nano-dongle-adapter',
+        name: 'Bluetooth 5.0 USB Nano Dongle Wireless Receiver Adapter',
+        brand: 'Generic',
+        model: 'Bluetooth 5.0 USB Dongle (V5.0)',
+        spec: 'Bluetooth 5.0 + EDR, 20m Operating Range, Plug-and-Play Windows/PC Support',
+        description: 'Low-latency Bluetooth 5.0 USB nano adapter enabling desktop computers and non-Bluetooth laptops to pair with wireless headphones, speakers, keyboards, and mice.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['bluetooth-5-0-usb-nano-dongle-adapter'] || []
+      },
+      {
+        slug: 'cctv-bnc-male-pigtail-coaxial-cables-10pack',
+        name: 'CCTV BNC Male Video Connector Coaxial Pigtail Cables (Pack of 10)',
+        brand: 'Generic',
+        model: 'BNC Male Coaxial Video Pigtail 10-Pack',
+        spec: '10x BNC Male Plug with Pre-Stripped Copper Coax Leads, White Insulated Wire',
+        description: 'Convenient 10-pack of pre-crimped BNC male video pigtail wires for quick CCTV camera repair, custom coaxial termination, and DVR board wiring.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['cctv-bnc-male-pigtail-coaxial-cables-10pack'] || []
+      },
+      {
+        slug: 'intel-stock-lga115x-cpu-cooler-fan',
+        name: 'Intel Stock CPU Heatsink Cooler Fan (LGA 115x Sockets)',
+        brand: 'Intel',
+        model: 'E97379-003 (Delta 12V DC)',
+        spec: 'LGA 1150 / 1151 / 1155 / 1156 Compatible, Aluminum Core, 4-Pin PWM Fan Connector',
+        description: 'Genuine Intel OEM stock heatsink cooler fan with push-pin mounting and copper/aluminum heat dissipation core for Core i3/i5/i7 desktop processors.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['intel-stock-lga115x-cpu-cooler-fan'] || []
+      },
+      {
+        slug: 'dt830d-digital-multimeter-with-probes',
+        name: 'DT830D Compact Digital Multimeter with Testing Probes',
+        brand: 'Generic',
+        model: 'DT830D',
+        spec: 'AC/DC Voltage, DC Current, Resistance, Continuity Buzzer, Transistor hFE Tester',
+        description: 'Essential DT830D digital multimeter with red and black probe leads for troubleshooting computer motherboards, power supplies, cables, and electronic components.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['dt830d-digital-multimeter-with-probes'] || []
+      },
+      {
+        slug: 'cctv-12v-dc-male-power-pigtail-connectors-10pack',
+        name: 'CCTV 12V DC Male Power Pigtail Connector Cables 2.1x5.5mm (Pack of 10)',
+        brand: 'Generic',
+        model: '12V DC Male Pigtail 10-Pack',
+        spec: '10x 2.1mm x 5.5mm DC Barrel Male Plugs, Pre-Stripped Red/Black Wire Ends',
+        description: 'Pack of 10 heavy-duty 12V DC male power pigtail cables for connecting CCTV security cameras to centralized power supply distribution boxes.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['cctv-12v-dc-male-power-pigtail-connectors-10pack'] || []
+      },
+      {
+        slug: 'thermaltake-cpu-cooler-fan-lga775-115x',
+        name: 'Thermaltake CPU Heatsink Cooler Fan (Screw Mount)',
+        brand: 'Thermaltake',
+        model: 'Silent Radial Aluminum CPU Cooler',
+        spec: 'Screw-and-Spring Backplate Mounting, Aluminum Extrusion Fin Array, 12V DC Fan',
+        description: 'Reliable Thermaltake radial aluminum CPU heatsink fan with heavy-duty spring screws for vibration-free processor cooling on desktop motherboards.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['thermaltake-cpu-cooler-fan-lga775-115x'] || []
+      },
+      {
+        slug: 'rj45-rj11-network-cable-crimping-tool-with-stripper',
+        name: '3-in-1 RJ45 / RJ11 Modular Network Cable Crimping Tool with Stripper',
+        brand: 'Generic',
+        model: '8P8C / 6P4C Modular Crimper',
+        spec: 'Hardened Carbon Steel Jaws, Integrated Wire Cutter & Jacket Stripper, Ergonomic Grip',
+        description: 'Professional 3-in-1 network crimping tool for cutting, stripping, and terminating 8P8C RJ45 and 6P4C RJ11 connectors on Ethernet and telephone cables.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['rj45-rj11-network-cable-crimping-tool-with-stripper'] || []
+      },
+      {
+        slug: 'universal-sata-2nd-hdd-caddy',
+        name: 'Universal SATA 2nd HDD / SSD Optical Drive Bay Caddy (9.5mm / 12.7mm)',
+        brand: 'Generic',
+        model: 'Second HDD Caddy Series',
+        spec: 'SATA to SATA Interface, Fits 2.5" SSD/HDD, Complete with Screws & Screwdriver',
+        description: 'Universal aluminum 2nd HDD caddy replacing your laptop internal DVD/CD optical drive with an additional 2.5-inch SATA solid-state drive or hard drive.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['universal-sata-2nd-hdd-caddy'] || [],
+        variantSelectorLabel: 'Select Thickness',
+        variantType: 'thickness',
+        variants: [
+          {
+            id: '9-5mm',
+            label: '9.5mm (Ultra-Slim)',
+            spec: '9.5mm Optical Drive Bay Thickness, SATA to SATA, Fits 2.5" SSD/HDD',
+            imageIndex: 0
+          },
+          {
+            id: '12-7mm',
+            label: '12.7mm (Standard)',
+            spec: '12.7mm Optical Drive Bay Thickness, SATA to SATA, Fits 2.5" SSD/HDD',
+            imageIndex: 1
+          }
+        ]
+      },
+      {
+        slug: 'dc-power-adapter-9v-1a-barrel-jack',
+        name: '9V 1A DC Regulated Power Supply Adapter (Indian 2-Pin Plug)',
+        brand: 'Generic',
+        model: '9V 1A DC Power Adapter (5.5x2.5mm / 5.5x2.1mm)',
+        spec: 'Input 100-240V AC, Output 9V DC 1A Regulated, 5.5mm Barrel Connector',
+        description: 'Standard 9V 1A regulated DC power supply adapter with Indian 2-pin wall plug and 5.5mm DC barrel jack, compatible with modems, optical network terminals (ONT), routers, and electronic equipment.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['dc-power-adapter-9v-1a-barrel-jack'] || []
+      },
+      {
+        slug: 'dc-power-adapter-12v-2a-barrel-jack',
+        name: '12V 2A DC Regulated Power Supply Adapter (Indian 2-Pin Plug)',
+        brand: 'Generic',
+        model: '12V 2A DC Power Adapter (5.5x2.5mm / 5.5x2.1mm)',
+        spec: 'Input 100-240V AC, Output 12V DC 2A Regulated (24W), 5.5mm Barrel Connector',
+        description: 'Standard 12V 2A regulated DC power adapter with Indian 2-pin wall plug and 5.5mm DC barrel connector, engineered for CCTV cameras, DVR systems, Wi-Fi routers, LED strips, and 12V peripherals.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['dc-power-adapter-12v-2a-barrel-jack'] || []
+      },
+      {
+        slug: 'extended-gaming-mouse-pad-desk-mat',
+        name: 'Extended Gaming Mouse Pad & Keyboard Desk Mat (Black with Blue Border)',
+        brand: 'Generic',
+        model: 'XL Extended Gaming Desk Mat',
+        spec: 'Smooth Micro-Weave Fabric Surface, Anti-Fray Stitched Blue Border, Non-Slip Base',
+        description: 'Extra-large gaming desk mat providing expansive tracking space for both keyboard and mouse, with non-slip rubber base and reinforced stitched edges.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['extended-gaming-mouse-pad-desk-mat'] || []
+      },
+      {
+        slug: 'scenic-nature-printed-optical-mousepad',
+        name: 'Scenic Nature Printed Optical Mousepad',
+        brand: 'Generic',
+        model: 'Printed Rubber Base Mousepad',
+        spec: 'Vibrant High-Resolution Fabric Print, Non-Slip Rubber Base, Standard Desktop Size',
+        description: 'Standard office fabric mousepad with scenic landscape print and high-traction rubber backing ensuring smooth mouse gliding and desk stability.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['scenic-nature-printed-optical-mousepad'] || []
+      },
+      {
+        slug: 'logitech-retro-logo-gaming-mousepad',
+        name: 'Logitech Retro Logo Non-Slip Gaming Mousepad',
+        brand: 'Logitech',
+        model: 'Classic Logo Series Mousepad',
+        spec: 'Textured Fabric Glide Surface, Natural Rubber Anti-Skid Base, Classic Logo Graphic',
+        description: 'Durable black desktop mousepad featuring classic green/orange Logitech emblem graphic, providing precise optical sensor tracking.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['logitech-retro-logo-gaming-mousepad'] || []
+      },
+      {
+        slug: 'micro-wolf-hunter-l-16-gaming-mouse-pad',
+        name: 'Micro Wolf Hunter Precision Gaming Mouse Pad (Model L-16)',
+        brand: 'Micro Wolf',
+        model: 'Hunter L-16 Silk-Gliding Series',
+        spec: 'Precision Speed-Type Gaming Surface, Anti-Fray Stitched Edges, Retail Bagged',
+        description: 'Micro Wolf Hunter L-16 precision gaming mousepad designed with a high-density silk-gliding textile surface for rapid mouse movements and pixel-perfect aim.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['micro-wolf-hunter-l-16-gaming-mouse-pad'] || []
+      },
+      {
+        slug: 'adnet-ad-mp-02-gaming-mouse-pad',
+        name: 'ADNet Gaming Mouse Pad (Model AD-MP-02)',
+        brand: 'ADNet',
+        model: 'AD-MP-02 Silk-Gliding Series',
+        spec: 'Avengers Superhero Graphic Print, Silk-Gliding Surface, Anti-Slip Base',
+        description: 'ADNet AD-MP-02 gaming mouse pad in sealed retail packaging, featuring vibrant superhero artwork and a silk-gliding surface for work and gaming.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['adnet-ad-mp-02-gaming-mouse-pad'] || []
+      },
+      {
+        slug: 'terabyte-kubix-e-02b-multimedia-speakers',
+        name: 'Terabyte Kubix E-02B 2.0 Multimedia USB-Powered Speakers',
+        brand: 'Terabyte',
+        model: 'Kubix E-02B',
+        spec: '2.0 Channel Stereo Sound, USB 5V Powered + 3.5mm Audio Jack, Black Cube Enclosure',
+        description: 'Terabyte Kubix E-02B compact 2.0 multimedia stereo speakers for desktop PCs and laptops, delivering crisp acoustics without needing an AC wall adapter.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['terabyte-kubix-e-02b-multimedia-speakers'] || []
+      },
+      {
+        slug: 'terabyte-eliptic-tb-015-multimedia-speakers',
+        name: 'Terabyte Eliptic TB-015 2.0 Multimedia USB-Powered Speakers',
+        brand: 'Terabyte',
+        model: 'Eliptic TB-015',
+        spec: 'Oval Acoustic Enclosure, Red Accent Cones, USB Powered with 3.5mm AUX Audio',
+        description: 'Terabyte Eliptic TB-015 stylish 2.0 USB-powered multimedia speakers featuring distinctive red driver accents and full-range sound output.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['terabyte-eliptic-tb-015-multimedia-speakers'] || []
+      },
+      {
+        slug: 'terabyte-clarion-tb-008-mini-digital-speakers',
+        name: 'Terabyte Clarion TB-008 Mini Digital Portable Stereo Speakers',
+        brand: 'Terabyte',
+        model: 'Clarion TB-008',
+        spec: 'Spherical Red Orb Enclosure, USB 5V Powered + 3.5mm Stereo Audio Plug',
+        description: 'Terabyte Clarion TB-008 portable mini spherical stereo speakers engineered for high-energy playback with laptops, mobile phones, and desktop computers.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['terabyte-clarion-tb-008-mini-digital-speakers'] || []
+      },
+      {
+        slug: 'adnet-ad-201-optical-wired-mouse',
+        name: 'ADNet AD-201 1000 DPI Optical Wired USB Mouse',
+        brand: 'ADNet',
+        model: 'AD-201',
+        spec: '1000 DPI Optical Sensor, 3-Button with Scroll Wheel, USB 2.0 Plug-and-Play',
+        description: 'ADNet AD-201 ergonomic wired optical mouse featuring high-precision 1000 DPI tracking and ambidextrous curved casing for daily office computing.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['adnet-ad-201-optical-wired-mouse'] || []
+      },
+      {
+        slug: 'adjustable-ergonomic-aluminum-laptop-stand',
+        name: 'Adjustable Ergonomic Aluminum Laptop Stand (Foldable Riser)',
+        brand: 'Generic',
+        model: 'Multi-Angle Aluminum Laptop Riser',
+        spec: 'Solid Anodized Aluminum Alloy, 6-Level Height Adjustment, Anti-Slip Silicone Pads',
+        description: 'Portable foldable aluminum laptop riser stand elevating screens to eye level for neck comfort and improved laptop underside cooling ventilation.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['adjustable-ergonomic-aluminum-laptop-stand'] || []
+      },
+      {
+        slug: 'laptop-cooling-pad-with-blue-led-fan',
+        name: 'Laptop Cooling Pad with Blue LED Silent Fan (Metal Mesh)',
+        brand: 'Generic',
+        model: 'Single-Fan Laptop Chill Mat Cooler',
+        spec: 'Large High-Airflow Silent Fan, Blue LED Illumination, Full Aerodynamic Metal Mesh',
+        description: 'Ergonomic laptop chill mat cooling pad with integrated silent blue LED fan and aerodynamic steel mesh surface to keep gaming and work laptops cool.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['laptop-cooling-pad-with-blue-led-fan'] || []
+      },
+      {
+        slug: 'cctv-4-channel-12v-1a-smps-power-supply',
+        name: '4-Channel 12V 1A/Channel CCTV Camera Power Supply SMPS Box',
+        brand: 'Generic',
+        model: '4 Channel CCTV SMPS (12V 4A / 1A per channel)',
+        spec: 'Input: AC 150-290V 50/60Hz, Output: DC 12V 1A per channel (4-Channels), Terminal Screws',
+        description: 'Wall-mountable 4-channel regulated 12V DC power supply SMPS with individual output terminals and power extension mode switch for 4 CCTV cameras.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['cctv-4-channel-12v-1a-smps-power-supply'] || []
+      },
+      {
+        slug: 'crotomax-wall-mount-dvr-rack-cabinet',
+        name: 'CROTOMAX Wall Mount DVR & Network Server Rack Cabinet (Toughened Glass Door)',
+        brand: 'CROTOMAX',
+        model: 'Wall Mount Security DVR Enclosure',
+        spec: 'Heavy-Duty Cold Rolled Steel, Lockable Glass Front Door, Side Ventilation Louvers',
+        description: 'Genuine CROTOMAX heavy-duty wall mount steel cabinet rack with lockable toughened glass door and ventilation slots to securely house DVRs, NVRs, and network switches.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['crotomax-wall-mount-dvr-rack-cabinet'] || [],
+        variantSelectorLabel: 'Select Rack Size',
+        variantType: 'size',
+        variants: [
+          {
+            id: '2u',
+            label: '2U Compact',
+            spec: '2U Form Factor, Heavy-Duty Cold Rolled Steel, Lockable Glass Front Door',
+            imageIndex: 0
+          },
+          {
+            id: '4u',
+            label: '4U Standard',
+            spec: '4U Form Factor, Extra Depth for DVR/NVR + SMPS + Router, Glass Front Door',
+            imageIndex: 1
+          }
+        ]
+      },
+      {
+        slug: 'hawk-vision-stainless-steel-electronic-door-lock',
+        name: 'Hawk Vision Stainless Steel Electronic Door Rim Lock (Electric Strike)',
+        brand: 'Hawk Vision',
+        model: 'Heavy-Duty Stainless Steel Rim Lock',
+        spec: 'High-Grade Stainless Steel Casing, 12V DC Electric Release, Dual Brass Cylinders',
+        description: 'Hawk Vision heavy-duty electronic rim lock compatible with biometric access control, video door phones, and security keypads for automated door locking.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['hawk-vision-stainless-steel-electronic-door-lock'] || []
+      },
+      {
+        slug: 'dvi-d-to-hdmi-bi-directional-video-adapter',
+        name: 'DVI-D 24+1 Male to HDMI Female Gold-Plated Bi-Directional Adapter',
+        brand: 'Generic',
+        model: 'DVI-D (24+1) to HDMI Video Converter',
+        spec: 'DVI-D Dual Link 24+1 Male to HDMI Female, Gold-Plated Contacts, Dual Locking Screws',
+        description: 'Bi-directional gold-plated DVI-D to HDMI display adapter enabling DVI graphics cards to output video to HDMI monitors or HDMI computers to DVI monitors.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['dvi-d-to-hdmi-bi-directional-video-adapter'] || []
+      },
+      {
+        slug: 'swivel-tilt-monitor-tv-wall-mount-bracket',
+        name: 'Adjustable Swivel & Tilt LCD/LED Monitor & TV Wall Mount Bracket (14"–27")',
+        brand: 'Generic',
+        model: 'VESA Swivel Wall Bracket (75x75 / 100x100mm)',
+        spec: 'Heavy-Gauge Cold Steel, 180° Swivel & 15° Tilt, Supports Screens up to 27 Inches',
+        description: 'Full-motion swivel and tilt wall mount bracket for computer monitors and compact LED TVs, offering adjustable viewing angles and secure VESA mounting.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['swivel-tilt-monitor-tv-wall-mount-bracket'] || []
+      },
+      {
+        slug: 'compact-fixed-tv-wall-mount-bracket-14-42',
+        name: 'Fixed LCD/LED Monitor & TV Wall Mount Bracket (14"–42")',
+        brand: 'Generic',
+        model: 'Slim Fixed Display Wall Mount Bracket (14"–42")',
+        spec: 'Heavy-Gauge Cold Steel Plate, Max VESA 200x200mm, Fits 14"–42" Displays',
+        description: 'Low-profile fixed cold-rolled steel wall mount bracket engineered for 14 to 42-inch computer monitors and compact LED TVs with up to 200x200mm VESA mounting.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['compact-fixed-tv-wall-mount-bracket-14-42'] || []
+      },
+      {
+        slug: 'heavy-duty-fixed-tv-wall-mount-bracket',
+        name: 'Heavy-Duty Fixed LCD/LED TV Wall Mount Bracket (26"–55")',
+        brand: 'Generic',
+        model: 'Universal Slim Fixed Wall Mount Bracket (26"–55")',
+        spec: 'Heavy-Duty Reinforced Steel Plate, Max VESA 400x400mm, Fits 26"–55" Displays',
+        description: 'Universal low-profile heavy-duty steel TV wall mount bracket holding 26 to 55-inch LED and LCD displays securely against the wall.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['heavy-duty-fixed-tv-wall-mount-bracket'] || []
+      },
+      {
+        slug: 'dlink-cat6-rj45-modular-connectors-box',
+        name: 'D-Link Cat6 RJ45 Modular Network Connector Plugs (Box of 100)',
+        brand: 'D-Link',
+        model: 'NPG-C61PLA451-100',
+        spec: 'Cat6 8P8C Modular Plugs, 50-Micron Gold-Plated Contacts, Box of 100 Pieces',
+        description: 'Box of 100 genuine D-Link Cat6 RJ45 unshielded modular plugs engineered with precision gold-plated contacts for terminating Gigabit twisted-pair network cables.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['dlink-cat6-rj45-modular-connectors-box'] || []
+      },
+      {
+        slug: 'flipkart-smartbuy-electric-fan-room-heater',
+        name: 'Flipkart SmartBuy Electric Fan Room Heater (1000W / 2000W)',
+        brand: 'Flipkart SmartBuy',
+        model: 'Electric Fan Room Heater',
+        spec: 'Dual Heat Settings (1000W/2000W), Adjustable Thermostat Knob, Built-In Overheat Cutoff',
+        description: 'Compact Flipkart SmartBuy electric fan room heater with dual heat dials and safety grill, ideal for quick warmth in office cabins and workstations.',
+        isGeneric: false,
+        images: PRODUCT_IMAGES['flipkart-smartbuy-electric-fan-room-heater'] || []
+      },
+      {
+        slug: 'flexible-usb-led-portable-reading-lamp-2pack',
+        name: 'Flexible Silicone USB LED Portable Light Lamp (Pack of 2: Blue & Green)',
+        brand: 'Generic',
+        model: 'Flexible Silicone USB LED Lamp',
+        spec: 'Gooseneck Flexible Silicone Body, 1.2W Energy-Saving LED, Standard USB 5V Plug',
+        description: 'Pack of 2 flexible USB LED portable stick lights in blue and green, ideal for illuminating laptop keyboards, bedside reading, and power bank lighting.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['flexible-usb-led-portable-reading-lamp-2pack'] || []
+      },
+      {
+        slug: 'water-resistant-laptop-backpack-15-6-inch-grey',
+        name: 'Grey Heather Water-Resistant Laptop Backpack (15.6-Inch)',
+        brand: 'Generic',
+        model: 'Slim Polyester Laptop Travel Backpack',
+        spec: 'Fits up to 15.6" Laptops, Water-Repellent Heather Fabric, Padded Shoulder Straps',
+        description: 'Slim and lightweight grey heather laptop travel backpack featuring a padded 15.6-inch laptop compartment, organizer pockets, and water-resistant polyester exterior.',
+        isGeneric: true,
+        images: PRODUCT_IMAGES['water-resistant-laptop-backpack-15-6-inch-grey'] || []
       }
     ]
   }
