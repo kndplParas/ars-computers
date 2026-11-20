@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import {
   SERVICE_CATEGORIES,
+  SERVICE_CATEGORY_GROUPS,
   CUSTOMER_TYPES,
   REQUEST_TYPES
 } from '../data/mockServiceRequests'
@@ -57,7 +58,21 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
   const [copied, setCopied] = useState(false)
 
   const isCctvCategory = ['CCTV Camera', 'DVR/NVR', 'CCTV Complete System'].includes(formData.product_category)
-  const isComputerCategory = ['Desktop Computer', 'Laptop'].includes(formData.product_category)
+  const isComputerCategory = [
+    'Desktop Computer',
+    'Laptop',
+    'All-in-One PC (AIO)',
+    'Server / Workstation',
+    'CPU / Processor',
+    'Motherboard',
+    'RAM (Memory)',
+    'Storage (SSD / HDD / NVMe)',
+    'Graphics Card (GPU)',
+    'Power Supply (SMPS)',
+    'Cabinet / PC Case',
+    'CPU Cooler / Cooling Fan',
+    'Monitor / Display'
+  ].includes(formData.product_category)
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -603,10 +618,14 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
                 onChange={handleChange}
                 required
               >
-                {SERVICE_CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
+                {SERVICE_CATEGORY_GROUPS.map((grp) => (
+                  <optgroup key={grp.group} label={grp.group}>
+                    {grp.categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
@@ -639,7 +658,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
                 name="brand"
                 value={formData.brand}
                 onChange={handleChange}
-                placeholder="e.g. Dell, HP, Hikvision, CP Plus, Epson"
+                placeholder="e.g. Intel, AMD, Dell, HP, ASUS, Gigabyte, Hikvision"
               />
             </div>
 
@@ -653,7 +672,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
                 name="model_number"
                 value={formData.model_number}
                 onChange={handleChange}
-                placeholder="e.g. Latitude 3440 / DS-2CD2047G2"
+                placeholder="e.g. Core i7-14700K / Ryzen 7 7800X3D / Latitude 3440"
               />
             </div>
 

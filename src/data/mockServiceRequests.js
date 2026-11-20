@@ -23,18 +23,71 @@ export const SERVICE_PRIORITY_META = {
   low: { label: 'Low', color: '#16a34a', bg: '#dcfce7' }
 }
 
-export const SERVICE_CATEGORIES = [
-  'Desktop Computer',
-  'Laptop',
-  'CCTV Camera',
-  'DVR/NVR',
-  'CCTV Complete System',
-  'Printer/Scanner',
-  'Biometric Device',
-  'Router/Networking',
-  'UPS/Power Backup',
-  'Other IT Hardware'
+export const SERVICE_CATEGORY_GROUPS = [
+  {
+    group: 'Computers & Systems',
+    categories: [
+      'Desktop Computer',
+      'Laptop',
+      'All-in-One PC (AIO)',
+      'Server / Workstation'
+    ]
+  },
+  {
+    group: 'PC Components & Hardware',
+    categories: [
+      'CPU / Processor',
+      'Motherboard',
+      'RAM (Memory)',
+      'Storage (SSD / HDD / NVMe)',
+      'Graphics Card (GPU)',
+      'Power Supply (SMPS)',
+      'Cabinet / PC Case',
+      'CPU Cooler / Cooling Fan'
+    ]
+  },
+  {
+    group: 'Displays & Peripherals',
+    categories: [
+      'Monitor / Display',
+      'Keyboard / Mouse / Input Devices',
+      'External Storage / Pen Drive'
+    ]
+  },
+  {
+    group: 'Printers & Office Equipment',
+    categories: [
+      'Printer/Scanner',
+      'Barcode / Thermal Printer',
+      'Biometric Device'
+    ]
+  },
+  {
+    group: 'CCTV & Security Surveillance',
+    categories: [
+      'CCTV Camera',
+      'DVR/NVR',
+      'CCTV Complete System'
+    ]
+  },
+  {
+    group: 'Networking & Power Backup',
+    categories: [
+      'Router/Networking',
+      'Network Switch / Rack',
+      'UPS/Power Backup',
+      'Cables & Adapters'
+    ]
+  },
+  {
+    group: 'Other Hardware',
+    categories: [
+      'Other IT Hardware'
+    ]
+  }
 ]
+
+export const SERVICE_CATEGORIES = SERVICE_CATEGORY_GROUPS.flatMap((g) => g.categories)
 
 export const SERVICE_LOCATIONS = [
   'On-site',

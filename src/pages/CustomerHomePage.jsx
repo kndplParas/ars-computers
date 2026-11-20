@@ -862,6 +862,7 @@ function CustomerHomePage() {
                     >
                       <option value="general">General IT Inquiry</option>
                       <option value="computer-laptop">Computer / Laptop</option>
+                      <option value="pc-components">PC Components &amp; Hardware (CPU, RAM, GPU, etc.)</option>
                       <option value="cctv">CCTV &amp; Security</option>
                       <option value="printer">Printer &amp; Scanners</option>
                       <option value="biometric-machine">Biometric Machine</option>
