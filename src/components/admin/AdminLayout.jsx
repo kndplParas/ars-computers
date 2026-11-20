@@ -28,6 +28,7 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
   const allNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Overview', roles: ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff'] },
     { id: 'orders', label: 'Orders & Sales', icon: '🛒', badge: `${orders?.length ?? 0} Orders`, roles: ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff'] },
+    { id: 'customers', label: 'Customers (CRM)', icon: '👤', badge: 'CRM', roles: ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff'] },
     { id: 'enquiries', label: 'Enquiries', icon: '💬', badge: `${enquiries?.length ?? 0} Leads`, roles: ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'] },
     { id: 'products', label: 'Products', icon: '📦', badge: `${metrics?.products?.total ?? 0} Items`, roles: ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff'] },
     { id: 'inventory', label: 'Inventory', icon: '⚡', badge: `${(metrics?.products?.lowStock ?? 0) > 0 ? `${metrics.products.lowStock} Low` : 'Stock'}`, roles: ['superadmin', 'inventory_staff'] },
@@ -49,6 +50,8 @@ export default function AdminLayout({ activeTab, onTabChange, children }) {
     }
     if (itemId === 'orders') {
       navigate('/admin/orders')
+    } else if (itemId === 'customers') {
+      navigate('/admin/customers')
     } else if (itemId === 'products') {
       navigate('/admin/products')
     } else if (itemId === 'inventory') {

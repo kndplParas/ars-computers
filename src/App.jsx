@@ -15,6 +15,7 @@ const AdminInventoryPage = lazy(() => import('./pages/admin/AdminInventoryPage')
 const AdminCategoriesPage = lazy(() => import('./pages/admin/AdminCategoriesPage'))
 const AdminEnquiriesPage = lazy(() => import('./pages/admin/AdminEnquiriesPage'))
 const AdminOrdersPage = lazy(() => import('./pages/admin/AdminOrdersPage'))
+const AdminCustomersPage = lazy(() => import('./pages/admin/AdminCustomersPage'))
 const AdminStaffPage = lazy(() => import('./pages/admin/AdminStaffPage'))
 const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'))
 const SearchResultsPage = lazy(() => import('./pages/SearchResultsPage'))
@@ -109,6 +110,14 @@ function App() {
                   element={
                     <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account']}>
                       <AdminEnquiriesPage />
+                    </AdminRouteGuard>
+                  }
+                />
+                <Route
+                  path="/admin/customers"
+                  element={
+                    <AdminRouteGuard allowedRoles={['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account', 'inventory_staff']}>
+                      <AdminCustomersPage />
                     </AdminRouteGuard>
                   }
                 />
