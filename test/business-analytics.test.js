@@ -336,8 +336,8 @@ test('Business Monthly Analytics Suite', async (t) => {
     const ordersCode = fs.readFileSync(ordersPath, 'utf8')
     assert.match(
       ordersCode,
-      /\['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'\]\.includes\(adminUser\?\.role\)/,
-      'AdminOrdersPage must display Business button for the 6 authorized roles'
+      /\['superadmin', 'admin', 'account'\]\.includes\(adminUser\?\.role\)/,
+      'AdminOrdersPage must display Business button strictly for superadmin, admin, and account'
     )
 
     // 2. BusinessAnalyticsOverlay component code check

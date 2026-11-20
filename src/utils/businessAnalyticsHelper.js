@@ -86,70 +86,35 @@ export async function fetchMonthlyBusinessData(year, monthIndex, supabaseClient)
 
   if (catErr) console.warn('[BusinessAnalytics] Failed to fetch categories:', catErr.message)
 
-  // 2. Fetch products with catalog cost_price
-  const { data: products, error: prodErr } = await supabaseClient
-    .from('products')
-    .select('id, name, sku, brand, model, price, cost_price, category_id')
+  // 2. Fetch business analytics via authorized SECURITY DEFINER RPC
+  const { data: rpcData, error: rpcErr } = await supabaseClient.rpc('get_monthly_business_analytics', {
+    p_year: year,
+    p_month: monthIndex
+  })
 
-  if (prodErr) console.warn('[BusinessAnalytics] Failed to fetch products:', prodErr.message)
+  if (rpcErr) {
+    throw new Error(`Failed to load monthly business analytics: ${rpcErr.message}`)
+  }
 
-  // 3. Fetch target month orders (created in month OR completed in month)
-  const { data: targetOrders, error: ordErr } = await supabaseClient
-    .from('orders')
-    .select('*, order_items(*)')
-    .or(`created_at.gte.${targetRange.startISO},completion_approved_at.gte.${targetRange.startISO}`)
-    .order('created_at', { ascending: false })
-
-  if (ordErr) throw new Error(`Failed to fetch orders: ${ordErr.message}`)
+  const rawOrders = rpcData?.orders || []
+  const paymentsInMonth = rpcData?.payments || []
+  const prevOrders = rpcData?.prev_orders || []
+  const prevPayments = rpcData?.prev_payments || []
+  const prevOrdersCreatedCount = Number(rpcData?.prev_orders_created_count || 0)
+  const products = rpcData?.products || []
 
   // Filter in memory to respect exact date bounds
-  const ordersInMonth = (targetOrders || []).filter((o) => {
+  const ordersInMonth = rawOrders.filter((o) => {
     if (!o.created_at) return false
     const d = new Date(o.created_at)
     return d >= targetRange.startDate && d <= targetRange.endDate
   })
 
-  const completedSalesInMonth = (targetOrders || []).filter((o) => {
+  const completedSalesInMonth = rawOrders.filter((o) => {
     if (o.status !== 'completed' || !o.completion_approved_at) return false
     const d = new Date(o.completion_approved_at)
     return d >= targetRange.startDate && d <= targetRange.endDate
   })
-
-  // 4. Fetch target month payments (all collections in date range)
-  const { data: targetPayments, error: payErr } = await supabaseClient
-    .from('order_payments')
-    .select('*, orders(id, order_number, customer_name, created_at, status)')
-    .gte('received_at', targetRange.startISO)
-    .lte('received_at', targetRange.endISO)
-    .order('received_at', { ascending: false })
-
-  if (payErr) throw new Error(`Failed to fetch payments: ${payErr.message}`)
-
-  // 5. Fetch previous month completed sales & payments for comparative trend
-  const { data: prevOrders, error: prevOrdErr } = await supabaseClient
-    .from('orders')
-    .select('id, total_amount, paid_amount, status, created_at, completion_approved_at, order_items(quantity, line_total)')
-    .gte('completion_approved_at', prevRange.startISO)
-    .lte('completion_approved_at', prevRange.endISO)
-    .eq('status', 'completed')
-
-  if (prevOrdErr) console.warn('[BusinessAnalytics] Prev orders warning:', prevOrdErr.message)
-
-  const { data: prevOrdersCreated, error: prevCreatedErr } = await supabaseClient
-    .from('orders')
-    .select('id')
-    .gte('created_at', prevRange.startISO)
-    .lte('created_at', prevRange.endISO)
-
-  if (prevCreatedErr) console.warn('[BusinessAnalytics] Prev created orders warning:', prevCreatedErr.message)
-
-  const { data: prevPayments, error: prevPayErr } = await supabaseClient
-    .from('order_payments')
-    .select('amount_received')
-    .gte('received_at', prevRange.startISO)
-    .lte('received_at', prevRange.endISO)
-
-  if (prevPayErr) console.warn('[BusinessAnalytics] Prev payments warning:', prevPayErr.message)
 
   return {
     year,
@@ -161,11 +126,11 @@ export async function fetchMonthlyBusinessData(year, monthIndex, supabaseClient)
     products: products || [],
     ordersInMonth,
     completedSalesInMonth,
-    paymentsInMonth: targetPayments || [],
+    paymentsInMonth,
     prevData: {
-      completedSales: prevOrders || [],
-      ordersCreatedCount: prevOrdersCreated?.length || 0,
-      totalCollected: (prevPayments || []).reduce((acc, p) => acc + Number(p.amount_received || 0), 0)
+      completedSales: prevOrders,
+      ordersCreatedCount: prevOrdersCreatedCount,
+      totalCollected: prevPayments.reduce((acc, p) => acc + Number(p.amount_received || 0), 0)
     }
   }
 }

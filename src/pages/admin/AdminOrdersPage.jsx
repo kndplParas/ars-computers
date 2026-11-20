@@ -801,7 +801,7 @@ export default function AdminOrdersPage() {
               📊 Monthly Sales Report
             </button>
 
-            {['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role) && (
+            {['superadmin', 'admin', 'account'].includes(adminUser?.role) && (
               <button
                 type="button"
                 className="btn-outline btn-sm admin-business-btn"
@@ -1850,8 +1850,8 @@ export default function AdminOrdersPage() {
                           <tr>
                             <th style={{ padding: '8px', textAlign: 'left' }}>Product</th>
                             <th style={{ padding: '8px', textAlign: 'center' }}>Qty</th>
-                            <th style={{ padding: '8px', textAlign: 'right' }}>Unit Price</th>
-                            <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
+                            {!isInventoryStaff && <th style={{ padding: '8px', textAlign: 'right' }}>Unit Price</th>}
+                            {!isInventoryStaff && <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1862,13 +1862,13 @@ export default function AdminOrdersPage() {
                                   {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
                                 </td>
                                 <td style={{ padding: '8px', textAlign: 'center' }}>{it.quantity}</td>
-                                <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(it.unit_price).toFixed(2)}</td>
-                                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>₹{Number(it.line_total).toFixed(2)}</td>
+                                {!isInventoryStaff && <td style={{ padding: '8px', textAlign: 'right' }}>{it.unit_price != null ? `₹${Number(it.unit_price).toFixed(2)}` : '—'}</td>}
+                                {!isInventoryStaff && <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>{it.line_total != null ? `₹${Number(it.line_total).toFixed(2)}` : '—'}</td>}
                               </tr>
                             ))
                           ) : (
                             <tr>
-                              <td colSpan="4" style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
+                              <td colSpan={isInventoryStaff ? 2 : 4} style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
                                 No line item details available.
                               </td>
                             </tr>
@@ -1886,8 +1886,8 @@ export default function AdminOrdersPage() {
                               {it.product_name_snapshot} {it.sku_snapshot ? `[${it.sku_snapshot}]` : ''}
                             </div>
                             <div className="order-detail-card-mobile-row">
-                              <span style={{ color: '#64748b' }}>Qty: <strong>{it.quantity}</strong> × ₹{Number(it.unit_price).toFixed(2)}</span>
-                              <strong style={{ color: '#0f172a' }}>₹{Number(it.line_total).toFixed(2)}</strong>
+                              <span style={{ color: '#64748b' }}>Qty: <strong>{it.quantity}</strong> {!isInventoryStaff && it.unit_price != null ? `× ₹${Number(it.unit_price).toFixed(2)}` : ''}</span>
+                              {!isInventoryStaff && it.line_total != null && <strong style={{ color: '#0f172a' }}>₹{Number(it.line_total).toFixed(2)}</strong>}
                             </div>
                           </div>
                         ))
@@ -1900,40 +1900,47 @@ export default function AdminOrdersPage() {
                   </div>
 
                   {/* Financial Summary */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
-                    <div>
-                      <div><strong>Payment Method:</strong> {(displayOrder.payment_method || 'cash').toUpperCase()}</div>
-                      <div><strong>Payment Status:</strong> {displayOrder.payment_status === 'paid' ? 'RECEIVED' : (displayOrder.payment_status || 'pending').toUpperCase()}</div>
+                  {isInventoryStaff ? (
+                    <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', color: '#64748b', fontSize: '13px' }}>
+                      📦 <strong>Warehouse Dispatch View:</strong> Line item quantities and item details verified for packing. Financial pricing is restricted to Management & Accounts.
                     </div>
-                    <div>
-                      <div><strong>Total Amount:</strong> ₹{Number(displayOrder.total_amount).toFixed(2)}</div>
-                      <div><strong>Amount Received:</strong> ₹{Number(displayOrder.paid_amount).toFixed(2)}</div>
-                      <div style={{ color: currentBal > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
-                        Balance Due: ₹{currentBal.toFixed(2)}
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
+                      <div>
+                        <div><strong>Payment Method:</strong> {(displayOrder.payment_method || 'cash').toUpperCase()}</div>
+                        <div><strong>Payment Status:</strong> {displayOrder.payment_status === 'paid' ? 'RECEIVED' : (displayOrder.payment_status || 'pending').toUpperCase()}</div>
                       </div>
+                      <div>
+                        <div><strong>Total Amount:</strong> {displayOrder.total_amount != null ? `₹${Number(displayOrder.total_amount).toFixed(2)}` : '—'}</div>
+                        <div><strong>Amount Received:</strong> {displayOrder.paid_amount != null ? `₹${Number(displayOrder.paid_amount).toFixed(2)}` : '—'}</div>
+                        <div style={{ color: currentBal > 0 ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
+                          Balance Due: {displayOrder.total_amount != null ? `₹${currentBal.toFixed(2)}` : '—'}
+                        </div>
+                      </div>
+                      {/* Update Payment Button */}
+                      {currentBal > 0 && displayOrder.status !== 'cancelled' && isOrderEditor && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{
+                              padding: '8px 16px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              borderRadius: '6px',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => {
+                              setSelectedPaymentOrder(displayOrder)
+                              setIsPaymentModalOpen(true)
+                            }}
+                          >
+                            ➕ Add Payment
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {/* Update Payment Button */}
-                    {currentBal > 0 && displayOrder.status !== 'cancelled' && isOrderEditor && (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          style={{
-                            padding: '8px 16px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                          onClick={() => handleOpenPaymentModal(displayOrder)}
-                        >
-                          💳 Update Payment
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   {/* Payment History */}
                   <div style={{ marginTop: '16px' }}>

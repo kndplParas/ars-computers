@@ -408,16 +408,18 @@ export function AdminDataProvider({ children }) {
         throw new Error('Supabase client is not configured.')
       }
 
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*, order_items(*)')
-        .order('created_at', { ascending: false })
+      // 1. Primary secure route: Role-projected SECURITY DEFINER RPC
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_admin_orders')
 
-      if (error) {
+      if (rpcError) {
         setLiveOrders([])
-        setOrdersError(error.message || 'Failed to query sales orders.')
+        setOrdersError(rpcError.message || 'Failed to query sales orders via secure RPC.')
+      } else if (rpcData) {
+        const orderList = Array.isArray(rpcData) ? rpcData : (rpcData.orders || [])
+        setLiveOrders(orderList)
+        setOrdersError(null)
       } else {
-        setLiveOrders(data || [])
+        setLiveOrders([])
         setOrdersError(null)
       }
     } catch (err) {
@@ -3191,12 +3193,22 @@ export function AdminDataProvider({ children }) {
       if (!orderId) return null
       if (isLiveDatabase) {
         if (!supabase) return null
-        const [payRes, attRes, shareRes] = await Promise.all([
-          supabase
-            .from('order_payments')
-            .select('*')
-            .eq('order_id', orderId)
-            .order('received_at', { ascending: true }),
+        let payments = []
+        try {
+          const { data: rpcPayments, error: rpcPayErr } = await supabase.rpc('get_admin_order_payments', {
+            p_order_id: orderId
+          })
+          if (!rpcPayErr && Array.isArray(rpcPayments)) {
+            payments = rpcPayments
+          } else {
+            // Operational role access denial (42501) or RPC error -> safe empty payments array
+            payments = []
+          }
+        } catch {
+          payments = []
+        }
+
+        const [attRes, shareRes] = await Promise.all([
           supabase
             .from('order_attachments')
             .select('*')
@@ -3209,7 +3221,6 @@ export function AdminDataProvider({ children }) {
             .order('created_at', { ascending: false })
         ])
 
-        const payments = payRes.data || []
         const attachments = attRes.data || []
         const shares = shareRes.data || []
 

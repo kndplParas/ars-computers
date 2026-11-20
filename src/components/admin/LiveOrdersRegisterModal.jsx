@@ -716,7 +716,7 @@ export default function LiveOrdersRegisterModal({
                                   {val}
                                 </span>
                               ) : isAmount ? (
-                                <span style={{ fontWeight: 600 }}>₹{val}</span>
+                                <span style={{ fontWeight: 600 }}>{val != null && val !== '' ? `₹${val}` : '—'}</span>
                               ) : (
                                 val
                               )}
