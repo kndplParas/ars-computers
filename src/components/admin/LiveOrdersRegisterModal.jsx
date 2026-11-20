@@ -673,18 +673,18 @@ export default function LiveOrdersRegisterModal({
                       />
                     </td>
                     <td
-                          className="live-register-td live-register-td-sticky-check"
-                          style={{ width: '44px', minWidth: '44px', maxWidth: '44px', textAlign: 'center' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            aria-label={`Select order ${row.order_ref}`}
-                            checked={selectedRowIds.has(row.id)}
-                            onChange={(e) => handleToggleSelectRow(row.id, e)}
-                          />
-                        </td>
-                        {ORDER_REGISTER_COLUMNS.filter((c) => visibleColumns[c.id]).map((col) => {
+                      className="live-register-td live-register-td-sticky-check"
+                      style={{ width: '44px', minWidth: '44px', maxWidth: '44px', textAlign: 'center' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label={`Select order ${row.order_ref}`}
+                        checked={selectedRowIds.has(row.id)}
+                        onChange={(e) => handleToggleSelectRow(row.id, e)}
+                      />
+                    </td>
+                    {ORDER_REGISTER_COLUMNS.filter((c) => visibleColumns[c.id]).map((col) => {
                       const val = row[col.id]
                       const isRef = col.id === 'order_ref'
                       const isAmount = ['total_amount', 'paid_amount', 'balance_amount'].includes(col.id)
@@ -702,9 +702,8 @@ export default function LiveOrdersRegisterModal({
                                 <span style={{ fontWeight: 700, color: '#1e40af' }}>{val}</span>
                               ) : col.id === 'payment_status' ? (
                                 <span
-                                  className={`live-register-status-badge ${
-                                    val === 'PAID' || val === 'RECEIVED' ? 'status-paid' : val === 'PARTIAL' ? 'status-partial' : 'status-pending'
-                                  }`}
+                                  className={`live-register-status-badge ${val === 'PAID' || val === 'RECEIVED' ? 'status-paid' : val === 'PARTIAL' ? 'status-partial' : 'status-pending'
+                                    }`}
                                   style={{
                                     backgroundColor: val === 'PAID' || val === 'RECEIVED' ? '#dcfce7' : val === 'PARTIAL' ? '#fef3c7' : '#fee2e2',
                                     color: val === 'PAID' || val === 'RECEIVED' ? '#15803d' : val === 'PARTIAL' ? '#b45309' : '#b91c1c'

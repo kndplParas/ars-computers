@@ -3214,6 +3214,113 @@
   margin-bottom: 48px;
 }
 
+/* Accessories Grouping Sub-sections */
+.accessories-group-jump-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.group-jump-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.group-jump-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.group-jump-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.group-jump-pill:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.group-jump-pill-count {
+  font-size: 11px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.accessory-group-section {
+  margin-bottom: 44px;
+  scroll-margin-top: 100px;
+}
+
+.accessory-group-header {
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.accessory-group-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.accessory-group-icon {
+  font-size: 22px;
+}
+
+.accessory-group-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.accessory-group-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.accessory-group-description {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin: 6px 0 0 0;
+  line-height: 1.5;
+}
+
 .category-product-card {
   background: #ffffff;
   border: 1px solid var(--border-subtle);
@@ -12240,7 +12347,23 @@
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .mobile-enquiries-cards .mobile-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .mobile-enquiries-cards .mobile-submitted-time {
+    font-size: 0.74rem;
+    color: #64748b;
+    font-weight: 500;
+    white-space: nowrap;
   }
 
   .mobile-enquiries-cards .enquiry-id-badge {
@@ -12254,12 +12377,129 @@
     white-space: normal;
     line-height: 1.25;
   }
+
+  .mobile-enquiries-cards .mobile-card-subinfo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 3px 0;
+    min-width: 0;
+  }
+
+  .mobile-enquiries-cards .mobile-phone-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #0284c7;
+    text-decoration: none;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    min-height: 32px;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+  }
+
+  .mobile-enquiries-cards .mobile-phone-link:hover {
+    text-decoration: underline;
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+  }
+
+  .mobile-enquiries-cards .mobile-card-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+  }
+
+  .mobile-enquiries-cards .mobile-quick-action-btn {
+    min-height: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 8px;
+    text-decoration: none;
+    box-sizing: border-box;
+    white-space: nowrap;
+    border: 1px solid var(--border-subtle, #cbd5e1);
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .mobile-enquiries-cards .mobile-call-btn {
+    border-color: #7dd3fc;
+    color: #0369a1;
+    background: #f0f9ff;
+  }
+
+  .mobile-enquiries-cards .mobile-call-btn:hover {
+    background: #e0f2fe;
+    border-color: #38bdf8;
+  }
+
+  .mobile-enquiries-cards .mobile-whatsapp-btn {
+    border-color: #86efac;
+    color: #15803d;
+    background: #f0fdf4;
+  }
+
+  .mobile-enquiries-cards .mobile-whatsapp-btn:hover {
+    background: #dcfce7;
+    border-color: #4ade80;
+  }
+
+  .mobile-enquiries-cards .quick-self-assign-btn,
+  .mobile-enquiries-cards .quick-assign-btn {
+    border-color: #c4b5fd;
+    color: #6d28d9;
+    background: #f5f3ff;
+  }
+
+  .mobile-enquiries-cards .quick-self-assign-btn:hover,
+  .mobile-enquiries-cards .quick-assign-btn:hover {
+    background: #ede9fe;
+    border-color: #a78bfa;
+  }
+
+  .mobile-enquiries-cards .mobile-quick-action-btn:disabled,
+  .mobile-enquiries-cards .mobile-quick-action-btn[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+    pointer-events: none;
+  }
+
+  .mobile-enquiries-cards .enquiry-select-checkbox-mobile {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    cursor: pointer;
+    accent-color: var(--primary, #0284c7);
+  }
 }
 
 @media (max-width: 600px) {
   .mobile-enquiries-cards .enquiry-mobile-card {
     padding: 12px;
     gap: 10px;
+    border-radius: 10px;
   }
 
   .mobile-enquiries-cards .mobile-card-meta,
@@ -12279,6 +12519,28 @@
 
   .mobile-enquiries-cards .view-details-btn {
     font-weight: 700;
+  }
+}
+
+/* Compact layout for small phone screens (320px - 375px) */
+@media (max-width: 375px) {
+  .mobile-enquiries-cards .enquiry-mobile-card {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .mobile-enquiries-cards .mobile-card-quick-actions {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .mobile-enquiries-cards .mobile-quick-action-btn {
+    font-size: 0.78rem;
+    padding: 6px 8px;
+  }
+
+  .mobile-enquiries-cards .mobile-card-header {
+    gap: 6px;
   }
 }
 
@@ -13973,4 +14235,113 @@
   line-height: 1.3;
 }
 
+/* ==========================================================================
+   Admin Enquiries — Phase 1: Responsive 4-Section Navigation
+   ========================================================================== */
+.admin-workflow-tabs-bar.enquiries-primary-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
 
+.enquiry-main-sections-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+
+.enquiry-main-sections-group::-webkit-scrollbar {
+  display: none;
+}
+
+.enquiry-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-height: 34px;
+  transition: all 0.18s ease-in-out;
+}
+
+.enquiry-nav-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.enquiry-nav-btn.active-new {
+  background: #1e40af !important;
+  color: #ffffff !important;
+  border-color: #1e3a8a !important;
+}
+
+.enquiry-nav-btn.active-assigned {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0369a1 !important;
+}
+
+.enquiry-nav-btn.active-action {
+  background: #d97706 !important;
+  color: #ffffff !important;
+  border-color: #b45309 !important;
+}
+
+.enquiry-nav-btn.active-completed {
+  background: #047857 !important;
+  color: #ffffff !important;
+  border-color: #065f46 !important;
+}
+
+.admin-maintenance-tab-group {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .admin-workflow-tabs-bar.enquiries-primary-nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding-bottom: 6px;
+  }
+
+  .enquiry-main-sections-group {
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  .admin-maintenance-tab-group {
+    margin-left: 0 !important;
+    justify-content: flex-end;
+    width: 100%;
+    border-top: 1px dashed #e2e8f0;
+    padding-top: 6px;
+  }
+}
+
+@media (max-width: 600px) {
+  .enquiry-nav-btn {
+    min-height: 38px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+}

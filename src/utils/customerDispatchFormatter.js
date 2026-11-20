@@ -75,6 +75,9 @@ export function resolveCustomerPhone(record) {
   if (record.customer_phone && String(record.customer_phone).trim()) {
     return String(record.customer_phone).trim()
   }
+  if (record.phone && String(record.phone).trim()) {
+    return String(record.phone).trim()
+  }
   if (record.service_details?.mobile_number) {
     return String(record.service_details.mobile_number).trim()
   }
@@ -111,6 +114,9 @@ export function resolveCustomerEmail(record) {
 
   if (record.customer_email && emailRegex.test(record.customer_email.trim())) {
     return record.customer_email.trim().toLowerCase()
+  }
+  if (record.email && emailRegex.test(record.email.trim())) {
+    return record.email.trim().toLowerCase()
   }
   if (record.service_details?.email && emailRegex.test(record.service_details.email.trim())) {
     return record.service_details.email.trim().toLowerCase()

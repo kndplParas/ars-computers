@@ -1947,6 +1947,10 @@ export function AdminDataProvider({ children }) {
         throw new Error('Access denied: Active administrator or technician privileges required to self-assign enquiries.')
       }
 
+      if (!enquiryId) {
+        throw new Error('Enquiry ID is required to self-assign enquiry.')
+      }
+
       if (isLiveDatabase) {
         if (!supabase) throw new Error('Supabase client is not available.')
 
@@ -2002,6 +2006,10 @@ export function AdminDataProvider({ children }) {
     async (enquiryId, employeeId, reason = null, expectedArrival = null, visitNote = null, expectedVisitAt = null) => {
       if (adminUser?.role !== 'superadmin') {
         throw new Error('Access denied: Superadministrator privileges required to assign, reassign, or unassign staff.')
+      }
+
+      if (!enquiryId) {
+        throw new Error('Enquiry ID is required to assign or reassign staff.')
       }
 
       if (isLiveDatabase) {

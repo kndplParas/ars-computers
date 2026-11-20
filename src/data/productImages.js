@@ -228,6 +228,11 @@ import accImg420 from '../assets/img420.jpg'
 import accImg421 from '../assets/img421.jpg'
 import accImg443 from '../assets/img443.jpg'
 import accImg446 from '../assets/img446.jpg'
+// Verified third-party catalog assets (see src/assets/ATTRIBUTIONS.md)
+// CC0 1.0 Universal - Author: User5515 (Wikimedia Commons)
+import accNvmeGen4Ssd from '../assets/acc-nvme-pcie-gen4-ssd.jpg'
+// CC-BY-SA 4.0 International - Author: Abhi25t (Wikimedia Commons File:TP-Link_AX1500_Wi-Fi_6_Router_Front.jpg)
+import accWifi6Router from '../assets/acc-wifi6-gigabit-router.jpg'
 
 /**
  * Mapping dictionary of verified product slugs to arrays of imported asset URLs.
@@ -318,7 +323,7 @@ export const PRODUCT_IMAGES = {
   'seagate-barracuda-3-5-inch-hdd': [accSeagateBarracudaHdd],
   'corsair-vengeance-lpx-ddr4-ram': [gamingRamCorsairLpx],
   'kingston-desktop-ddr-ram-module': [accKingstonDdrRam],
-  'high-speed-nvme-m2-ssds-external-drives': [],
+  'high-speed-nvme-m2-ssds-external-drives': [accNvmeGen4Ssd],
 
   // Components, Power & Cooling
   'high-performance-thermal-paste-compound': [gamingThermalPaste],
@@ -329,7 +334,7 @@ export const PRODUCT_IMAGES = {
   'multi-channel-cctv-smps-power-supply': [cctvSmpsSupply],
 
   // Networking
-  'dual-band-wifi-6-routers-poe-gigabit-switches': [],
+  'dual-band-wifi-6-routers-poe-gigabit-switches': [accWifi6Router],
 
   // Keyboards & Mice
   'dell-km3322w-wireless-combo': [accDellKm3322wCombo],

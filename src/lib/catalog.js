@@ -256,6 +256,69 @@ export function normalizeStaticCategories(categories) {
 }
 
 /**
+ * Enriches a product with variant configuration from static catalog metadata.
+ *
+ * @param {Object} product - Product record to enrich.
+ * @param {Array} [staticProducts=null] - Optional candidate static products list.
+ * @returns {Object} Product with variants, variantSelectorLabel, and variantType populated.
+ */
+export function enrichProductWithVariants(product, staticProducts = null) {
+  if (!product || typeof product !== 'object') return product
+
+  let candidates = staticProducts
+  if (!candidates && Array.isArray(CATEGORIES)) {
+    const matchingCat = CATEGORIES.find(
+      (c) =>
+        c.id === product.categoryId ||
+        c.slug === product.categoryId ||
+        (product.categoryId && c.id && c.id.toLowerCase() === String(product.categoryId).toLowerCase()) ||
+        (product.categoryTitle && c.title && c.title.toLowerCase() === String(product.categoryTitle).toLowerCase())
+    )
+    candidates = matchingCat?.products || []
+  }
+
+  const staticMatch = (candidates || []).find((sp) => sp.slug === product.slug)
+  const rawVariants = Array.isArray(staticMatch?.variants) && staticMatch.variants.length > 0
+    ? staticMatch.variants
+    : (Array.isArray(product.variants) && product.variants.length > 0 ? product.variants : null)
+
+  const productImages = Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : (PRODUCT_IMAGES[product.slug] || [])
+
+  if (!rawVariants) {
+    return {
+      ...product,
+      images: productImages,
+      variants: null,
+      variantSelectorLabel: product.variantSelectorLabel || null,
+      variantType: product.variantType || null
+    }
+  }
+
+  const normalizedVariants = rawVariants.map((v) => {
+    const imgIndex =
+      typeof v.imageIndex === 'number' && v.imageIndex >= 0 && v.imageIndex < productImages.length
+        ? v.imageIndex
+        : 0
+    const variantImage = v.image || productImages[imgIndex] || productImages[0] || null
+    return {
+      ...v,
+      image: variantImage,
+      imageIndex: imgIndex
+    }
+  })
+
+  return {
+    ...product,
+    images: productImages,
+    variants: normalizedVariants,
+    variantSelectorLabel: staticMatch?.variantSelectorLabel || product.variantSelectorLabel || null,
+    variantType: staticMatch?.variantType || product.variantType || null
+  }
+}
+
+/**
  * Normalizes user-supplied or URL category slugs and resolves common aliases.
  * E.g., 'CCTV' -> 'cctv', 'computer' -> 'computer-laptop', 'biometric machine' -> 'biometric-machine'
  */
@@ -530,7 +593,7 @@ export async function fetchPublicCatalog({ forceRefresh = false } = {}) {
               : (PRODUCT_IMAGES[p.slug] || [])
             const merged = mergeProductContentFields(p)
 
-            return {
+            return enrichProductWithVariants({
               id: p.id,
               name: p.brand ? `${p.name} (${p.brand})` : p.name,
               rawName: p.name,
@@ -559,7 +622,7 @@ export async function fetchPublicCatalog({ forceRefresh = false } = {}) {
               categoryTitle: cat.title,
               categoryIcon: cat.icon || (staticCat?.icon || '💻'),
               images: productImages
-            }
+            }, staticCat?.products)
           })
 
           // CRITICAL PRODUCTION INVARIANT:

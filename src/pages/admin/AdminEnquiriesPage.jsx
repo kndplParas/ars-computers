@@ -142,8 +142,8 @@ export default function AdminEnquiriesPage() {
     restoreRemovedEnquiry
   } = useAdminData()
 
-  // Workflow Tabs: 'all_active', 'pending_completion', 'pending_rejection', 'quoted', 'rejected_closed', 'bin', 'archived'
-  const [activeWorkflowTab, setActiveWorkflowTab] = useState('all_active')
+  // Phase 1: 4 Primary Workflow Sections ('new', 'my_enquiries', 'action_required', 'completed') + Admin Maintenance ('bin', 'removed')
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState('new')
   const handleWorkflowTabChange = (tab) => {
     setActiveWorkflowTab(tab)
     setSelectedEnquiryIds(new Set())
@@ -362,11 +362,56 @@ export default function AdminEnquiriesPage() {
     }
   }, [enquiries])
 
+  // Phase 1: 4 Simplified Workflow Section Counts
+  const sectionCounts = useMemo(() => {
+    const active = enquiries.filter((e) => !e.is_archived && !e.is_in_bin && e.status !== 'in_bin' && !e.is_removed)
+
+    // 1. New: active unassigned or status new (excluding finished)
+    const newCount = active.filter((e) => {
+      const c = classifyEnquiry(e)
+      if (c.isCompleted || ['closed', 'rejected'].includes(e.status)) return false
+      return e.status === 'new' || !e.assigned_employee_id
+    }).length
+
+    // 2. My Enquiries / Assigned
+    const myEnquiriesCount = active.filter((e) => {
+      const c = classifyEnquiry(e)
+      if (c.isCompleted || ['closed', 'rejected'].includes(e.status)) return false
+      if (!e.assigned_employee_id) return false
+      return isSuperadmin ? true : e.assigned_employee_id === adminUser?.id
+    }).length
+
+    // 3. Action Required
+    const actionRequiredCount = active.filter((e) => {
+      const c = classifyEnquiry(e)
+      if (c.isCompleted || ['closed', 'rejected'].includes(e.status)) return false
+      if (isSuperadmin) {
+        return e.status === 'completion_requested' || e.status === 'rejection_requested' || c.isOverdue
+      }
+      return e.assigned_employee_id === adminUser?.id && (e.status === 'returned_for_rework' || c.isOverdue)
+    }).length
+
+    // 4. Completed: completed, approved, closed, rejected, archived
+    const completedCount = enquiries.filter((e) => {
+      if (e.is_removed || e.is_in_bin || e.status === 'in_bin') return false
+      const c = classifyEnquiry(e)
+      return c.isCompleted || e.is_archived || ['closed', 'rejected'].includes(e.status)
+    }).length
+
+    return {
+      new: newCount,
+      myEnquiries: myEnquiriesCount,
+      actionRequired: actionRequiredCount,
+      completed: completedCount
+    }
+  }, [enquiries, isSuperadmin, adminUser])
+
   // --- Filtered Enquiries (Tab + Search + Filters) ---
   const filteredEnquiries = useMemo(() => {
     return enquiries.filter((item) => {
       const isInBin = Boolean(item.is_in_bin || item.status === 'in_bin')
       const isRemoved = Boolean(item.is_removed)
+      const c = classifyEnquiry(item)
 
       // Rule 5 & 10: Removed enquiries are isolated to the Head-only Removed tab
       if (effectiveWorkflowTab === 'removed') {
@@ -375,17 +420,48 @@ export default function AdminEnquiriesPage() {
         if (isRemoved) return false
       }
 
-      // 1. Workflow Tab Filtering
-      if (effectiveWorkflowTab === 'all_active' && (item.is_archived || isInBin)) return false
-      if (effectiveWorkflowTab === 'pending_completion' && (item.is_archived || isInBin || item.status !== 'completion_requested')) return false
-      if (effectiveWorkflowTab === 'pending_rejection' && (item.is_archived || isInBin || item.status !== 'rejection_requested')) return false
-      if (effectiveWorkflowTab === 'quoted' && (item.is_archived || isInBin || item.status !== 'quoted')) return false
-      if (effectiveWorkflowTab === 'rejected_closed' && (item.is_archived || isInBin || (item.status !== 'closed' && item.status !== 'rejected'))) return false
-      if (effectiveWorkflowTab === 'bin' && !isInBin) return false
-      if (effectiveWorkflowTab === 'archived' && !item.is_archived) return false
+      // 1. Primary 4-Section & Workflow Tab Filtering
+      if (effectiveWorkflowTab === 'new') {
+        if (item.is_archived || isInBin) return false
+        if (c.isCompleted || ['closed', 'rejected'].includes(item.status)) return false
+        const isNewOrUnassigned = item.status === 'new' || !item.assigned_employee_id
+        if (!isNewOrUnassigned) return false
+      } else if (effectiveWorkflowTab === 'my_enquiries') {
+        if (item.is_archived || isInBin) return false
+        if (c.isCompleted || ['closed', 'rejected'].includes(item.status)) return false
+        if (!item.assigned_employee_id) return false
+        if (!isSuperadmin && item.assigned_employee_id !== adminUser?.id) return false
+      } else if (effectiveWorkflowTab === 'action_required') {
+        if (item.is_archived || isInBin) return false
+        if (c.isCompleted || ['closed', 'rejected'].includes(item.status)) return false
+        if (isSuperadmin) {
+          const isHeadAction = item.status === 'completion_requested' || item.status === 'rejection_requested' || c.isOverdue
+          if (!isHeadAction) return false
+        } else {
+          const isMyEnquiry = item.assigned_employee_id === adminUser?.id
+          const isEmpAction = isMyEnquiry && (item.status === 'returned_for_rework' || c.isOverdue)
+          if (!isEmpAction) return false
+        }
+      } else if (effectiveWorkflowTab === 'completed') {
+        const isFinished = c.isCompleted || item.is_archived || ['closed', 'rejected'].includes(item.status)
+        if (!isFinished || isInBin) return false
+      } else if (effectiveWorkflowTab === 'all_active') {
+        if (item.is_archived || isInBin) return false
+      } else if (effectiveWorkflowTab === 'pending_completion') {
+        if (item.is_archived || isInBin || item.status !== 'completion_requested') return false
+      } else if (effectiveWorkflowTab === 'pending_rejection') {
+        if (item.is_archived || isInBin || item.status !== 'rejection_requested') return false
+      } else if (effectiveWorkflowTab === 'quoted') {
+        if (item.is_archived || isInBin || item.status !== 'quoted') return false
+      } else if (effectiveWorkflowTab === 'rejected_closed') {
+        if (item.is_archived || isInBin || (item.status !== 'closed' && item.status !== 'rejected')) return false
+      } else if (effectiveWorkflowTab === 'bin') {
+        if (!isInBin) return false
+      } else if (effectiveWorkflowTab === 'archived') {
+        if (!item.is_archived) return false
+      }
 
       // 1b. Smart Dashboard Click-Through Filters
-      const c = classifyEnquiry(item)
       if (dashboardFilter === 'today' && !c.isToday) return false
       if (dashboardFilter === 'pending' && !c.isPending) return false
       if (dashboardFilter === 'completed' && !c.isCompleted) return false
@@ -470,7 +546,7 @@ export default function AdminEnquiriesPage() {
 
       return matchesSearch && matchesStatus && matchesCategory && matchesDate
     })
-  }, [enquiries, effectiveWorkflowTab, searchQuery, statusFilter, categoryFilter, dateFilter, dashboardFilter, staffFilter])
+  }, [enquiries, effectiveWorkflowTab, searchQuery, statusFilter, categoryFilter, dateFilter, dashboardFilter, staffFilter, isSuperadmin, adminUser?.id])
 
   // Step 2: Client-side Paginated Slice
   const totalFilteredRecords = filteredEnquiries.length
@@ -667,8 +743,16 @@ export default function AdminEnquiriesPage() {
     const statusParam = searchParams.get('status')
     const staffParam = searchParams.get('staff')
 
-    if (tabParam && ['all_active', 'pending_completion', 'pending_rejection', 'quoted', 'rejected_closed', 'bin', 'archived', 'removed'].includes(tabParam)) {
-      setActiveWorkflowTab(tabParam)
+    if (tabParam) {
+      if (['new', 'my_enquiries', 'action_required', 'completed', 'all_active', 'pending_completion', 'pending_rejection', 'quoted', 'rejected_closed', 'bin', 'archived', 'removed'].includes(tabParam)) {
+        setActiveWorkflowTab(tabParam)
+      }
+    } else if (staffParam) {
+      setActiveWorkflowTab('my_enquiries')
+    } else if (filterParam === 'overdue' || filterParam === 'pending') {
+      setActiveWorkflowTab('action_required')
+    } else if (filterParam === 'completed') {
+      setActiveWorkflowTab('completed')
     }
 
     if (statusParam && ENQUIRY_STATUSES.some((s) => s.id === statusParam)) {
@@ -893,9 +977,14 @@ export default function AdminEnquiriesPage() {
   }
 
   // --- Phase 4 Employee Assignment Handlers ---
+  const isValidEnquiryObject = (obj) =>
+    Boolean(obj && typeof obj === 'object' && typeof obj.id === 'string' && !obj.nativeEvent && !obj.preventDefault && !obj._reactName)
+
   // Opens the self-assign confirmation modal (employee provides optional visit time)
-  const handleSelfAssign = (targetEnquiry = selectedEnquiry) => {
-    const target = targetEnquiry || selectedEnquiry
+  const handleSelfAssign = (targetEnquiry = null) => {
+    const target = isValidEnquiryObject(targetEnquiry)
+      ? targetEnquiry
+      : (isValidEnquiryObject(selectedEnquiry) ? selectedEnquiry : null)
     if (!target || !isOperationalUser) return
     setSelectedEnquiry(target)
     setSelfVisitDate(target.expected_visit_at ? target.expected_visit_at.split('T')[0] : '')
@@ -908,6 +997,7 @@ export default function AdminEnquiriesPage() {
   const handleConfirmSelfAssign = async (e) => {
     if (e) e.preventDefault()
     if (!selectedEnquiry || !isOperationalUser) return
+    if (!selectedEnquiry?.id) return
     setIsSelfAssigning(true)
     try {
       const expectedArrival = selfExpectedArrival || null
@@ -938,9 +1028,12 @@ export default function AdminEnquiriesPage() {
     }
   }
 
-  const handleOpenAssignModal = async (targetEnquiry = selectedEnquiry) => {
-    const target = targetEnquiry || selectedEnquiry
-    if (!isSuperadmin || !target) return
+  const handleOpenAssignModal = async (targetEnquiry = null) => {
+    // If targetEnquiry is a React SyntheticEvent or lacks a valid ID, fall back to selectedEnquiry
+    const target = isValidEnquiryObject(targetEnquiry)
+      ? targetEnquiry
+      : (isValidEnquiryObject(selectedEnquiry) ? selectedEnquiry : null)
+    if (!isSuperadmin || !target || !target.id) return
     setSelectedEnquiry(target)
     setAssignmentError(null)
     setAssignReason('')
@@ -1072,7 +1165,10 @@ export default function AdminEnquiriesPage() {
 
   const handleSaveAssignment = async (e) => {
     if (e) e.preventDefault()
-    if (!selectedEnquiry || !isSuperadmin) return
+    if (!selectedEnquiry?.id || !isSuperadmin) {
+      setAssignmentError('No valid enquiry is selected for assignment.')
+      return
+    }
     setAssignmentError(null)
     setIsSubmittingAssignment(true)
     try {
@@ -1756,6 +1852,71 @@ export default function AdminEnquiriesPage() {
     )
   }
 
+  // Section-specific empty state with clear filters trigger
+  const renderEmptyState = (isMobile = false) => {
+    let title = 'No enquiries found'
+    let description = 'There are no records in this view.'
+
+    if (hasActiveFilters) {
+      title = 'No enquiries match your filters'
+      description = 'Try clearing your filters or search terms to see all enquiries.'
+    } else {
+      switch (activeWorkflowTab) {
+        case 'new':
+          title = 'No new enquiries waiting for assignment'
+          description = 'All incoming requests have been assigned or processed.'
+          break
+        case 'my_enquiries':
+          title = isSuperadmin ? 'No assigned enquiries' : 'No active enquiries assigned to you right now'
+          description = isSuperadmin
+            ? 'No enquiries are currently assigned to staff.'
+            : "Check the 'New' section to pick up open enquiries."
+          break
+        case 'action_required':
+          title = 'No actions requiring your attention'
+          description = isSuperadmin
+            ? 'No pending approvals, rejection reviews, or overdue items.'
+            : 'No returned rework or overdue visits assigned to you.'
+          break
+        case 'completed':
+        case 'archived':
+          title = 'No completed enquiries match your filters'
+          description = 'Completed and archived enquiries will appear here.'
+          break
+        case 'bin':
+          title = 'The Bin is empty'
+          description = 'Enquiries moved to the Bin will appear here for 30-day retention before permanent cleanup.'
+          break
+        case 'removed':
+          title = 'No removed enquiries recorded'
+          description = 'Audit records of removed spam and test entries will appear here.'
+          break
+        default:
+          title = 'No enquiries match your selection'
+          description = 'Try switching sections or clearing your search filters.'
+          break
+      }
+    }
+
+    return (
+      <div className={`empty-state-wrap ${isMobile ? 'mobile-empty-box' : ''}`}>
+        <span className="empty-icon" aria-hidden="true">🔍</span>
+        <h3>{title}</h3>
+        <p>{description}</p>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            className="btn-outline btn-sm"
+            onClick={handleClearFilters}
+            style={{ marginTop: isMobile ? '10px' : '8px' }}
+          >
+            Clear All Filters
+          </button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <AdminLayout activeTab="enquiries">
       {/* Toast Notification */}
@@ -1878,160 +2039,142 @@ export default function AdminEnquiriesPage() {
           </div>
         </div>
 
-        {/* Phase 2 & Phase 3: Workflow Tab Bar */}
+        {/* Phase 1: Simplified 4-Section Primary Navigation Bar */}
         <div
-          className="admin-workflow-tabs-bar"
+          className="admin-workflow-tabs-bar enquiries-primary-nav"
           style={{
             display: 'flex',
-            gap: '5px',
-            marginBottom: '8px',
+            gap: '8px',
+            marginBottom: '10px',
             borderBottom: '1px solid #e2e8f0',
-            paddingBottom: '5px',
+            paddingBottom: '8px',
+            alignItems: 'center',
             flexWrap: 'wrap'
           }}
           role="tablist"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeWorkflowTab === 'all_active'}
-            onClick={() => handleWorkflowTabChange('all_active')}
+          {/* Operational Sections Group */}
+          <div
+            className="enquiry-main-sections-group"
             style={{
-              padding: '4px 9px',
-              borderRadius: '5px',
-              fontWeight: 600,
-              fontSize: '0.78rem',
-              border: 'none',
-              cursor: 'pointer',
-              background: activeWorkflowTab === 'all_active' ? '#0f172a' : '#f1f5f9',
-              color: activeWorkflowTab === 'all_active' ? '#ffffff' : '#475569',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-          >
-            📋 All Active ({metrics.total})
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            id="tab-pending-completion"
-            aria-selected={activeWorkflowTab === 'pending_completion'}
-            onClick={() => handleWorkflowTabChange('pending_completion')}
-            style={{
-              padding: '4px 9px',
-              borderRadius: '5px',
-              fontWeight: 600,
-              fontSize: '0.78rem',
-              border: metrics.pendingCompletion > 0 ? '1px solid #7c3aed' : 'none',
-              cursor: 'pointer',
-              background: activeWorkflowTab === 'pending_completion' ? '#7c3aed' : (metrics.pendingCompletion > 0 ? '#f5f3ff' : '#f1f5f9'),
-              color: activeWorkflowTab === 'pending_completion' ? '#ffffff' : (metrics.pendingCompletion > 0 ? '#6d28d9' : '#475569'),
-              transition: 'all 0.2s',
               display: 'flex',
+              gap: '6px',
               alignItems: 'center',
-              gap: '4px',
-              flexShrink: 0
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              maxWidth: '100%'
             }}
           >
-            <span>⏳ Pending Completion</span>
-            {metrics.pendingCompletion > 0 && (
-              <span
-                style={{
-                  background: activeWorkflowTab === 'pending_completion' ? '#ffffff' : '#7c3aed',
-                  color: activeWorkflowTab === 'pending_completion' ? '#7c3aed' : '#ffffff',
-                  fontSize: '0.7rem',
-                  padding: '1px 5px',
-                  borderRadius: '8px',
-                  fontWeight: 700
-                }}
-              >
-                {metrics.pendingCompletion}
-              </span>
-            )}
-          </button>
+            {/* 1. New */}
+            <button
+              type="button"
+              role="tab"
+              id="tab-new"
+              aria-selected={activeWorkflowTab === 'new' || activeWorkflowTab === 'all_active'}
+              onClick={() => handleWorkflowTabChange('new')}
+              className={`enquiry-nav-btn ${activeWorkflowTab === 'new' || activeWorkflowTab === 'all_active' ? 'active active-new' : ''}`}
+              title="Genuinely new or unassigned enquiries ready for staff assignment or self-assignment"
+            >
+              <span>📥 New</span>
+              {sectionCounts.new > 0 && (
+                <span
+                  style={{
+                    background: (activeWorkflowTab === 'new' || activeWorkflowTab === 'all_active') ? '#ffffff' : '#2563eb',
+                    color: (activeWorkflowTab === 'new' || activeWorkflowTab === 'all_active') ? '#1e40af' : '#ffffff',
+                    fontSize: '0.7rem',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    fontWeight: 700
+                  }}
+                >
+                  {sectionCounts.new}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            role="tab"
-            id="tab-pending-rejection"
-            aria-selected={activeWorkflowTab === 'pending_rejection'}
-            onClick={() => handleWorkflowTabChange('pending_rejection')}
-            style={{
-              padding: '4px 9px',
-              borderRadius: '5px',
-              fontWeight: 600,
-              fontSize: '0.78rem',
-              border: metrics.pendingRejection > 0 ? '1px solid #f59e0b' : 'none',
-              cursor: 'pointer',
-              background: activeWorkflowTab === 'pending_rejection' ? '#d97706' : (metrics.pendingRejection > 0 ? '#fef3c7' : '#f1f5f9'),
-              color: activeWorkflowTab === 'pending_rejection' ? '#ffffff' : (metrics.pendingRejection > 0 ? '#b91c1c' : '#475569'),
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              flexShrink: 0
-            }}
-          >
-            <span>⚠️ Pending Rejection</span>
-            {metrics.pendingRejection > 0 && (
-              <span
-                style={{
-                  background: activeWorkflowTab === 'pending_rejection' ? '#ffffff' : '#b45309',
-                  color: activeWorkflowTab === 'pending_rejection' ? '#b45309' : '#ffffff',
-                  fontSize: '0.7rem',
-                  padding: '1px 5px',
-                  borderRadius: '8px',
-                  fontWeight: 700
-                }}
-              >
-                {metrics.pendingRejection}
-              </span>
-            )}
-          </button>
+            {/* 2. My Enquiries / Assigned */}
+            <button
+              type="button"
+              role="tab"
+              id="tab-my-enquiries"
+              aria-selected={activeWorkflowTab === 'my_enquiries' || activeWorkflowTab === 'quoted'}
+              onClick={() => handleWorkflowTabChange('my_enquiries')}
+              className={`enquiry-nav-btn ${activeWorkflowTab === 'my_enquiries' || activeWorkflowTab === 'quoted' ? 'active active-assigned' : ''}`}
+              title={isSuperadmin ? 'Active enquiries currently assigned to staff' : 'Enquiries assigned to your account'}
+            >
+              <span>👤 {isSuperadmin ? 'Assigned' : 'My Enquiries'}</span>
+              {sectionCounts.myEnquiries > 0 && (
+                <span
+                  style={{
+                    background: (activeWorkflowTab === 'my_enquiries' || activeWorkflowTab === 'quoted') ? '#ffffff' : '#0284c7',
+                    color: (activeWorkflowTab === 'my_enquiries' || activeWorkflowTab === 'quoted') ? '#0284c7' : '#ffffff',
+                    fontSize: '0.7rem',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    fontWeight: 700
+                  }}
+                >
+                  {sectionCounts.myEnquiries}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeWorkflowTab === 'quoted'}
-            onClick={() => handleWorkflowTabChange('quoted')}
-            style={{
-              padding: '4px 9px',
-              borderRadius: '5px',
-              fontWeight: 600,
-              fontSize: '0.78rem',
-              border: 'none',
-              cursor: 'pointer',
-              background: activeWorkflowTab === 'quoted' ? '#0f172a' : '#f1f5f9',
-              color: activeWorkflowTab === 'quoted' ? '#ffffff' : '#475569',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-          >
-            💼 Quoted ({metrics.quoted})
-          </button>
+            {/* 3. Action Required */}
+            <button
+              type="button"
+              role="tab"
+              id="tab-action-required"
+              aria-selected={activeWorkflowTab === 'action_required' || activeWorkflowTab === 'pending_completion' || activeWorkflowTab === 'pending_rejection'}
+              onClick={() => handleWorkflowTabChange('action_required')}
+              className={`enquiry-nav-btn ${activeWorkflowTab === 'action_required' || activeWorkflowTab === 'pending_completion' || activeWorkflowTab === 'pending_rejection' ? 'active active-action' : ''}`}
+              title={isSuperadmin ? 'Tasks pending Head approval or decision (completion requests, rejection requests, overdue visits)' : 'Tasks requiring action (rework requested, overdue visits)'}
+            >
+              <span>⚡ Action Required</span>
+              {sectionCounts.actionRequired > 0 && (
+                <span
+                  style={{
+                    background: (activeWorkflowTab === 'action_required' || activeWorkflowTab === 'pending_completion' || activeWorkflowTab === 'pending_rejection') ? '#ffffff' : '#b45309',
+                    color: (activeWorkflowTab === 'action_required' || activeWorkflowTab === 'pending_completion' || activeWorkflowTab === 'pending_rejection') ? '#b45309' : '#ffffff',
+                    fontSize: '0.7rem',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    fontWeight: 700
+                  }}
+                >
+                  {sectionCounts.actionRequired}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeWorkflowTab === 'rejected_closed'}
-            onClick={() => handleWorkflowTabChange('rejected_closed')}
-            style={{
-              padding: '4px 9px',
-              borderRadius: '5px',
-              fontWeight: 600,
-              fontSize: '0.78rem',
-              border: 'none',
-              cursor: 'pointer',
-              background: activeWorkflowTab === 'rejected_closed' ? '#0f172a' : '#f1f5f9',
-              color: activeWorkflowTab === 'rejected_closed' ? '#ffffff' : '#475569',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-          >
-            🏁 Rejected &amp; Closed ({metrics.closed})
-          </button>
+            {/* 4. Completed */}
+            <button
+              type="button"
+              role="tab"
+              id="tab-completed"
+              aria-selected={activeWorkflowTab === 'completed' || activeWorkflowTab === 'archived' || activeWorkflowTab === 'rejected_closed'}
+              onClick={() => handleWorkflowTabChange('completed')}
+              className={`enquiry-nav-btn ${activeWorkflowTab === 'completed' || activeWorkflowTab === 'archived' || activeWorkflowTab === 'rejected_closed' ? 'active active-completed' : ''}`}
+              title="Completed, closed, and historical archived enquiries"
+            >
+              <span>✅ Completed</span>
+              {sectionCounts.completed > 0 && (
+                <span
+                  style={{
+                    background: (activeWorkflowTab === 'completed' || activeWorkflowTab === 'archived' || activeWorkflowTab === 'rejected_closed') ? '#ffffff' : '#059669',
+                    color: (activeWorkflowTab === 'completed' || activeWorkflowTab === 'archived' || activeWorkflowTab === 'rejected_closed') ? '#047857' : '#ffffff',
+                    fontSize: '0.7rem',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    fontWeight: 700
+                  }}
+                >
+                  {sectionCounts.completed}
+                </span>
+              )}
+            </button>
+          </div>
 
+          {/* Superadmin Storage Maintenance Area: Bin (#tab-bin) and Removed (#tab-removed) */}
           {isSuperadmin && (
             <button
               type="button"
@@ -2040,20 +2183,22 @@ export default function AdminEnquiriesPage() {
               aria-selected={activeWorkflowTab === 'bin'}
               onClick={() => handleWorkflowTabChange('bin')}
               style={{
+                marginLeft: 'auto',
                 padding: '4px 9px',
                 borderRadius: '5px',
                 fontWeight: 600,
                 fontSize: '0.78rem',
-                border: metrics.binCount > 0 ? '1px solid #94a3b8' : 'none',
+                border: metrics.binCount > 0 ? '1px solid #94a3b8' : '1px solid #e2e8f0',
                 cursor: 'pointer',
                 background: activeWorkflowTab === 'bin' ? '#475569' : (metrics.binCount > 0 ? '#f1f5f9' : '#f8fafc'),
                 color: activeWorkflowTab === 'bin' ? '#ffffff' : '#475569',
                 transition: 'all 0.2s',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
                 flexShrink: 0
               }}
+              title="7-day Bin retention before permanent cleanup"
             >
               <span>🗑️ Bin</span>
               {metrics.binCount > 0 && (
@@ -2073,27 +2218,6 @@ export default function AdminEnquiriesPage() {
             </button>
           )}
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeWorkflowTab === 'archived'}
-            onClick={() => handleWorkflowTabChange('archived')}
-            style={{
-              padding: '4px 9px',
-              borderRadius: '5px',
-              fontWeight: 600,
-              fontSize: '0.78rem',
-              border: 'none',
-              cursor: 'pointer',
-              background: activeWorkflowTab === 'archived' ? '#334155' : '#f1f5f9',
-              color: activeWorkflowTab === 'archived' ? '#ffffff' : '#475569',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-          >
-            📦 Archived ({metrics.archived})
-          </button>
-
           {isSuperadmin && (
             <button
               type="button"
@@ -2106,18 +2230,19 @@ export default function AdminEnquiriesPage() {
                 borderRadius: '5px',
                 fontWeight: 600,
                 fontSize: '0.78rem',
-                border: metrics.removedCount > 0 ? '1px solid #f87171' : 'none',
+                border: metrics.removedCount > 0 ? '1px solid #f87171' : '1px solid #e2e8f0',
                 cursor: 'pointer',
                 background: activeWorkflowTab === 'removed' ? '#dc2626' : (metrics.removedCount > 0 ? '#fef2f2' : '#f8fafc'),
                 color: activeWorkflowTab === 'removed' ? '#ffffff' : (metrics.removedCount > 0 ? '#b91c1c' : '#64748b'),
                 transition: 'all 0.2s',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
                 flexShrink: 0
               }}
+              title="Soft-removed spam, fake, test or duplicate enquiries"
             >
-              <span>🚫 Removed (Spam/Fake)</span>
+              <span>🚫 Removed</span>
               {metrics.removedCount > 0 && (
                 <span
                   style={{
@@ -2200,7 +2325,7 @@ export default function AdminEnquiriesPage() {
         )}
 
         {/* Permanent Archive Information Banner */}
-        {activeWorkflowTab === 'archived' && (
+        {(activeWorkflowTab === 'completed' || activeWorkflowTab === 'archived') && (
           <div
             style={{
               background: '#f0fdf4',
@@ -2554,21 +2679,7 @@ export default function AdminEnquiriesPage() {
               {totalFilteredRecords === 0 ? (
                 <tr>
                   <td colSpan={isSuperadmin && activeWorkflowTab !== 'removed' ? 9 : 8}>
-                    <div className="empty-state-wrap">
-                      <span className="empty-icon">🔍</span>
-                      <h3>No enquiries match your selection</h3>
-                      <p>Try switching tabs or clearing your search filters.</p>
-                      {hasActiveFilters && (
-                        <button
-                          type="button"
-                          className="btn-outline btn-sm"
-                          onClick={handleClearFilters}
-                          style={{ marginTop: '8px' }}
-                        >
-                          Clear Filters
-                        </button>
-                      )}
-                    </div>
+                    {renderEmptyState(false)}
                   </td>
                 </tr>
               ) : (
@@ -3054,28 +3165,24 @@ export default function AdminEnquiriesPage() {
         {/* 4. Mobile Enquiries Cards (< 900px) */}
         <div className="mobile-products-cards-list mobile-enquiries-cards">
           {totalFilteredRecords === 0 ? (
-            <div className="empty-state-wrap mobile-empty-box">
-              <span className="empty-icon">🔍</span>
-              <h3>No enquiries match your criteria</h3>
-              <p>Clear active filters to view all records.</p>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="btn-outline btn-sm"
-                  onClick={handleClearFilters}
-                  style={{ marginTop: '10px' }}
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
+            renderEmptyState(true)
           ) : (
             paginatedEnquiries.map((enq) => {
               const statusMeta = getStatusMeta(enq.status)
+              const customerName = enq.customer_name || enq.name || 'Anonymous Customer'
               const isPendingRejection = enq.status === 'rejection_requested'
               const isPendingCompletion = enq.status === 'completion_requested'
               const isInBin = enq.is_in_bin || enq.status === 'in_bin'
               const c = classifyEnquiry(enq)
+              const sm = parseServiceEnquiry(enq)
+
+              // Customer phone and communication resolution
+              const rawCustPhone = enq.phone || resolveCustomerPhone(enq) || (enq.contact_info && !enq.contact_info.includes('@') ? enq.contact_info.trim() : null)
+              const cleanCustPhone = rawCustPhone && rawCustPhone.trim() !== '' && !['-', 'n/a', 'none'].includes(rawCustPhone.trim().toLowerCase()) ? rawCustPhone.trim() : null
+              const telHref = cleanCustPhone ? `tel:${cleanCustPhone.replace(/[^+\d]/g, '')}` : null
+              const customerWhatsAppUrl = buildCustomerWhatsAppUrl(enq)
+
+              const isWorkable = !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status)
 
               return (
                 <div
@@ -3091,8 +3198,9 @@ export default function AdminEnquiriesPage() {
                           : undefined
                   }
                 >
+                  {/* Card Header: Selection, ID, Submitted Date/Time & Status */}
                   <div className="mobile-card-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="mobile-card-header-left">
                       {isSuperadmin && activeWorkflowTab !== 'removed' && isEnquiryEligibleForRemoval(enq) && (
                         <input
                           type="checkbox"
@@ -3109,7 +3217,10 @@ export default function AdminEnquiriesPage() {
                           }}
                         />
                       )}
-                      <span className="enquiry-id-badge">{enq.enquiry_number || enq.id}</span>
+                      <span className="enquiry-id-badge" title={enq.id}>{enq.enquiry_number || enq.id}</span>
+                      <span className="mobile-submitted-time" title={enq.created_at ? `Submitted: ${formatDateTime(enq.created_at)}` : ''}>
+                        🕒 {formatDate(enq.created_at)}
+                      </span>
                     </div>
                     <span
                       className="enquiry-status-chip"
@@ -3132,27 +3243,35 @@ export default function AdminEnquiriesPage() {
                     </div>
                   )}
 
+                  {/* Card Body: Customer, Company, Phone & Requirement */}
                   <div className="mobile-card-meta">
-                    {(() => {
-                      const sm = parseServiceEnquiry(enq)
-                      return (
-                        <>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                            <h3 className="mobile-card-title">{enq.customer_name || enq.name}</h3>
-                            {sm.isService && (
-                              <span className="service-repair-badge">🛠️ Service / Repair</span>
-                            )}
-                            {sm.ticketNumber && (
-                              <span className="service-ticket-tag">{sm.ticketNumber}</span>
-                            )}
-                          </div>
-                          <span className="customer-company-text">{enq.company || 'Direct Client'}</span>
-                          <span className="service-title-text" style={{ marginTop: '4px' }}>
-                            {sm.productCategory || enq.service_requested || (enq.category_interest ? enq.category_interest.replace(/-/g, ' ') : 'Hardware Inquiry')}
-                          </span>
-                        </>
-                      )
-                    })()}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                      <h3 className="mobile-card-title">{enq.customer_name || enq.name}</h3>
+                      {sm.isService && (
+                        <span className="service-repair-badge">🛠️ Service / Repair</span>
+                      )}
+                      {sm.ticketNumber && (
+                        <span className="service-ticket-tag">{sm.ticketNumber}</span>
+                      )}
+                    </div>
+
+                    <div className="mobile-card-subinfo">
+                      <span className="customer-company-text">{enq.company || 'Direct Client'}</span>
+                      {cleanCustPhone ? (
+                        <a href={telHref} className="mobile-phone-link" title={`Call ${cleanCustPhone}`}>
+                          📞 <span className="customer-phone-text">{cleanCustPhone}</span>
+                        </a>
+                      ) : (
+                        <span className="customer-phone-text text-muted" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                          📞 No Phone
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="service-title-text" style={{ marginTop: '4px' }}>
+                      {sm.productCategory || enq.service_requested || (enq.category_interest ? enq.category_interest.replace(/-/g, ' ') : 'Hardware Inquiry')}
+                    </span>
+
                     {enq.category_label && enq.category_label.toLowerCase() !== (enq.service_requested || '').toLowerCase() ? (
                       <span className="category-tag-inline" style={{ marginTop: '4px', alignSelf: 'flex-start' }}>{enq.category_label}</span>
                     ) : enq.category_interest && enq.category_interest.toLowerCase() !== (enq.service_requested || '').toLowerCase() && enq.service_requested ? (
@@ -3160,7 +3279,7 @@ export default function AdminEnquiriesPage() {
                     ) : null}
                   </div>
 
-                  {/* Step 2: Mobile Card Assignment & Follow-Up Row */}
+                  {/* Mobile Card Assignment & Follow-Up Row */}
                   <div className="mobile-card-assignment-row">
                     <div className="mobile-assignment-info">
                       {enq.assigned_employee_name ? (
@@ -3183,31 +3302,78 @@ export default function AdminEnquiriesPage() {
                     )}
                   </div>
 
-                  <p className="mobile-specs-snippet">{enq.message}</p>
+                  {enq.message && (
+                    <p className="mobile-specs-snippet">{enq.message}</p>
+                  )}
 
+                  {/* Actions Section */}
                   <div className="mobile-card-actions">
-                    {/* Quick Assignment Actions for Mobile */}
-                    {!isSuperadmin && isOperationalUser && !enq.assigned_employee_id && !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status) && (
-                      <button
-                        type="button"
-                        className="btn-outline btn-block quick-self-assign-btn"
-                        onClick={() => handleSelfAssign(enq)}
-                        style={{ marginBottom: '8px' }}
-                      >
-                        ✋ Self-Assign to Me
-                      </button>
-                    )}
-                    {isSuperadmin && !enq.is_archived && !c.isCompleted && !c.isInBin && !['rejected', 'closed'].includes(enq.status) && (
-                      <button
-                        type="button"
-                        className="btn-outline btn-block quick-assign-btn"
-                        onClick={() => handleOpenAssignModal(enq)}
-                        style={{ marginBottom: '8px' }}
-                      >
-                        {enq.assigned_employee_name ? '✏️ Reassign Engineer' : '👤 Assign Engineer'}
-                      </button>
-                    )}
+                    {/* Compact Quick Actions: Call, WhatsApp, Contextual Assign */}
+                    <div className="mobile-card-quick-actions">
+                      {telHref ? (
+                        <a
+                          href={telHref}
+                          className="btn-outline mobile-quick-action-btn mobile-call-btn"
+                          aria-label={`Call ${customerName}`}
+                        >
+                          📞 Call
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-outline mobile-quick-action-btn mobile-call-btn"
+                          disabled
+                          title="No phone number provided"
+                        >
+                          📞 Call
+                        </button>
+                      )}
 
+                      {customerWhatsAppUrl ? (
+                        <a
+                          href={customerWhatsAppUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-outline mobile-quick-action-btn mobile-whatsapp-btn"
+                          aria-label={`Chat with ${customerName} on WhatsApp`}
+                        >
+                          💬 WhatsApp
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-outline mobile-quick-action-btn mobile-whatsapp-btn"
+                          disabled
+                          title="No valid WhatsApp phone number"
+                        >
+                          💬 WhatsApp
+                        </button>
+                      )}
+
+                      {!isSuperadmin && isOperationalUser && !enq.assigned_employee_id && isWorkable && (
+                        <button
+                          type="button"
+                          className="btn-outline mobile-quick-action-btn quick-self-assign-btn"
+                          onClick={() => handleSelfAssign(enq)}
+                          aria-label="Self-Assign enquiry to me"
+                        >
+                          ✋ Self-Assign
+                        </button>
+                      )}
+
+                      {isSuperadmin && isWorkable && (
+                        <button
+                          type="button"
+                          className="btn-outline mobile-quick-action-btn quick-assign-btn"
+                          onClick={() => handleOpenAssignModal(enq)}
+                          aria-label={enq.assigned_employee_name ? 'Reassign Engineer' : 'Assign Engineer'}
+                        >
+                          {enq.assigned_employee_name ? '✏️ Reassign' : '👤 Assign'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Superadmin destructive & workflow approval controls */}
                     {activeWorkflowTab === 'removed' && isSuperadmin && (
                       <div style={{ marginBottom: '8px' }}>
                         <button
@@ -3237,6 +3403,7 @@ export default function AdminEnquiriesPage() {
                         🚫 Remove (Spam / Fake)
                       </button>
                     )}
+
                     {enq.status === 'rejection_requested' && isSuperadmin && (
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                         <button
@@ -4186,7 +4353,7 @@ export default function AdminEnquiriesPage() {
                             <button
                               type="button"
                               className="btn-outline btn-xs"
-                              onClick={handleOpenAssignModal}
+                              onClick={() => handleOpenAssignModal(selectedEnquiry)}
                               style={{ fontSize: '0.76rem', padding: '3px 8px' }}
                             >
                               ✏️ Reassign
@@ -4236,7 +4403,7 @@ export default function AdminEnquiriesPage() {
                           type="button"
                           id="take-enquiry-btn"
                           className="btn-primary btn-sm"
-                          onClick={handleSelfAssign}
+                          onClick={() => handleSelfAssign(selectedEnquiry)}
                           disabled={isSelfAssigning}
                           style={{ fontSize: '0.82rem', padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
@@ -4250,7 +4417,7 @@ export default function AdminEnquiriesPage() {
                           type="button"
                           id="head-assign-btn"
                           className="btn-primary btn-sm"
-                          onClick={handleOpenAssignModal}
+                          onClick={() => handleOpenAssignModal(selectedEnquiry)}
                           style={{ fontSize: '0.82rem', padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
                           <span>👤</span> Assign Employee

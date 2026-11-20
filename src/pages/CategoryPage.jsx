@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   fetchCategoryBySlug,
@@ -7,12 +7,119 @@ import {
   getInstantCatalog,
   normalizeCategorySlug
 } from '../lib/catalog'
+import { groupAccessories } from '../data/accessoryGroups'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import WhatsAppButton from '../components/WhatsAppButton'
 import WhatsAppSelectionBar from '../components/WhatsAppSelectionBar'
 import { useProductSelection } from '../lib/useProductSelection'
 import '../App.css'
+
+function ProductCard({ item, category, navigate }) {
+  return (
+    <article
+      key={item.slug || item.id}
+      className="category-product-card"
+      onClick={() => navigate(`/products/${item.slug}`)}
+    >
+      {/* Visual hardware preview placeholder or image */}
+      <div
+        className="product-card-visual"
+        onClick={(e) => {
+          e.stopPropagation()
+          navigate(`/products/${item.slug}`)
+        }}
+      >
+        {item.images && item.images.length > 0 && item.images[0] ? (
+          <img
+            src={item.images[0]}
+            alt={item.name}
+            className="product-card-img"
+            loading="lazy"
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+          />
+        ) : (
+          <div className="product-card-placeholder">
+            <span className="placeholder-icon" aria-hidden="true">{category.icon}</span>
+            <div className="placeholder-badge">
+              {item.isGeneric ? 'Solution Package' : 'Certified Genuine'}
+            </div>
+          </div>
+        )}
+
+        {item.isFeatured && (
+          <span className="product-featured-tag">★ Featured</span>
+        )}
+      </div>
+
+      {/* Product Info */}
+      <div className="product-card-body">
+        <div className="product-card-header">
+          <span className="product-category-label">{category.title}</span>
+          {item.brand ? (
+            <span className="product-brand-tag">{item.brand}</span>
+          ) : item.isGeneric ? (
+            <span className="product-brand-tag generic-tag">Hardware Solution</span>
+          ) : null}
+        </div>
+
+        <h3 className="product-card-title">
+          <Link
+            to={`/products/${item.slug}`}
+            className="product-title-link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {item.name}
+          </Link>
+        </h3>
+
+        <p className="product-card-spec">{item.spec}</p>
+
+        {item.variants && item.variants.length > 0 && (
+          <div className="product-card-variants-badge">
+            <span className="variants-badge-text">
+              {item.variantSelectorLabel ? item.variantSelectorLabel.replace(/^Select\s+/i, '') : 'Options'}: {item.variants.length} available ({item.variants.map((v) => v.label).slice(0, 3).join(', ')}{item.variants.length > 3 ? '…' : ''})
+            </span>
+          </div>
+        )}
+
+        {((typeof item.price === 'number' && item.price > 0) ||
+          (typeof item.stock === 'number' && item.stock > 0)) && (
+          <div className="product-card-pricing-row">
+            {typeof item.price === 'number' && item.price > 0 && (
+              <div className="product-card-price-wrap">
+                <span className="price-label">Price</span>
+                <span className="price-val">₹{Number(item.price).toLocaleString('en-IN')}</span>
+              </div>
+            )}
+
+            {typeof item.stock === 'number' && item.stock > 0 && (
+              <div className="product-card-stock-wrap">
+                <span className="stock-pill in-stock">✓ In Stock</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="product-card-actions">
+          <Link
+            to={`/products/${item.slug}`}
+            className="btn-primary w-full text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            View Details
+          </Link>
+
+          <WhatsAppButton
+            product={item}
+            category={category}
+            className="whatsapp-card-btn"
+          />
+        </div>
+      </div>
+    </article>
+  )
+}
 
 export default function CategoryPage() {
   const { slug } = useParams()
@@ -30,6 +137,11 @@ export default function CategoryPage() {
   const [error, setError] = useState(null)
   const [isRetrying, setIsRetrying] = useState(false)
   const { selected, clear } = useProductSelection()
+
+  const isAccessories = category?.id === 'accessories' || normalizedSlug === 'accessories'
+  const groupedAccessories = useMemo(() => {
+    return isAccessories ? groupAccessories(products) : []
+  }, [isAccessories, products])
 
   // Retry handler for user clicks
   const handleRetry = async () => {
@@ -240,110 +352,64 @@ export default function CategoryPage() {
                         View Other Categories
                       </Link>
                     </div>
+                  ) : isAccessories && groupedAccessories.length > 0 ? (
+                    <div className="accessories-grouped-container">
+                      {/* Section Quick Jump Bar */}
+                      <div className="accessories-group-jump-bar" aria-label="Jump to accessory section">
+                        <span className="group-jump-label">Jump to Section:</span>
+                        <div className="group-jump-pills">
+                          {groupedAccessories.map((grp) => (
+                            <a
+                              key={grp.id}
+                              href={`#${grp.id}`}
+                              className="group-jump-pill"
+                            >
+                              <span aria-hidden="true">{grp.icon}</span>
+                              <span>{grp.title}</span>
+                              <span className="group-jump-pill-count">{grp.products.length}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Group Sections */}
+                      {groupedAccessories.map((grp) => (
+                        <section key={grp.id} id={grp.id} className="accessory-group-section" aria-labelledby={`heading-${grp.id}`}>
+                          <div className="accessory-group-header">
+                            <div className="accessory-group-title-row">
+                              <span className="accessory-group-icon" aria-hidden="true">{grp.icon}</span>
+                              <h3 id={`heading-${grp.id}`} className="accessory-group-title">{grp.title}</h3>
+                              <span className="accessory-group-count">
+                                {grp.products.length} {grp.products.length === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                            {grp.description && (
+                              <p className="accessory-group-description">{grp.description}</p>
+                            )}
+                          </div>
+
+                          <div className="category-product-cards-grid">
+                            {grp.products.map((item) => (
+                              <ProductCard
+                                key={item.slug || item.id}
+                                item={item}
+                                category={category}
+                                navigate={navigate}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
                   ) : (
                     <div className="category-product-cards-grid">
                       {products.map((item) => (
-                        <article
+                        <ProductCard
                           key={item.slug || item.id}
-                          className="category-product-card"
-                          onClick={() => navigate(`/products/${item.slug}`)}
-                        >
-                          {/* Visual hardware preview placeholder or image */}
-                          <div
-                            className="product-card-visual"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              navigate(`/products/${item.slug}`)
-                            }}
-                          >
-                            {item.images && item.images.length > 0 && item.images[0] ? (
-                              <img
-                                src={item.images[0]}
-                                alt={item.name}
-                                className="product-card-img"
-                                loading="lazy"
-                                onError={(e) => { e.currentTarget.style.display = 'none' }}
-                              />
-                            ) : (
-                              <div className="product-card-placeholder">
-                                <span className="placeholder-icon" aria-hidden="true">{category.icon}</span>
-                                <div className="placeholder-badge">
-                                  {item.isGeneric ? 'Solution Package' : 'Certified Genuine'}
-                                </div>
-                              </div>
-                            )}
-
-                            {item.isFeatured && (
-                              <span className="product-featured-tag">★ Featured</span>
-                            )}
-                          </div>
-
-                          {/* Product Info */}
-                          <div className="product-card-body">
-                            <div className="product-card-header">
-                              <span className="product-category-label">{category.title}</span>
-                              {item.brand ? (
-                                <span className="product-brand-tag">{item.brand}</span>
-                              ) : item.isGeneric ? (
-                                <span className="product-brand-tag generic-tag">Hardware Solution</span>
-                              ) : null}
-                            </div>
-
-                            <h3 className="product-card-title">
-                              <Link
-                                to={`/products/${item.slug}`}
-                                className="product-title-link"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {item.name}
-                              </Link>
-                            </h3>
-
-                            <p className="product-card-spec">{item.spec}</p>
-
-                            {item.variants && item.variants.length > 0 && (
-                              <div className="product-card-variants-badge">
-                                <span className="variants-badge-text">
-                                  {item.variantSelectorLabel ? item.variantSelectorLabel.replace(/^Select\s+/i, '') : 'Options'}: {item.variants.length} available ({item.variants.map((v) => v.label).slice(0, 3).join(', ')}{item.variants.length > 3 ? '…' : ''})
-                                </span>
-                              </div>
-                            )}
-
-                            {((typeof item.price === 'number' && item.price > 0) ||
-                              (typeof item.stock === 'number' && item.stock > 0)) && (
-                              <div className="product-card-pricing-row">
-                                {typeof item.price === 'number' && item.price > 0 && (
-                                  <div className="product-card-price-wrap">
-                                    <span className="price-label">Price</span>
-                                    <span className="price-val">₹{Number(item.price).toLocaleString('en-IN')}</span>
-                                  </div>
-                                )}
-
-                                {typeof item.stock === 'number' && item.stock > 0 && (
-                                  <div className="product-card-stock-wrap">
-                                    <span className="stock-pill in-stock">✓ In Stock</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            <div className="product-card-actions">
-                              <Link
-                                to={`/products/${item.slug}`}
-                                className="btn-primary w-full text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View Details
-                              </Link>
-
-                              <WhatsAppButton
-                                product={item}
-                                category={category}
-                                className="whatsapp-card-btn"
-                              />
-                            </div>
-                          </div>
-                        </article>
+                          item={item}
+                          category={category}
+                          navigate={navigate}
+                        />
                       ))}
                     </div>
                   )}

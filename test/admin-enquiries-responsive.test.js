@@ -143,6 +143,60 @@ test('Database, permissions and workflow logic are not changed by this responsiv
   !page.includes('GRANT ') &&
   !page.includes('REVOKE '))
 
+console.log('\n[Suite 4] Phase 2 Mobile Enquiry Cards (320px - 430px, Call, WhatsApp, 44px Touch Targets)')
+test('Card header displays enquiry ID, submitted date/time, and status chip',
+  page.includes('className="mobile-submitted-time"') &&
+  page.includes('formatDate(enq.created_at)') &&
+  page.includes('className="enquiry-id-badge"') &&
+  page.includes('className="enquiry-status-chip"'))
+
+test('Card header preserves authorized Superadmin removal checkbox',
+  page.includes('className="enquiry-select-checkbox-mobile"'))
+
+test('Card body displays customer name, company, service and problem snippet',
+  page.includes('className="mobile-card-title"') &&
+  page.includes('customer-company-text') &&
+  page.includes('service-title-text') &&
+  page.includes('mobile-specs-snippet'))
+
+test('Customer phone number is displayed and formatted on mobile cards',
+  page.includes('customer-phone-text') &&
+  page.includes('cleanCustPhone'))
+
+test('Direct Call action is present with tel: protocol',
+  page.includes('telHref') &&
+  page.includes('className="btn-outline mobile-quick-action-btn mobile-call-btn"') &&
+  page.includes('📞 Call'))
+
+test('Direct WhatsApp action uses existing buildCustomerWhatsAppUrl helper',
+  page.includes('buildCustomerWhatsAppUrl(enq)') &&
+  page.includes('className="btn-outline mobile-quick-action-btn mobile-whatsapp-btn"') &&
+  page.includes('💬 WhatsApp') &&
+  page.includes('target="_blank"') &&
+  page.includes('rel="noopener noreferrer"'))
+
+test('Contextual assignment action renders according to role permissions',
+  page.includes('quick-self-assign-btn') &&
+  page.includes('quick-assign-btn') &&
+  page.includes('handleSelfAssign(enq)') &&
+  page.includes('handleOpenAssignModal(enq)'))
+
+test('View Full Details & History remains accessible as a full-width action',
+  page.includes('view-details-btn') &&
+  page.includes('View Full Details &amp; History'))
+
+test('All interactive touch targets on mobile cards enforce at least 44px height',
+  css.includes('.mobile-quick-action-btn') &&
+  css.includes('min-height: 44px') &&
+  css.includes('.mobile-card-actions .btn-block') &&
+  css.includes('.enquiry-select-checkbox-mobile'))
+
+test('Responsive card styles prevent horizontal overflow on small screens (320px - 430px)',
+  css.includes('@media (max-width: 375px)') &&
+  css.includes('grid-template-columns: repeat(2, 1fr)') &&
+  css.includes('overflow-wrap: anywhere') &&
+  css.includes('word-break: break-word'))
+
 console.log('\n====================================================================')
 console.log(`Admin enquiries responsive tests passed: ${passed}`)
 console.log(`Admin enquiries responsive tests failed: ${failed}`)
