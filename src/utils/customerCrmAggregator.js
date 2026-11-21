@@ -143,11 +143,13 @@ export function getCrmRolePermissions(role) {
  * @param {Object} params
  * @param {Array} [params.enquiries=[]]
  * @param {Array} [params.orders=[]]
+ * @param {Array} [params.regularCustomers=[]]
  * @returns {Array<Object>} Aggregated customer list sorted by lastActive descending
  */
-export function aggregateCustomers({ enquiries = [], orders = [] }) {
+export function aggregateCustomers({ enquiries = [], orders = [], regularCustomers = [] }) {
   const safeEnquiries = Array.isArray(enquiries) ? enquiries : []
   const safeOrders = Array.isArray(orders) ? orders : []
+  const safeRegular = Array.isArray(regularCustomers) ? regularCustomers : []
 
   // Map of customer ID -> Customer Entity
   const customerMap = new Map()
@@ -170,6 +172,11 @@ export function aggregateCustomers({ enquiries = [], orders = [] }) {
       emails: initialData.email ? [initialData.email] : [],
       phones: initialData.normalizedPhone ? [initialData.normalizedPhone] : [],
       address: initialData.address || null,
+      customerType: initialData.customer_type || initialData.customerType || 'Individual',
+      gstNumber: initialData.gst_number || initialData.gstNumber || null,
+      notes: initialData.notes || null,
+      isRegularCustomer: Boolean(initialData.is_regular || initialData.isRegularCustomer),
+      permanentCustomerId: initialData.permanentCustomerId || (initialData.is_regular ? initialData.id : null),
       orders: [],
       enquiries: [],
       totalOrders: 0,
@@ -355,12 +362,76 @@ export function aggregateCustomers({ enquiries = [], orders = [] }) {
     }
   }
 
-  // Ingest all orders first (high commercial fidelity)
+  // Helper to ingest permanent regular customer records
+  function ingestRegularCustomer(reg) {
+    if (!reg || typeof reg !== 'object') return
+    const rawPhone = reg.phone || reg.normalized_phone || reg.customer_phone
+    const normPhone = normalizeIndianPhone10Digit(rawPhone)
+    const rawEmail = reg.email || reg.normalized_email || reg.customer_email
+    const normEmail = normalizeCustomerEmail(rawEmail)
+    const regDate = reg.created_at || new Date().toISOString()
+
+    let targetId = null
+    if (normPhone) {
+      if (phoneToId.has(normPhone)) {
+        targetId = phoneToId.get(normPhone)
+      } else {
+        targetId = `cust_phone_${normPhone}`
+        phoneToId.set(normPhone, targetId)
+        if (normEmail && !emailToId.has(normEmail)) {
+          emailToId.set(normEmail, targetId)
+        }
+      }
+    } else if (normEmail) {
+      if (emailToId.has(normEmail)) {
+        targetId = emailToId.get(normEmail)
+      } else {
+        targetId = `cust_email_${encodeURIComponent(normEmail)}`
+        emailToId.set(normEmail, targetId)
+      }
+    } else {
+      targetId = `cust_reg_${reg.id || Math.random().toString(36).slice(2)}`
+    }
+
+    let customer = customerMap.get(targetId)
+    if (!customer) {
+      customer = createCustomerEntity(targetId, {
+        name: (reg.name || reg.customer_name || '').trim(),
+        company: (reg.company || '').trim(),
+        normalizedPhone: normPhone,
+        email: normEmail,
+        address: (reg.address || '').trim() || null,
+        date: regDate,
+        is_regular: true,
+        permanentCustomerId: reg.id || null,
+        customer_type: reg.customer_type || 'Individual',
+        gst_number: reg.gst_number || null,
+        notes: reg.notes || null
+      })
+      customerMap.set(targetId, customer)
+    } else {
+      customer.isRegularCustomer = true
+      if (reg.id) customer.permanentCustomerId = reg.id
+      if (reg.customer_type) customer.customerType = reg.customer_type
+      if (reg.gst_number) customer.gstNumber = reg.gst_number
+      if (reg.notes && !customer.notes) customer.notes = reg.notes
+      if (!customer.address && reg.address) customer.address = reg.address
+      if ((!customer.name || customer.name === 'Valued Customer') && reg.name) customer.name = reg.name
+      if (!customer.company && reg.company) customer.company = reg.company
+    }
+  }
+
+  // 1. Ingest permanent regular customers first (canonical CRM identities)
+  for (const reg of safeRegular) {
+    ingestRegularCustomer(reg)
+  }
+
+  // 2. Ingest all orders (high commercial fidelity)
   for (const ord of safeOrders) {
     ingestRecord(ord, 'order')
   }
 
-  // Ingest all enquiries (leads and service tickets)
+  // 3. Ingest all enquiries (leads and service tickets)
   for (const enq of safeEnquiries) {
     ingestRecord(enq, 'enquiry')
   }
@@ -423,6 +494,9 @@ export function filterCustomers(customers, { query = '', filter = 'all', rolePer
     if (f === 'active_enquiry') {
       return cust.hasActiveEnquiry
     }
+    if (f === 'regular') {
+      return Boolean(cust.isRegularCustomer)
+    }
     if (f === 'high_value') {
       // If role cannot view financials, high_value filter is excluded
       return canFinancials ? cust.isHighValue : false
@@ -430,6 +504,94 @@ export function filterCustomers(customers, { query = '', filter = 'all', rolePer
 
     return true
   })
+}
+
+/**
+ * Detects potential duplicate customers from existing aggregated CRM profiles.
+ * Used for instant duplicate suggestions in enquiry & order creation forms.
+ *
+ * Scored Matching Invariants:
+ * - Exact 10-digit Indian mobile number: Confidence 100
+ * - Exact normalized email address: Confidence 90
+ * - Matching company name (>= 3 chars): Confidence 75
+ * - Matching customer name (>= 3 chars, non-generic): Confidence 60
+ *
+ * @param {Object} candidate - Candidate customer details entered in form
+ * @param {string} [candidate.name='']
+ * @param {string} [candidate.phone='']
+ * @param {string} [candidate.email='']
+ * @param {string} [candidate.company='']
+ * @param {Array<Object>} existingCustomers - Aggregated customer entities
+ * @returns {Array<Object>} Matches sorted by confidence descending (max 5)
+ */
+export function detectDuplicateCustomers(candidate = {}, existingCustomers = []) {
+  if (!candidate || typeof candidate !== 'object') return []
+  if (!Array.isArray(existingCustomers) || existingCustomers.length === 0) return []
+
+  const { name = '', phone = '', email = '', company = '' } = candidate
+  const normPhone = normalizeIndianPhone10Digit(phone)
+  const normEmail = normalizeCustomerEmail(email)
+  const cleanName = String(name || '').trim().toLowerCase()
+  const cleanComp = String(company || '').trim().toLowerCase()
+
+  // If no substantial input, return empty matches
+  if (!normPhone && !normEmail && cleanName.length < 3 && cleanComp.length < 3) {
+    return []
+  }
+
+  const matches = []
+
+  for (const cust of existingCustomers) {
+    let confidence = 0
+    const reasons = []
+
+    // 1. Mobile Phone match (exact 10-digit Indian phone)
+    if (normPhone && (cust.normalizedPhone === normPhone || (cust.phones && cust.phones.includes(normPhone)))) {
+      confidence = Math.max(confidence, 100)
+      reasons.push(`Matching Mobile Number (${formatIndianPhoneDisplay(normPhone)})`)
+    }
+
+    // 2. Email match
+    if (normEmail && (cust.email === normEmail || (cust.emails && cust.emails.includes(normEmail)))) {
+      confidence = Math.max(confidence, 90)
+      reasons.push(`Matching Email Address (${normEmail})`)
+    }
+
+    // 3. Company match (exact or substring)
+    if (cleanComp && cleanComp.length >= 3 && cust.company) {
+      const custComp = cust.company.toLowerCase()
+      if (custComp === cleanComp || (cleanComp.length >= 4 && (custComp.includes(cleanComp) || cleanComp.includes(custComp)))) {
+        confidence = Math.max(confidence, 75)
+        reasons.push(`Matching Company (${cust.company})`)
+      }
+    }
+
+    // 4. Name match (non-generic)
+    if (
+      cleanName &&
+      cleanName.length >= 3 &&
+      cleanName !== 'customer' &&
+      cleanName !== 'valued customer' &&
+      cust.name &&
+      cust.name.toLowerCase() === cleanName
+    ) {
+      confidence = Math.max(confidence, 60)
+      reasons.push(`Identical Customer Name (${cust.name})`)
+    }
+
+    if (confidence > 0) {
+      matches.push({
+        customer: cust,
+        confidence,
+        score: confidence,
+        reason: reasons.join(' & '),
+        matchReasons: reasons,
+        matchType: confidence >= 90 ? 'exact' : 'potential'
+      })
+    }
+  }
+
+  return matches.sort((a, b) => b.confidence - a.confidence).slice(0, 5)
 }
 
 /**

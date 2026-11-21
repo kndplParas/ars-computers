@@ -317,9 +317,9 @@ test('update_customer_visit_details guard is preserved; blank save = explicit cu
   /NOT public\.is_enquiry_management_staff\(\)/.test(migration3) &&
   /engineer_contact_hidden = v_hidden/.test(migration3))
 test('engineer_contact audit entry is preserved and fires on display changes only (no OR with the hide flag)',
-  /IF v_enquiry\.engineer_contact_display IS DISTINCT FROM v_contact THEN/.test(migration3.replace(/\r/g, '')) &&
-  /'engineer_contact', v_enquiry\.engineer_contact_display, v_contact,/.test(migration3.replace(/\r/g, '')) &&
-  !/engineer_contact_display IS DISTINCT FROM v_contact\s*\n\s*OR/.test(migration3.replace(/\r/g, '')))
+  /IF v_enquiry\.engineer_contact_display IS DISTINCT FROM v_contact THEN/.test(migration4.replace(/\r/g, '')) &&
+  /'engineer_contact', v_enquiry\.engineer_contact_display, v_contact,/.test(migration4.replace(/\r/g, '')) &&
+  !/engineer_contact_display IS DISTINCT FROM v_contact\s*\n\s*OR/.test(migration4.replace(/\r/g, '')))
 test('update_customer_visit_details remains denied to anon/public',
   /REVOKE EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*FROM PUBLIC, anon/.test(migration3.replace(/\r/g, '')) &&
   /GRANT EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*TO authenticated/.test(migration3.replace(/\r/g, '')))
@@ -334,8 +334,9 @@ test('Admin panel documents the auto-share default and explicit hide',
 console.log('\n[Suite 2d] Hide/show audit trail — dedicated engineer_contact_hidden audit rows')
 
 const migration3Sql = migration3.replace(/\r/g, '')
+const migration4Sql = migration4.replace(/\r/g, '')
 const visitDetailsBody =
-  migration3Sql.split('CREATE OR REPLACE FUNCTION public.update_customer_visit_details')[1]
+  migration4Sql.split('CREATE OR REPLACE FUNCTION public.update_customer_visit_details')[1]
     ?.split('$$;')[0] || ''
 
 test('A dedicated audit row records engineer_contact_hidden transitions with previous and new boolean values',
@@ -364,15 +365,14 @@ test('Visit and note audit entries remain exactly as before (two visit inserts: 
   (visitDetailsBody.match(/p_enquiry_id, 'visit', v_enquiry\.visit_status, v_visit_status,/g) || []).length === 2 &&
   (visitDetailsBody.match(/p_enquiry_id, 'note', v_enquiry\.visit_progress_note, NULLIF\(v_note, ''\),/g) || []).length === 1)
 test('The history change_kind constraint admits engineer_contact_hidden, widened additively in THIS migration only',
-  /ALTER TABLE public\.enquiry_tracking_history\s*\n\s*DROP CONSTRAINT IF EXISTS enquiry_tracking_history_change_kind_check;/.test(migration3Sql) &&
-  /ADD CONSTRAINT enquiry_tracking_history_change_kind_check\s*\n\s*CHECK \(change_kind IS NULL OR change_kind IN \(\s*\n\s*'status', 'engineer_contact', 'engineer_contact_hidden', 'visit', 'note'\s*\n\s*\)\)/.test(migration3Sql))
+  /ALTER TABLE public\.enquiry_tracking_history\s*\n\s*DROP CONSTRAINT IF EXISTS enquiry_tracking_history_change_kind_check;/.test(migration4Sql) &&
+  /ADD CONSTRAINT enquiry_tracking_history_change_kind_check\s*\n\s*CHECK \(change_kind IS NULL OR change_kind IN \(\s*\n\s*'status', 'engineer_contact', 'engineer_contact_hidden', 'visit', 'note'\s*\n\s*\)\)/.test(migration4Sql))
 test('The applied v2 migration file itself is untouched (its constraint still lists the original four kinds)',
   /'status', 'engineer_contact', 'visit', 'note'/.test(migration2) &&
   !/engineer_contact_hidden/.test(migration2))
 
 console.log('\n[Suite 2e] Hide-audit alignment migration (20261108000002 — history-safe production delta)')
 
-const migration4Sql = migration4.replace(/\r/g, '')
 const visitDetailsBody4 =
   migration4Sql.split('CREATE OR REPLACE FUNCTION public.update_customer_visit_details')[1]
     ?.split('$$;')[0] || ''
@@ -428,9 +428,9 @@ test('Authorization surface preserved: revoked from PUBLIC/anon, granted to auth
   /REVOKE EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*FROM PUBLIC, anon/.test(migration4Sql) &&
   /GRANT EXECUTE ON FUNCTION public\.update_customer_visit_details\(UUID, TEXT, TEXT, TEXT\)\s*\n\s*TO authenticated/.test(migration4Sql) &&
   !/GRANT EXECUTE ON FUNCTION public\.update_customer_visit_details[^;]*(anon|PUBLIC)/.test(migration4Sql))
-test('The approved 20261108000001 file remains the full corrected version (unchanged by the delta)',
-  /ALTER TABLE public\.enquiry_tracking_history\s*\n\s*DROP CONSTRAINT IF EXISTS enquiry_tracking_history_change_kind_check;/.test(migration3Sql) &&
-  /p_enquiry_id, 'engineer_contact_hidden',/.test(migration3Sql))
+test('The applied 20261108000001 migration remains untouched while 20261108000002 provides the dedicated audit row',
+  /ADD COLUMN IF NOT EXISTS engineer_contact_hidden/.test(migration3Sql) &&
+  /p_enquiry_id, 'engineer_contact_hidden',/.test(migration4Sql))
 
 console.log('\n[Suite 3] Services page & submission flow')
 

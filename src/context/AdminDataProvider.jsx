@@ -21,7 +21,8 @@ const STORAGE_KEYS = {
   ENQUIRIES: 'ars_admin_demo_enquiries_v1',
   STAFF: 'ars_admin_demo_staff_v1',
   SERVICE_REQUESTS: 'ars_admin_demo_service_requests_v1',
-  ORDERS: 'ars_admin_demo_orders_v1'
+  ORDERS: 'ars_admin_demo_orders_v1',
+  CUSTOMERS: 'ars_admin_demo_customers_v1'
 }
 
 function safeLoad(key, fallback) {
@@ -73,7 +74,24 @@ export function AdminDataProvider({ children }) {
     safeLoad(STORAGE_KEYS.ORDERS, [])
   )
 
+  const [demoCustomers, setDemoCustomers] = useState(() =>
+    safeLoad(STORAGE_KEYS.CUSTOMERS, [])
+  )
+  const [liveCustomers, setLiveCustomers] = useState([])
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
+  const [customersError, setCustomersError] = useState(null)
+
   // Sync demo state to LocalStorage ONLY when offline/demo; live records never touch localStorage
+  useEffect(() => {
+    if (!isLiveDatabase) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(demoCustomers))
+      } catch (e) {
+        console.warn('[AdminDataProvider] Failed to save customers to localStorage:', e)
+      }
+    }
+  }, [demoCustomers, isLiveDatabase])
+
   useEffect(() => {
     if (!isLiveDatabase) {
       try {
@@ -430,6 +448,109 @@ export function AdminDataProvider({ children }) {
     }
   }, [isLiveDatabase])
 
+  // --- Permanent Regular Customers (Phase 3A + CRM) ---
+  const loadAdminCustomers = useCallback(async () => {
+    if (!isLiveDatabase) return
+    setIsLoadingCustomers(true)
+    setCustomersError(null)
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase client is not configured.')
+      }
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_admin_customers')
+
+      if (rpcError) {
+        setLiveCustomers([])
+        setCustomersError(rpcError.message || 'Failed to query customers via secure RPC.')
+      } else if (rpcData) {
+        const custList = Array.isArray(rpcData) ? rpcData : (rpcData.customers || [])
+        setLiveCustomers(custList)
+        setCustomersError(null)
+      } else {
+        setLiveCustomers([])
+        setCustomersError(null)
+      }
+    } catch (err) {
+      setLiveCustomers([])
+      setCustomersError(err.message || 'Failed to query customers.')
+    } finally {
+      setIsLoadingCustomers(false)
+    }
+  }, [isLiveDatabase])
+
+  const createRegularCustomer = useCallback(
+    async ({
+      name,
+      phone = null,
+      email = null,
+      company = null,
+      customer_type = 'Individual',
+      gst_number = null,
+      address = null,
+      notes = null,
+      allow_duplicate = false
+    }) => {
+      const trimmedName = (name || '').trim()
+      if (!trimmedName) throw new Error('Customer name is required.')
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not configured.')
+        const { data, error } = await supabase.rpc('create_regular_customer', {
+          p_name: trimmedName,
+          p_phone: phone || null,
+          p_email: email || null,
+          p_company: company || null,
+          p_address: address || null,
+          p_customer_type: customer_type || 'Individual',
+          p_gst_number: gst_number || null,
+          p_notes: notes || null,
+          p_allow_duplicate: Boolean(allow_duplicate)
+        })
+
+        if (error) {
+          throw new Error(error.message || 'Failed to register customer.')
+        }
+
+        if (data && data.success === false && data.duplicate_detected) {
+          const dupErr = new Error(data.message || 'Duplicate customer detected in CRM.')
+          dupErr.isDuplicate = true
+          dupErr.potentialDuplicate = data.potential_duplicate
+          throw dupErr
+        }
+
+        const savedCustomer = data?.customer || data
+        await loadAdminCustomers()
+        return savedCustomer
+      }
+
+      // Demo offline mode
+      const newCustomer = {
+        id: crypto.randomUUID(),
+        name: trimmedName,
+        phone: phone || null,
+        normalized_phone: phone || null,
+        email: email || null,
+        normalized_email: email ? email.toLowerCase().trim() : null,
+        company: company || null,
+        customer_type: customer_type || 'Individual',
+        gst_number: gst_number || null,
+        address: address || null,
+        notes: notes || null,
+        is_regular: true,
+        created_by: adminUser?.id,
+        created_by_name: adminUser?.full_name || 'Staff Member',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      setDemoCustomers((prev) => [newCustomer, ...prev])
+      return newCustomer
+    },
+    [isLiveDatabase, adminUser, loadAdminCustomers]
+  )
+
   // --- Unified dashboard refresh (throttled + role-aware) ---
   // Used on dashboard navigation, focus/visibility recovery, and retry actions.
   // Individual mutators and realtime handlers refresh their own datasets, so this
@@ -454,6 +575,7 @@ export function AdminDataProvider({ children }) {
 
       if (['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)) {
         tasks.push(loadAdminEnquiries())
+        tasks.push(loadAdminCustomers())
       }
       if (ALL_STAFF_ROLES.includes(role)) {
         tasks.push(loadAdminServiceRequests())
@@ -471,6 +593,7 @@ export function AdminDataProvider({ children }) {
       loadAdminCategories,
       loadAdminProducts,
       loadAdminEnquiries,
+      loadAdminCustomers,
       loadAdminServiceRequests,
       loadAdminOrders,
       loadAdminStaff
@@ -497,8 +620,10 @@ export function AdminDataProvider({ children }) {
         loadAdminProducts({ page: 1, limit: 50 })
         if (['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
           loadAdminEnquiries()
+          loadAdminCustomers()
         } else {
           setLiveEnquiries([])
+          setLiveCustomers([])
         }
         if (adminUser?.role === 'superadmin') {
           loadAdminStaff()
@@ -516,11 +641,13 @@ export function AdminDataProvider({ children }) {
         setLiveCategories([])
         setLiveProducts([])
         setLiveEnquiries([])
+        setLiveCustomers([])
         setLiveStaff([])
         setLiveServiceRequests([])
         setLiveOrders([])
         setDatabaseError(null)
         setEnquiriesError(null)
+        setCustomersError(null)
         setStaffError(null)
         setServiceRequestsError(null)
         setOrdersError(null)
@@ -533,7 +660,7 @@ export function AdminDataProvider({ children }) {
     return () => {
       ignore = true
     }
-  }, [isLiveDatabase, adminUser, loadAdminCategories, loadAdminProducts, loadAdminEnquiries, loadAdminStaff, loadAdminServiceRequests, loadAdminOrders])
+  }, [isLiveDatabase, adminUser, loadAdminCategories, loadAdminProducts, loadAdminEnquiries, loadAdminCustomers, loadAdminStaff, loadAdminServiceRequests, loadAdminOrders])
 
   // Refresh dashboard data whenever the user navigates back to the dashboard.
   // The very first load is handled by the auth/mount effect above. A login
@@ -966,6 +1093,77 @@ export function AdminDataProvider({ children }) {
 
   // --- Phase 2: Enquiry Workflow Mutators & Approval RPCs ---
 
+  // 0. Create Customer Enquiry from Admin Console
+  const createAdminEnquiry = useCallback(
+    async ({
+      customer_name,
+      contact_info,
+      category_interest,
+      message,
+      phone,
+      email,
+      company,
+      address,
+      service_location
+    }) => {
+      if (!['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(adminUser?.role)) {
+        throw new Error('Access denied: Authorized staff privileges required to log customer enquiries.')
+      }
+
+      const cleanName = (customer_name || '').trim()
+      if (!cleanName || cleanName.length < 2) {
+        throw new Error('Please enter a valid customer name (minimum 2 characters).')
+      }
+
+      const cleanContact = (contact_info || (phone && email ? `${phone} | ${email}` : phone || email || '')).trim()
+      if (!cleanContact || cleanContact.length < 5) {
+        throw new Error('Please provide valid contact information.')
+      }
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('create_customer_enquiry', {
+          p_name: cleanName,
+          p_contact_info: cleanContact,
+          p_category_interest: category_interest || 'General IT Hardware Enquiry',
+          p_message: message || 'Customer enquiry recorded by staff.'
+        })
+
+        if (error) throw error
+
+        await loadAdminEnquiries()
+        return data
+      }
+
+      // Demo fallback
+      const generatedId = `enq-${Date.now()}`
+      const generatedEnqNumber = `ARS-ENQ-${String(demoEnquiries.length + 1020).padStart(5, '0')}`
+      const newEnquiry = {
+        id: generatedId,
+        enquiry_number: generatedEnqNumber,
+        customer_name: cleanName,
+        name: cleanName,
+        contact_info: cleanContact,
+        phone: phone || null,
+        email: email || null,
+        company: company || null,
+        address: address || null,
+        category_interest: category_interest || 'General IT Hardware Enquiry',
+        service_requested: category_interest || 'General IT Hardware Enquiry',
+        message: message || 'Customer enquiry recorded by staff.',
+        status: 'new',
+        workflow_tab: 'new',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      setDemoEnquiries((prev) => [newEnquiry, ...prev])
+      return newEnquiry
+    },
+    [isLiveDatabase, adminUser, demoEnquiries.length, loadAdminEnquiries]
+  )
+
   // 1. Add Timestamped Follow-up Note (Admin & Superadmin)
   const addEnquiryNote = useCallback(
     async (enquiryId, content) => {
@@ -1054,12 +1252,12 @@ export function AdminDataProvider({ children }) {
           prev.map((item) =>
             item.id === enquiryId
               ? {
-                  ...item,
-                  customer_tracking_status: trackingStatus,
-                  customer_tracking_updated_at: data?.customer_tracking_updated_at || new Date().toISOString(),
-                  customer_tracking_updated_by_name: data?.customer_tracking_updated_by_name || null,
-                  customer_tracking_updated_by_code: data?.customer_tracking_updated_by_code || null
-                }
+                ...item,
+                customer_tracking_status: trackingStatus,
+                customer_tracking_updated_at: data?.customer_tracking_updated_at || new Date().toISOString(),
+                customer_tracking_updated_by_name: data?.customer_tracking_updated_by_name || null,
+                customer_tracking_updated_by_code: data?.customer_tracking_updated_by_code || null
+              }
               : item
           )
         )
@@ -1124,11 +1322,11 @@ export function AdminDataProvider({ children }) {
           prev.map((item) =>
             item.id === enquiryId
               ? {
-                  ...item,
-                  engineer_contact_display: payload?.engineer_contact_display ?? null,
-                  visit_status: payload?.visit_status ?? null,
-                  visit_progress_note: payload?.visit_progress_note ?? null
-                }
+                ...item,
+                engineer_contact_display: payload?.engineer_contact_display ?? null,
+                visit_status: payload?.visit_status ?? null,
+                visit_progress_note: payload?.visit_progress_note ?? null
+              }
               : item
           )
         )
@@ -1139,11 +1337,11 @@ export function AdminDataProvider({ children }) {
         prev.map((item) =>
           item.id === enquiryId
             ? {
-                ...item,
-                engineer_contact_display: engineerContact || null,
-                visit_status: visitStatus || null,
-                visit_progress_note: visitNote || null
-              }
+              ...item,
+              engineer_contact_display: engineerContact || null,
+              visit_status: visitStatus || null,
+              visit_progress_note: visitNote || null
+            }
             : item
         )
       )
@@ -1177,11 +1375,11 @@ export function AdminDataProvider({ children }) {
         prev.map((e) =>
           e.id === enquiryId
             ? {
-                ...e,
-                previous_status: e.status,
-                status: 'rejection_requested',
-                rejection_reason: reason
-              }
+              ...e,
+              previous_status: e.status,
+              status: 'rejection_requested',
+              rejection_reason: reason
+            }
             : e
         )
       )
@@ -1215,10 +1413,10 @@ export function AdminDataProvider({ children }) {
         prev.map((e) =>
           e.id === enquiryId
             ? {
-                ...e,
-                status: decision === 'approved' ? 'rejected' : e.previous_status || 'in_progress',
-                rejection_reason: decision === 'approved' ? e.rejection_reason : null
-              }
+              ...e,
+              status: decision === 'approved' ? 'rejected' : e.previous_status || 'in_progress',
+              rejection_reason: decision === 'approved' ? e.rejection_reason : null
+            }
             : e
         )
       )
@@ -1332,16 +1530,16 @@ export function AdminDataProvider({ children }) {
         prev.map((e) =>
           e.id === enquiryId
             ? {
-                ...e,
-                previous_status: e.status,
-                status: 'completion_requested',
-                completion_summary: completionSummary,
-                completion_requested_by: adminUser?.id,
-                completion_requested_at: new Date().toISOString(),
-                completed_by_name: adminUser?.full_name || 'Store Employee',
-                completed_by_employee_code: adminUser?.employee_code || 'ARS-EMP-001',
-                completion_rework_reason: null
-              }
+              ...e,
+              previous_status: e.status,
+              status: 'completion_requested',
+              completion_summary: completionSummary,
+              completion_requested_by: adminUser?.id,
+              completion_requested_at: new Date().toISOString(),
+              completed_by_name: adminUser?.full_name || 'Store Employee',
+              completed_by_employee_code: adminUser?.employee_code || 'ARS-EMP-001',
+              completion_rework_reason: null
+            }
             : e
         )
       )
@@ -1429,12 +1627,12 @@ export function AdminDataProvider({ children }) {
         prev.map((e) =>
           e.id === enquiryId
             ? {
-                ...e,
-                status: 'quoted',
-                is_in_bin: false,
-                bin_entered_at: null,
-                scheduled_deletion_at: null
-              }
+              ...e,
+              status: 'quoted',
+              is_in_bin: false,
+              bin_entered_at: null,
+              scheduled_deletion_at: null
+            }
             : e
         )
       )
@@ -1536,16 +1734,16 @@ export function AdminDataProvider({ children }) {
         prev.map((e) =>
           e.id === enquiryId
             ? {
-                ...e,
-                is_removed: true,
-                removed_at: isoNow,
-                removed_by: adminUser?.id,
-                removed_by_name: adminUser?.name || adminUser?.full_name || 'Head Person',
-                removed_by_email: adminUser?.email,
-                removal_category: cleanCategory,
-                removal_reason: cleanReason,
-                removed_previous_status: e.status
-              }
+              ...e,
+              is_removed: true,
+              removed_at: isoNow,
+              removed_by: adminUser?.id,
+              removed_by_name: adminUser?.name || adminUser?.full_name || 'Head Person',
+              removed_by_email: adminUser?.email,
+              removal_category: cleanCategory,
+              removal_reason: cleanReason,
+              removed_previous_status: e.status
+            }
             : e
         )
       )
@@ -1586,18 +1784,18 @@ export function AdminDataProvider({ children }) {
         prev.map((e) =>
           e.id === enquiryId
             ? {
-                ...e,
-                is_removed: false,
-                status: e.removed_previous_status || 'new',
-                removed_at: null,
-                removed_by: null,
-                removed_by_name: null,
-                removed_by_email: null,
-                removal_category: null,
-                removal_reason: null,
-                removed_previous_status: null,
-                updated_at: now
-              }
+              ...e,
+              is_removed: false,
+              status: e.removed_previous_status || 'new',
+              removed_at: null,
+              removed_by: null,
+              removed_by_name: null,
+              removed_by_email: null,
+              removal_category: null,
+              removal_reason: null,
+              removed_previous_status: null,
+              updated_at: now
+            }
             : e
         )
       )
@@ -2042,21 +2240,21 @@ export function AdminDataProvider({ children }) {
           prev.map((e) =>
             e.id === enquiryId
               ? {
-                  ...e,
-                  assigned_employee_id: null,
-                  assigned_employee_name: null,
-                  assigned_employee_code: null,
-                  assigned_employee_phone: null,
-                  assigned_employee_aadhaar: null,
-                  assigned_at: null,
-                  expected_visit_at: null,
-                  expected_arrival: null,
-                  assignment_visit_note: null,
-                  assigned_by: adminUser?.id,
-                  assigned_by_name: headName,
-                  assigned_by_employee_code: headCode,
-                  updated_at: now
-                }
+                ...e,
+                assigned_employee_id: null,
+                assigned_employee_name: null,
+                assigned_employee_code: null,
+                assigned_employee_phone: null,
+                assigned_employee_aadhaar: null,
+                assigned_at: null,
+                expected_visit_at: null,
+                expected_arrival: null,
+                assignment_visit_note: null,
+                assigned_by: adminUser?.id,
+                assigned_by_name: headName,
+                assigned_by_employee_code: headCode,
+                updated_at: now
+              }
               : e
           )
         )
@@ -2068,21 +2266,21 @@ export function AdminDataProvider({ children }) {
         prev.map((e) =>
           e.id === enquiryId
             ? {
-                ...e,
-                assigned_employee_id: employeeId,
-                assigned_employee_name: target?.full_name || target?.email || 'Staff Member',
-                assigned_employee_code: target?.employee_code || 'EMP',
-                assigned_employee_phone: target?.phone_number || null,
-                assigned_employee_aadhaar: target?.aadhaar_number || null,
-                assigned_at: now,
-                assigned_by: adminUser?.id,
-                assigned_by_name: headName,
-                assigned_by_employee_code: headCode,
-                expected_visit_at: expectedVisitAt || null,
-                expected_arrival: expectedArrival || null,
-                assignment_visit_note: visitNote || null,
-                updated_at: now
-              }
+              ...e,
+              assigned_employee_id: employeeId,
+              assigned_employee_name: target?.full_name || target?.email || 'Staff Member',
+              assigned_employee_code: target?.employee_code || 'EMP',
+              assigned_employee_phone: target?.phone_number || null,
+              assigned_employee_aadhaar: target?.aadhaar_number || null,
+              assigned_at: now,
+              assigned_by: adminUser?.id,
+              assigned_by_name: headName,
+              assigned_by_employee_code: headCode,
+              expected_visit_at: expectedVisitAt || null,
+              expected_arrival: expectedArrival || null,
+              assignment_visit_note: visitNote || null,
+              updated_at: now
+            }
             : e
         )
       )
@@ -2257,16 +2455,16 @@ export function AdminDataProvider({ children }) {
         prev.map((t) =>
           t.id === ticketId
             ? {
-                ...t,
-                status: t.status === 'new' ? 'assigned' : t.status,
-                assigned_technician_id: technicianId,
-                assigned_technician_name: assignedTech?.full_name || assignedTech?.name || 'Assigned Technician',
-                priority,
-                internal_notes: notes
-                  ? `${t.internal_notes ? `${t.internal_notes}\n---\n` : ''}[${new Date().toISOString().slice(0, 10)} - ${adminUser?.fullName || 'Staff'}]: ${notes}`
-                  : t.internal_notes,
-                updated_at: new Date().toISOString()
-              }
+              ...t,
+              status: t.status === 'new' ? 'assigned' : t.status,
+              assigned_technician_id: technicianId,
+              assigned_technician_name: assignedTech?.full_name || assignedTech?.name || 'Assigned Technician',
+              priority,
+              internal_notes: notes
+                ? `${t.internal_notes ? `${t.internal_notes}\n---\n` : ''}[${new Date().toISOString().slice(0, 10)} - ${adminUser?.fullName || 'Staff'}]: ${notes}`
+                : t.internal_notes,
+              updated_at: new Date().toISOString()
+            }
             : t
         )
       )
@@ -2303,16 +2501,16 @@ export function AdminDataProvider({ children }) {
         prev.map((t) =>
           t.id === ticketId
             ? {
-                ...t,
-                status: newStatus,
-                diagnosis: diagnosis || t.diagnosis,
-                work_performed: workPerformed || t.work_performed,
-                resolved_at: newStatus === 'resolved' ? new Date().toISOString() : t.resolved_at,
-                internal_notes: notes
-                  ? `${t.internal_notes ? `${t.internal_notes}\n---\n` : ''}[${new Date().toISOString().slice(0, 10)} - ${adminUser?.fullName || 'Staff'}]: ${notes}`
-                  : t.internal_notes,
-                updated_at: new Date().toISOString()
-              }
+              ...t,
+              status: newStatus,
+              diagnosis: diagnosis || t.diagnosis,
+              work_performed: workPerformed || t.work_performed,
+              resolved_at: newStatus === 'resolved' ? new Date().toISOString() : t.resolved_at,
+              internal_notes: notes
+                ? `${t.internal_notes ? `${t.internal_notes}\n---\n` : ''}[${new Date().toISOString().slice(0, 10)} - ${adminUser?.fullName || 'Staff'}]: ${notes}`
+                : t.internal_notes,
+              updated_at: new Date().toISOString()
+            }
             : t
         )
       )
@@ -2362,10 +2560,10 @@ export function AdminDataProvider({ children }) {
         prev.map((t) =>
           t.id === ticketId
             ? {
-                ...t,
-                ...details,
-                updated_at: new Date().toISOString()
-              }
+              ...t,
+              ...details,
+              updated_at: new Date().toISOString()
+            }
             : t
         )
       )
@@ -2400,10 +2598,10 @@ export function AdminDataProvider({ children }) {
         prev.map((t) =>
           t.id === ticketId
             ? {
-                ...t,
-                internal_notes: `${t.internal_notes ? `${t.internal_notes}\n---\n` : ''}[${new Date().toISOString().slice(0, 10)} - ${adminUser?.fullName || 'Staff'}]: ${cleanNote}`,
-                updated_at: new Date().toISOString()
-              }
+              ...t,
+              internal_notes: `${t.internal_notes ? `${t.internal_notes}\n---\n` : ''}[${new Date().toISOString().slice(0, 10)} - ${adminUser?.fullName || 'Staff'}]: ${cleanNote}`,
+              updated_at: new Date().toISOString()
+            }
             : t
         )
       )
@@ -2438,14 +2636,14 @@ export function AdminDataProvider({ children }) {
         prev.map((t) =>
           t.id === ticketId
             ? {
-                ...t,
-                status: 'closed',
-                resolution_summary: resolutionSummary || t.resolution_summary,
-                final_cost: finalCost !== null ? Number(finalCost) : t.final_cost,
-                closed_at: new Date().toISOString(),
-                closed_by: adminUser?.id,
-                updated_at: new Date().toISOString()
-              }
+              ...t,
+              status: 'closed',
+              resolution_summary: resolutionSummary || t.resolution_summary,
+              final_cost: finalCost !== null ? Number(finalCost) : t.final_cost,
+              closed_at: new Date().toISOString(),
+              closed_by: adminUser?.id,
+              updated_at: new Date().toISOString()
+            }
             : t
         )
       )
@@ -2484,13 +2682,13 @@ export function AdminDataProvider({ children }) {
         prev.map((t) =>
           t.id === ticketId
             ? {
-                ...t,
-                status: 'in_progress',
-                reopen_reason: cleanReason,
-                reopened_at: new Date().toISOString(),
-                reopened_by: adminUser?.id,
-                updated_at: new Date().toISOString()
-              }
+              ...t,
+              status: 'in_progress',
+              reopen_reason: cleanReason,
+              reopened_at: new Date().toISOString(),
+              reopened_by: adminUser?.id,
+              updated_at: new Date().toISOString()
+            }
             : t
         )
       )
@@ -2772,11 +2970,11 @@ export function AdminDataProvider({ children }) {
         prev.map((o) =>
           o.id === orderId
             ? {
-                ...o,
-                assigned_engineer_id: engineerId,
-                expected_delivery_date: expectedDeliveryDate || o.expected_delivery_date,
-                updated_at: new Date().toISOString()
-              }
+              ...o,
+              assigned_engineer_id: engineerId,
+              expected_delivery_date: expectedDeliveryDate || o.expected_delivery_date,
+              updated_at: new Date().toISOString()
+            }
             : o
         )
       )
@@ -2812,22 +3010,22 @@ export function AdminDataProvider({ children }) {
           o.id === orderId
             ? isSuper
               ? {
-                  ...o,
-                  is_in_bin: true,
-                  is_removed: true,
-                  removed_at: new Date().toISOString(),
-                  removed_by_name: adminUser?.full_name || 'Head Admin',
-                  removal_reason: reason,
-                  removal_category: category,
-                  updated_at: new Date().toISOString()
-                }
+                ...o,
+                is_in_bin: true,
+                is_removed: true,
+                removed_at: new Date().toISOString(),
+                removed_by_name: adminUser?.full_name || 'Head Admin',
+                removal_reason: reason,
+                removal_category: category,
+                updated_at: new Date().toISOString()
+              }
               : {
-                  ...o,
-                  deletion_reason: reason,
-                  removal_category: category,
-                  deletion_requested_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                }
+                ...o,
+                deletion_reason: reason,
+                removal_category: category,
+                deletion_requested_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }
             : o
         )
       )
@@ -2907,15 +3105,15 @@ export function AdminDataProvider({ children }) {
         prev.map((o) =>
           o.id === orderId
             ? {
-                ...o,
-                is_in_bin: true,
-                is_removed: true,
-                removed_at: new Date().toISOString(),
-                removed_by_name: adminUser?.full_name || 'Head Admin',
-                removal_reason: reason,
-                removal_category: category,
-                updated_at: new Date().toISOString()
-              }
+              ...o,
+              is_in_bin: true,
+              is_removed: true,
+              removed_at: new Date().toISOString(),
+              removed_by_name: adminUser?.full_name || 'Head Admin',
+              removal_reason: reason,
+              removal_category: category,
+              updated_at: new Date().toISOString()
+            }
             : o
         )
       )
@@ -2947,15 +3145,15 @@ export function AdminDataProvider({ children }) {
         prev.map((o) =>
           o.id === orderId
             ? {
-                ...o,
-                is_in_bin: false,
-                is_removed: false,
-                removed_at: null,
-                removed_by_name: null,
-                removal_reason: null,
-                removal_category: null,
-                updated_at: new Date().toISOString()
-              }
+              ...o,
+              is_in_bin: false,
+              is_removed: false,
+              removed_at: null,
+              removed_by_name: null,
+              removal_reason: null,
+              removal_category: null,
+              updated_at: new Date().toISOString()
+            }
             : o
         )
       )
@@ -3014,15 +3212,15 @@ export function AdminDataProvider({ children }) {
         prev.map((o) =>
           o.id === orderId
             ? {
-                ...o,
-                status: 'completion_requested',
-                completion_requested_by: adminUser?.id,
-                completion_requested_at: now,
-                completed_by_name: adminUser?.full_name || 'Store Employee',
-                completed_by_employee_code: adminUser?.employee_code || null,
-                employee_remarks: employeeRemarks,
-                updated_at: now
-              }
+              ...o,
+              status: 'completion_requested',
+              completion_requested_by: adminUser?.id,
+              completion_requested_at: now,
+              completed_by_name: adminUser?.full_name || 'Store Employee',
+              completed_by_employee_code: adminUser?.employee_code || null,
+              employee_remarks: employeeRemarks,
+              updated_at: now
+            }
             : o
         )
       )
@@ -3054,17 +3252,17 @@ export function AdminDataProvider({ children }) {
         prev.map((o) =>
           o.id === orderId
             ? {
-                ...o,
-                status: 'completed',
-                is_archived: true,
-                archived_at: now,
-                completion_approved_by: adminUser?.id,
-                completion_approved_at: now,
-                approved_by_name: adminUser?.full_name || 'Store Head',
-                approved_by_employee_code: adminUser?.employee_code || null,
-                head_remarks: headRemarks,
-                updated_at: now
-              }
+              ...o,
+              status: 'completed',
+              is_archived: true,
+              archived_at: now,
+              completion_approved_by: adminUser?.id,
+              completion_approved_at: now,
+              approved_by_name: adminUser?.full_name || 'Store Head',
+              approved_by_employee_code: adminUser?.employee_code || null,
+              head_remarks: headRemarks,
+              updated_at: now
+            }
             : o
         )
       )
@@ -3096,16 +3294,16 @@ export function AdminDataProvider({ children }) {
         prev.map((o) =>
           o.id === orderId
             ? {
-                ...o,
-                status: 'cancelled',
-                is_archived: true,
-                archived_at: now,
-                cancelled_by: adminUser?.id,
-                cancelled_at: now,
-                cancelled_by_name: adminUser?.full_name || 'Store Head',
-                cancellation_reason: cancellationReason,
-                updated_at: now
-              }
+              ...o,
+              status: 'cancelled',
+              is_archived: true,
+              archived_at: now,
+              cancelled_by: adminUser?.id,
+              cancelled_at: now,
+              cancelled_by_name: adminUser?.full_name || 'Store Head',
+              cancellation_reason: cancellationReason,
+              updated_at: now
+            }
             : o
         )
       )
@@ -3494,14 +3692,14 @@ export function AdminDataProvider({ children }) {
           order_attachments: (o.order_attachments || []).map((att) =>
             att.id === attachmentId
               ? {
-                  ...att,
-                  is_customer_shareable: Boolean(isShareable),
-                  is_head_approved: Boolean(isShareable),
-                  document_type: documentType || (isShareable ? 'CUSTOMER_INVOICE' : 'OTHER_INTERNAL'),
-                  approved_by: isShareable ? adminUser?.id : null,
-                  approved_at: isShareable ? new Date().toISOString() : null,
-                  share_request_status: isShareable ? 'APPROVED' : 'NONE'
-                }
+                ...att,
+                is_customer_shareable: Boolean(isShareable),
+                is_head_approved: Boolean(isShareable),
+                document_type: documentType || (isShareable ? 'CUSTOMER_INVOICE' : 'OTHER_INTERNAL'),
+                approved_by: isShareable ? adminUser?.id : null,
+                approved_at: isShareable ? new Date().toISOString() : null,
+                share_request_status: isShareable ? 'APPROVED' : 'NONE'
+              }
               : att
           )
         }))
@@ -3540,14 +3738,14 @@ export function AdminDataProvider({ children }) {
           order_attachments: (o.order_attachments || []).map((att) =>
             att.id === attachmentId
               ? {
-                  ...att,
-                  share_request_status: 'PENDING',
-                  share_requested_by: adminUser?.id,
-                  share_requested_by_name: adminUser?.full_name || adminUser?.email,
-                  share_requested_at: new Date().toISOString(),
-                  share_requested_document_type: documentType,
-                  share_request_notes: notes
-                }
+                ...att,
+                share_request_status: 'PENDING',
+                share_requested_by: adminUser?.id,
+                share_requested_by_name: adminUser?.full_name || adminUser?.email,
+                share_requested_at: new Date().toISOString(),
+                share_requested_document_type: documentType,
+                share_request_notes: notes
+              }
               : att
           )
         }))
@@ -3588,17 +3786,17 @@ export function AdminDataProvider({ children }) {
           order_attachments: (o.order_attachments || []).map((att) =>
             att.id === attachmentId
               ? {
-                  ...att,
-                  share_request_status: decision,
-                  is_customer_shareable: isApproved,
-                  is_head_approved: isApproved,
-                  document_type: isApproved ? (documentType || att.share_requested_document_type || 'CUSTOMER_INVOICE') : att.document_type,
-                  approved_by: isApproved ? adminUser?.id : null,
-                  approved_at: isApproved ? new Date().toISOString() : null,
-                  share_reviewed_by: adminUser?.id,
-                  share_reviewed_at: new Date().toISOString(),
-                  share_review_rejection_reason: isApproved ? null : rejectionReason
-                }
+                ...att,
+                share_request_status: decision,
+                is_customer_shareable: isApproved,
+                is_head_approved: isApproved,
+                document_type: isApproved ? (documentType || att.share_requested_document_type || 'CUSTOMER_INVOICE') : att.document_type,
+                approved_by: isApproved ? adminUser?.id : null,
+                approved_at: isApproved ? new Date().toISOString() : null,
+                share_reviewed_by: adminUser?.id,
+                share_reviewed_at: new Date().toISOString(),
+                share_review_rejection_reason: isApproved ? null : rejectionReason
+              }
               : att
           )
         }))
@@ -4081,6 +4279,7 @@ export function AdminDataProvider({ children }) {
 
     // Enquiry Mutators & Workflow Actions (Phase 2 & Phase 3)
     setEnquiries: setDemoEnquiries,
+    createAdminEnquiry,
     updateEnquiryStatus,
     updateEnquiryNotes,
     deleteEnquiry,

@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAdminData } from '../../context/adminDataContext'
+import { useAdminAuth } from '../../context/adminAuthContext'
+import DuplicateCustomerSuggestionPanel from './DuplicateCustomerSuggestionPanel'
+import { aggregateCustomers } from '../../utils/customerCrmAggregator'
 
 /**
  * ============================================================================
@@ -16,7 +19,22 @@ import { useAdminData } from '../../context/adminDataContext'
  * ============================================================================
  */
 export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
-  const { products = [], staff = [], createSalesOrder, loadAdminCatalog, uploadOrderAttachments } = useAdminData()
+  const { adminUser } = useAdminAuth()
+  const {
+    products = [],
+    staff = [],
+    enquiries = [],
+    orders = [],
+    regularCustomers = [],
+    createSalesOrder,
+    loadAdminCatalog,
+    uploadOrderAttachments
+  } = useAdminData()
+
+  // Aggregate existing customers for duplicate detection & auto-link
+  const existingCustomers = useMemo(() => {
+    return aggregateCustomers({ enquiries, orders, regularCustomers })
+  }, [enquiries, orders, regularCustomers])
 
   // Eligible technical / engineering staff
   const technicalStaff = useMemo(() => {
@@ -445,6 +463,29 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderCreated }) {
                 />
               </div>
             </div>
+
+            {/* Realtime Duplicate Customer Suggestions */}
+            <DuplicateCustomerSuggestionPanel
+              candidate={{
+                name: customerName,
+                phone: customerPhone || contactInfo,
+                email: customerEmail || contactInfo
+              }}
+              existingCustomers={existingCustomers}
+              userRole={adminUser?.role}
+              onSelectCustomer={(c) => {
+                if (c.name) setCustomerName(c.name)
+                if (c.phone) {
+                  setCustomerPhone(c.phone)
+                  if (!contactInfo) setContactInfo(c.phone)
+                }
+                if (c.email) {
+                  setCustomerEmail(c.email)
+                  if (!contactInfo && !c.phone) setContactInfo(c.email)
+                }
+                if (c.address) setCustomerAddress(c.address)
+              }}
+            />
 
             {/* Engineer Assignment & Delivery Schedule */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>

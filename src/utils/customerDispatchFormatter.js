@@ -78,6 +78,9 @@ export function resolveCustomerPhone(record) {
   if (record.phone && String(record.phone).trim()) {
     return String(record.phone).trim()
   }
+  if (record.mobile_number && String(record.mobile_number).trim()) {
+    return String(record.mobile_number).trim()
+  }
   if (record.service_details?.mobile_number) {
     return String(record.service_details.mobile_number).trim()
   }

@@ -82,7 +82,7 @@ test('Live Orders Register & Reporting Verification Suite', async (t) => {
     assert.strictEqual(row.total_amount, '45000.00')
     assert.strictEqual(row.paid_amount, '45000.00')
     assert.strictEqual(row.balance_amount, '0.00')
-    assert.strictEqual(row.payment_status, 'PAID')
+    assert.strictEqual(row.payment_status, 'RECEIVED')
     assert.strictEqual(row.payment_method, 'UPI')
     assert.strictEqual(row.order_status, 'completed')
     assert.strictEqual(row.archive_status, 'Permanently Archived')

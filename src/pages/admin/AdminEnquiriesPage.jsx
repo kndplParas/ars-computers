@@ -17,6 +17,7 @@ import {
   normalizeIndianPhoneForWhatsApp
 } from '../../utils/customerDispatchFormatter'
 import CustomerEmailModal from '../../components/admin/CustomerEmailModal'
+import CreateEnquiryModal from '../../components/admin/CreateEnquiryModal'
 import {
   downloadMonthlyEnquiriesExcel,
   filterEnquiriesByReportingMonth,
@@ -177,6 +178,7 @@ export default function AdminEnquiriesPage() {
 
   // Modals & Panels State
   const [selectedEnquiry, setSelectedEnquiry] = useState(null)
+  const [isCreateEnquiryModalOpen, setIsCreateEnquiryModalOpen] = useState(false)
   const [isCustomerEmailModalOpen, setIsCustomerEmailModalOpen] = useState(false)
   const [statusConfirmTarget, setStatusConfirmTarget] = useState(null) // { enquiry, nextStatus }
   const [editingNotes, setEditingNotes] = useState('')
@@ -1980,6 +1982,30 @@ export default function AdminEnquiriesPage() {
           </div>
 
           <div className="admin-view-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {adminUser?.role !== 'inventory_staff' && (
+              <button
+                type="button"
+                id="open-create-enquiry-modal-btn"
+                className="btn-primary btn-sm"
+                onClick={() => setIsCreateEnquiryModalOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  background: '#0284c7',
+                  borderColor: '#0284c7',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  padding: '4px 10px',
+                  fontSize: '0.78rem',
+                  height: '30px',
+                  borderRadius: '5px'
+                }}
+                title="Log a new customer enquiry, phone lead, or walk-in service request"
+              >
+                ➕ Log New Enquiry
+              </button>
+            )}
             <button
               type="button"
               id="open-live-register-modal-btn"
@@ -4641,6 +4667,9 @@ export default function AdminEnquiriesPage() {
                         onChange={(event) => handleVisitDetailChange('contact', event.target.value)}
                         style={{ width: '100%', height: '34px', fontSize: '0.84rem' }}
                       />
+                      <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                        Auto: engineer's registered phone (leave empty to hide the customer-visible contact). Private staff phone details are never exposed.
+                      </span>
                     </div>
                   </div>
 
@@ -6730,6 +6759,18 @@ export default function AdminEnquiriesPage() {
                 bodyText={formatEnquiryCustomerDispatch(selectedEnquiry)}
                 shareableAttachments={enquiryProofs.filter((p) => !p.is_voided && p.is_customer_shareable)}
                 totalAttachmentCount={enquiryProofs.filter((p) => !p.is_voided).length}
+              />
+            )}
+
+            {/* Create Customer Enquiry Modal */}
+            {isCreateEnquiryModalOpen && (
+              <CreateEnquiryModal
+                isOpen={isCreateEnquiryModalOpen}
+                onClose={() => setIsCreateEnquiryModalOpen(false)}
+                onEnquiryCreated={() => {
+                  if (typeof loadAdminEnquiries === 'function') loadAdminEnquiries()
+                  setNotification({ type: 'success', text: 'Customer enquiry logged successfully!' })
+                }}
               />
             )}
           </AdminLayout>

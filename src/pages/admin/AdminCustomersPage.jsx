@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
+import CreateCustomerModal from '../../components/admin/CreateCustomerModal'
 import {
   aggregateCustomers,
   filterCustomers,
@@ -27,7 +28,7 @@ import { formatINR, normalizeIndianPhoneForWhatsApp } from '../../utils/customer
  */
 export default function AdminCustomersPage() {
   const { adminUser } = useAdminAuth()
-  const { enquiries = [], orders = [], fetchEnquiryActivities } = useAdminData()
+  const { enquiries = [], orders = [], regularCustomers = [], fetchEnquiryActivities } = useAdminData()
 
   // Permissions based on authenticated user's role
   const rolePermissions = useMemo(() => {
@@ -36,14 +37,15 @@ export default function AdminCustomersPage() {
 
   // Aggregate live business touchpoints into deduplicated customer entities
   const aggregatedCustomers = useMemo(() => {
-    return aggregateCustomers({ enquiries, orders })
-  }, [enquiries, orders])
+    return aggregateCustomers({ enquiries, orders, regularCustomers })
+  }, [enquiries, orders, regularCustomers])
 
   // UI Filter & Search state
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'repeat' | 'active_enquiry' | 'high_value'
+  const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'repeat' | 'active_enquiry' | 'high_value' | 'regular'
   const [selectedCustomerId, setSelectedCustomerId] = useState(null)
   const [activeDrawerTab, setActiveDrawerTab] = useState('overview') // 'overview' | 'orders' | 'enquiries' | 'timeline'
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   // Activity timeline state for the currently inspected customer
   const [customerActivities, setCustomerActivities] = useState([])
@@ -71,13 +73,15 @@ export default function AdminCustomersPage() {
     const activeEnquiriesCount = aggregatedCustomers.filter((c) => c.hasActiveEnquiry).length
     const highValueCount = aggregatedCustomers.filter((c) => c.isHighValue).length
     const totalLtv = aggregatedCustomers.reduce((acc, c) => acc + (c.totalSpend || 0), 0)
+    const regularCount = aggregatedCustomers.filter((c) => c.isRegularCustomer).length
 
     return {
       total,
       repeatCount,
       activeEnquiriesCount,
       highValueCount,
-      totalLtv
+      totalLtv,
+      regularCount
     }
   }, [aggregatedCustomers])
 
@@ -152,7 +156,7 @@ export default function AdminCustomersPage() {
     <AdminLayout activeTab="customers">
       <div className="admin-page-container crm-page-wrapper">
         {/* Module Header */}
-        <div className="admin-page-header crm-header-row">
+        <div className="admin-page-header crm-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h1 className="admin-page-title">
               <span className="page-icon" aria-hidden="true">👤</span>
@@ -162,6 +166,28 @@ export default function AdminCustomersPage() {
               Unified 360° customer profiles aggregated from live sales orders and service enquiries.
             </p>
           </div>
+          {adminUser?.role !== 'inventory_staff' && (
+            <button
+              type="button"
+              className="crm-action-btn crm-primary-btn"
+              onClick={() => setIsCreateModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 18px',
+                background: '#0284c7',
+                color: '#fff',
+                borderRadius: '8px',
+                border: 'none',
+                fontWeight: '600',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              ➕ Add Regular Customer
+            </button>
+          )}
         </div>
 
         {/* CRM Metric Badges */}
@@ -241,6 +267,15 @@ export default function AdminCustomersPage() {
               onClick={() => setActiveFilter('active_enquiry')}
             >
               ⚡ Active Service ({metrics.activeEnquiriesCount})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeFilter === 'regular'}
+              className={`crm-filter-tab-btn ${activeFilter === 'regular' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('regular')}
+            >
+              🏷️ Regular ({metrics.regularCount})
             </button>
             {rolePermissions.canViewFinancials && (
               <button
@@ -654,6 +689,28 @@ export default function AdminCustomersPage() {
                           <dt>Service / Billing Address:</dt>
                           <dd>{selectedCustomer.address || 'Not Provided'}</dd>
                         </div>
+                        {selectedCustomer.isRegularCustomer && (
+                          <div className="dl-row">
+                            <dt>Account Classification:</dt>
+                            <dd>
+                              <span style={{ display: 'inline-block', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>
+                                ⭐ Permanent Regular Customer ({selectedCustomer.customerType || 'Individual'})
+                              </span>
+                            </dd>
+                          </div>
+                        )}
+                        {selectedCustomer.gstNumber && (
+                          <div className="dl-row">
+                            <dt>GST Number:</dt>
+                            <dd><code>{selectedCustomer.gstNumber}</code></dd>
+                          </div>
+                        )}
+                        {selectedCustomer.notes && (
+                          <div className="dl-row">
+                            <dt>Permanent Notes:</dt>
+                            <dd>{selectedCustomer.notes}</dd>
+                          </div>
+                        )}
                         <div className="dl-row">
                           <dt>First Contact Recorded:</dt>
                           <dd>{new Date(selectedCustomer.firstSeen).toLocaleDateString('en-IN')}</dd>
@@ -811,6 +868,12 @@ export default function AdminCustomersPage() {
             </div>
           </div>
         )}
+        {/* Create Regular Customer Modal */}
+        <CreateCustomerModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          existingCustomers={aggregatedCustomers}
+        />
       </div>
     </AdminLayout>
   )
