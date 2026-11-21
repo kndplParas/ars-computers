@@ -237,10 +237,404 @@ export function formatExpectedVisitDateTime(isoString) {
 }
 
 /**
+ * Formats an ISO date-time into standard Indian representation (e.g. 21 Nov 2026, 06:30 PM).
+ */
+export function formatDateTime(isoString) {
+  if (!isoString) return null
+  try {
+    const d = new Date(isoString)
+    if (isNaN(d.getTime())) return null
+    return d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Maps raw workflow status into human-readable label.
+ */
+export function formatWorkflowStatus(status) {
+  if (!status) return 'New'
+  switch (String(status).toLowerCase().trim()) {
+    case 'new':
+      return 'New'
+    case 'in_progress':
+      return 'In Progress'
+    case 'quoted':
+      return 'Quotation Sent'
+    case 'completion_requested':
+      return 'Completion Under Review'
+    case 'completed':
+      return 'Completed'
+    case 'returned_for_rework':
+      return 'Returned for Additional Work'
+    case 'rejection_requested':
+      return 'Under Review (Rejection Requested)'
+    case 'rejected':
+      return 'Closed (Rejected)'
+    case 'closed':
+      return 'Closed'
+    case 'converted':
+      return 'Converted'
+    default:
+      return String(status).charAt(0).toUpperCase() + String(status).slice(1)
+  }
+}
+
+/**
+ * Maps customer tracking status into human-readable label.
+ */
+export function formatCustomerTrackingStatus(status) {
+  if (!status) return null
+  switch (String(status).toLowerCase().trim()) {
+    case 'received':
+      return 'Received'
+    case 'in_progress':
+      return 'In Progress'
+    case 'needs_info':
+      return 'Need More Info'
+    case 'scheduled':
+      return 'Scheduled'
+    case 'completed':
+      return 'Completed'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return String(status).charAt(0).toUpperCase() + String(status).slice(1)
+  }
+}
+
+/**
+ * Maps customer visit tracking status into human-readable label.
+ */
+export function formatVisitStatusLabel(status) {
+  if (!status) return null
+  switch (String(status).toLowerCase().trim()) {
+    case 'scheduled':
+      return 'Visit Scheduled'
+    case 'in_progress':
+      return 'Visit In Progress'
+    case 'on_way':
+      return 'Engineer On The Way'
+    case 'completed':
+      return 'Visit Completed'
+    case 'rescheduled':
+      return 'Visit Rescheduled'
+    case 'cancelled':
+      return 'Visit Cancelled'
+    default:
+      return String(status).charAt(0).toUpperCase() + String(status).slice(1)
+  }
+}
+
+/**
+ * Extracts a bullet field value from message text formatted like: "• Brand: Lenovo"
+ */
+function extractBulletField(message, fieldName) {
+  if (!message || typeof message !== 'string') return null
+  const regex = new RegExp(`•\\s*${fieldName}:?\\s*([^\\n]+)`, 'i')
+  const match = message.match(regex)
+  if (match && match[1]) {
+    const val = match[1].trim()
+    if (val && !['n/a', 'none', '-', 'not specified'].includes(val.toLowerCase())) {
+      return val
+    }
+  }
+  return null
+}
+
+/**
+ * Comprehensive customer-facing pure formatter: builds complete enquiry details text for copying to clipboard.
+ * Includes every customer-facing field for both General and Service/Repair enquiries.
+ * 
+ * Strict Privacy & Security Invariants:
+ * - NO internal admin notes (admin_notes)
+ * - NO employee codes or internal IDs (ARS-EMP-*, UUIDs)
+ * - NO staff Aadhaar numbers (even masked)
+ * - NO assignment, rejection, rework, or completion audit actors/reasons
+ * - NO archive or bin lifecycle details
+ * - NO private storage paths, tokens, signed URLs, passwords, or secrets
+ * - Engineer contact ONLY from approved customer-visible contact (engineer_contact_display)
+ * - Complete, untruncated customer message & problem description
+ * - Clear headings and consistent fallback 'Not Provided' for missing fields
+ */
+export function formatEnquiryDetailsForCopy(enquiry) {
+  if (!enquiry) return ''
+
+  const service = parseServiceEnquiry(enquiry)
+  const isService = Boolean(service?.isService)
+
+  // Safe parse of nested JSONB objects
+  let sd = enquiry.service_details
+  if (typeof sd === 'string') {
+    try { sd = JSON.parse(sd) } catch { sd = {} }
+  } else if (!sd || typeof sd !== 'object') {
+    sd = {}
+  }
+
+  let pd = enquiry.product_details
+  if (typeof pd === 'string') {
+    try { pd = JSON.parse(pd) } catch { pd = {} }
+  } else if (!pd || typeof pd !== 'object') {
+    pd = {}
+  }
+
+  const lines = []
+
+  // 1. Header & Enquiry Identification
+  lines.push('ARS COMPUTERS')
+  if (isService) {
+    lines.push('SERVICE & REPAIR ENQUIRY DETAILS')
+  } else {
+    lines.push('GENERAL ENQUIRY DETAILS')
+  }
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+
+  // Service Ticket ID (if service enquiry)
+  const serviceTicket = service.ticketNumber || sd.ticket_number || (enquiry.ticket_number ? String(enquiry.ticket_number) : null)
+  if (isService && serviceTicket) {
+    lines.push(`Service Ticket ID: ${serviceTicket}`)
+  }
+
+  // Enquiry ID / Reference
+  if (enquiry.enquiry_number) {
+    lines.push(`Enquiry ID: ARS-ENQ-${String(enquiry.enquiry_number).padStart(5, '0')}`)
+  } else if (!isService || !serviceTicket) {
+    lines.push(`Enquiry ID: ${resolveTicketId(enquiry, service)}`)
+  }
+
+  // Submission Date & Time
+  const submissionTimestamp = enquiry.created_at || enquiry.submitted_at || enquiry.date || null
+  const submissionFormatted = formatDateTime(submissionTimestamp)
+  lines.push(`Submission Date & Time: ${submissionFormatted || 'Not Provided'}`)
+
+  // Status & Requirement
+  const statusLabel = formatWorkflowStatus(enquiry.status)
+  lines.push(`Enquiry Status: ${statusLabel}`)
+
+  const requirement = enquiry.service_requested || enquiry.category_label || enquiry.category_interest || (isService ? 'Hardware Service & Repair' : 'General Enquiry')
+  lines.push(`Requirement: ${requirement}`)
+
+  const enquiryTypeLabel = enquiry.enquiry_type
+    ? (enquiry.enquiry_type === 'service_request' ? 'Service / Repair' : enquiry.enquiry_type.charAt(0).toUpperCase() + enquiry.enquiry_type.slice(1))
+    : (isService ? 'Service / Repair' : 'General')
+  lines.push(`Enquiry Type: ${enquiryTypeLabel}`)
+  lines.push('')
+
+  // 2. Customer Details
+  lines.push('CUSTOMER DETAILS')
+  lines.push('────────────────────────────')
+  const customerName = enquiry.customer_name || enquiry.name || sd.customer_name || 'Valued Customer'
+  lines.push(`Name: ${customerName}`)
+
+  const customerType = service.customerType || sd.customer_type || enquiry.customer_type || null
+  if (customerType) {
+    lines.push(`Customer Type: ${customerType}`)
+  }
+
+  const company = enquiry.company || enquiry.company_name || sd.company_name || extractBulletField(enquiry.message, 'Company') || null
+  lines.push(`Company: ${company && !['n/a', 'none', '-', 'not specified'].includes(company.toLowerCase()) ? company : 'Not Provided'}`)
+
+  const customerPhone = resolveCustomerPhone(enquiry)
+  lines.push(`Phone: ${customerPhone || 'Not Provided'}`)
+
+  const customerEmail = resolveCustomerEmail(enquiry)
+  lines.push(`Email: ${customerEmail || 'Not Provided'}`)
+
+  const customerAddress = resolveCustomerAddress(enquiry, service)
+  lines.push(`Address: ${customerAddress || 'Not Provided'}`)
+  lines.push('')
+
+  // 3. Product / Service Specifications
+  if (isService) {
+    lines.push('SERVICE / REPAIR SPECIFICATIONS')
+    lines.push('────────────────────────────')
+
+    const productCategory = service.productCategory || sd.product_category || (enquiry.category_interest ? enquiry.category_interest.replace(/^service:\s*/i, '') : null)
+    lines.push(`Product Category: ${productCategory || 'Not Provided'}`)
+
+    const requestType = service.requestType || sd.request_type || extractBulletField(enquiry.message, 'Request Type') || null
+    lines.push(`Request Type: ${requestType || 'Not Provided'}`)
+
+    const brandModel = (service.brandModel && service.brandModel !== 'N/A')
+      ? service.brandModel
+      : (sd.brand || sd.model_number ? `${sd.brand || 'Not Provided'}${sd.model_number ? ` / ${sd.model_number}` : ''}` : null)
+    lines.push(`Brand & Model: ${brandModel || 'Not Provided'}`)
+
+    const serialInvoice = (service.serialInvoice && service.serialInvoice !== 'N/A')
+      ? service.serialInvoice
+      : (sd.serial_number || sd.invoice_number ? `${sd.serial_number || 'Not Provided'}${sd.invoice_number ? ` | Invoice: ${sd.invoice_number}` : ''}` : null)
+    lines.push(`Serial Number / Invoice: ${serialInvoice || 'Not Provided'}`)
+
+    const purchaseDate = (service.purchaseDate && service.purchaseDate !== 'N/A') ? service.purchaseDate : (sd.purchase_date || null)
+    lines.push(`Purchase Date: ${purchaseDate || 'Not Provided'}`)
+
+    const serviceLocation = (service.serviceLocation && service.serviceLocation !== 'N/A')
+      ? service.serviceLocation
+      : (sd.service_location || customerAddress || 'On-site')
+    lines.push(`Service Location: ${serviceLocation || 'On-site'}`)
+
+    const preferredVisitDate = (service.preferredVisitDate && service.preferredVisitDate !== 'N/A') ? service.preferredVisitDate : (sd.preferred_visit_date || null)
+    lines.push(`Preferred Visit Date: ${preferredVisitDate || 'Not Provided'}`)
+
+    const diagnostics = service.diagnosticsSummary || sd.diagnostics || (typeof sd.device_details === 'object' && sd.device_details ? Object.keys(sd.device_details).filter(k => sd.device_details[k] === true).map(k => k.replace(/^issue_/, '').replace(/_/g, ' ')).join(', ') : null)
+    lines.push(`Diagnostic Symptoms: ${diagnostics || 'Not Provided'}`)
+
+    if (sd.warranty_status) {
+      lines.push(`Warranty Status: ${sd.warranty_status}`)
+    }
+    if (sd.accessories_received) {
+      lines.push(`Accessories Received: ${sd.accessories_received}`)
+    }
+    if (sd.device_condition) {
+      lines.push(`Device Physical Condition: ${sd.device_condition}`)
+    }
+    if (service.attachmentUrl || sd.attachment_url) {
+      lines.push('Attachment: Uploaded Document / Photo Available')
+    } else {
+      lines.push('Attachment: None')
+    }
+  } else {
+    lines.push('PRODUCT & REQUIREMENT SPECIFICATIONS')
+    lines.push('────────────────────────────')
+
+    const categoryInterest = enquiry.category_interest || enquiry.category_label || enquiry.product_category || pd.category || null
+    lines.push(`Category / Interest: ${categoryInterest || 'Not Provided'}`)
+
+    const brand = enquiry.brand || enquiry.product_brand || pd.brand || extractBulletField(enquiry.message, 'Brand') || null
+    lines.push(`Brand: ${brand || 'Not Provided'}`)
+
+    const model = enquiry.model || enquiry.model_number || enquiry.product_model || pd.model || extractBulletField(enquiry.message, 'Model') || null
+    lines.push(`Model: ${model || 'Not Provided'}`)
+
+    const specs = enquiry.specifications || enquiry.spec_summary || pd.specifications || extractBulletField(enquiry.message, 'Specifications') || extractBulletField(enquiry.message, 'Specs') || null
+    lines.push(`Specifications: ${specs || 'Not Provided'}`)
+
+    const budget = enquiry.budget || enquiry.estimated_budget || pd.budget || extractBulletField(enquiry.message, 'Budget') || null
+    if (budget) {
+      lines.push(`Estimated Budget: ${budget}`)
+    }
+
+    const quantity = enquiry.quantity || enquiry.required_quantity || pd.quantity || extractBulletField(enquiry.message, 'Quantity') || null
+    if (quantity) {
+      lines.push(`Quantity: ${quantity}`)
+    }
+  }
+  lines.push('')
+
+  // 4. Problem Description / Customer Notes (Full customer-submitted text; zero internal admin notes)
+  lines.push('PROBLEM DESCRIPTION & CUSTOMER NOTES')
+  lines.push('────────────────────────────')
+  const problemDesc = (isService && service.problemDescription)
+    ? service.problemDescription
+    : (enquiry.message || enquiry.problem_description || 'Not Provided')
+  lines.push('Customer Description:')
+  lines.push(problemDesc)
+  lines.push('')
+
+  // 5. Assigned Engineer (Customer-Visible details only; zero employee IDs, zero Aadhaar, zero internal contacts)
+  lines.push('ASSIGNED ENGINEER')
+  lines.push('────────────────────────────')
+  if (enquiry.assigned_employee_name || enquiry.assigned_employee_id || enquiry.assigned_to) {
+    lines.push('Status: Assigned')
+    lines.push(`Engineer: ${enquiry.assigned_employee_name || 'Staff Member'}`)
+
+    // Engineer contact ONLY if approved customer-visible contact from customer tracking is available
+    const isContactHidden = Boolean(enquiry.engineer_contact_hidden)
+    const rawCustomerContact = enquiry.engineer_contact_display || enquiry.customer_engineer_contact_display
+    const customerVisibleContact = (!isContactHidden && rawCustomerContact) ? String(rawCustomerContact).trim() : null
+    if (customerVisibleContact) {
+      lines.push(`Engineer Contact: ${customerVisibleContact}`)
+    } else {
+      lines.push('Engineer Contact: Contact number not yet available')
+    }
+  } else {
+    lines.push('Status: Not Assigned')
+  }
+  lines.push('')
+
+  // 6. Visit & Dispatch Schedule (Customer-Visible)
+  lines.push('VISIT & DISPATCH SCHEDULE')
+  lines.push('────────────────────────────')
+  const expectedVisitFormatted = formatExpectedVisitDateTime(enquiry.expected_visit_at)
+  const arrivalDuration = enquiry.expected_arrival
+  const arrivalDate = enquiry.expected_arrival_date
+
+  if (expectedVisitFormatted && arrivalDuration) {
+    lines.push(`Expected Visit: ${expectedVisitFormatted} (${arrivalDuration})`)
+  } else if (expectedVisitFormatted) {
+    lines.push(`Expected Visit: ${expectedVisitFormatted}`)
+  } else if (arrivalDate && arrivalDuration) {
+    lines.push(`Expected Visit: ${arrivalDate} (${arrivalDuration})`)
+  } else if (arrivalDuration) {
+    lines.push(`Expected Arrival: ${arrivalDuration}`)
+  } else {
+    lines.push('Expected Visit: Not Scheduled')
+  }
+
+  // Customer tracking visit details if present
+  const rawVisitStatus = enquiry.visit_status || enquiry.customer_visit_status
+  const visitStatusLabel = formatVisitStatusLabel(rawVisitStatus)
+  if (visitStatusLabel) {
+    lines.push(`Visit Status: ${visitStatusLabel}`)
+  }
+
+  const customerVisitNote = enquiry.visit_progress_note || enquiry.customer_visit_note
+  if (customerVisitNote && typeof customerVisitNote === 'string' && customerVisitNote.trim()) {
+    lines.push(`Visit Note: ${customerVisitNote.trim()}`)
+  }
+  lines.push('')
+
+  // 7. Workflow Status & Customer Tracking (Zero internal audit actors/reasons)
+  lines.push('STATUS & TRACKING')
+  lines.push('────────────────────────────')
+  lines.push(`Current Status: ${statusLabel}`)
+
+  const trackingStatusLabel = formatCustomerTrackingStatus(enquiry.customer_tracking_status)
+  if (trackingStatusLabel) {
+    lines.push(`Customer Tracking Status: ${trackingStatusLabel}`)
+  }
+
+  if (submissionFormatted) {
+    lines.push(`Submitted: ${submissionFormatted}`)
+  }
+  if (enquiry.updated_at) {
+    const updatedFormatted = formatDateTime(enquiry.updated_at)
+    if (updatedFormatted) {
+      lines.push(`Last Updated: ${updatedFormatted}`)
+    }
+  }
+  lines.push('')
+
+  // 8. Footer
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  lines.push('ARS Computers — Service Desk & Customer Records')
+
+  return lines.join('\n')
+}
+
+/**
+ * Alias for formatEnquiryDetailsForCopy.
+ */
+export function formatCompleteEnquiryDetails(enquiry) {
+  return formatEnquiryDetailsForCopy(enquiry)
+}
+
+/**
  * Primary pure formatter: produces the single authoritative customer-facing dispatch for enquiries.
  * Used identically across WhatsApp, Copy to Notepad, and Email.
  */
-export function formatEnquiryCustomerDispatch(enquiry) {
+export function formatEnquiryCustomerDispatch(enquiry, options = {}) {
+  if (options && options.complete) {
+    return formatEnquiryDetailsForCopy(enquiry)
+  }
   if (!enquiry) return ''
 
   const service = parseServiceEnquiry(enquiry)

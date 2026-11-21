@@ -10,6 +10,8 @@ import { formatAadhaarDisplay } from '../../utils/aadhaarFormatter'
 import { formatJobDispatchText, buildWhatsAppDispatchUrl } from '../../utils/jobDispatchFormatter'
 import {
   formatEnquiryCustomerDispatch,
+  formatEnquiryDetailsForCopy,
+  formatCompleteEnquiryDetails,
   buildCustomerWhatsAppUrl,
   buildCustomerEmailSubject,
   resolveCustomerPhone,
@@ -603,13 +605,29 @@ export default function AdminEnquiriesPage() {
   const handleCustomerCopy = async () => {
     if (!selectedEnquiry) return
     try {
-      const text = formatEnquiryCustomerDispatch(selectedEnquiry)
-      await navigator.clipboard.writeText(text)
+      const text = formatEnquiryDetailsForCopy(selectedEnquiry)
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(text)
+      } else if (typeof document !== 'undefined') {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        const successful = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        if (!successful) throw new Error('Clipboard copy command was unsuccessful')
+      } else {
+        throw new Error('Clipboard API is not available')
+      }
       setCopyFeedback(true)
-      showNotification('Service visit details copied', 'success')
+      showNotification('Enquiry details copied to clipboard', 'success')
       setTimeout(() => setCopyFeedback(false), 2500)
     } catch (err) {
-      showNotification('Could not copy to clipboard: ' + err.message, 'error')
+      setCopyFeedback(false)
+      showNotification('Could not copy to clipboard: ' + (err?.message || 'Permission denied'), 'error')
     }
   }
 
@@ -5080,7 +5098,7 @@ export default function AdminEnquiriesPage() {
                           id="customer-copy-btn"
                           className="btn-outline btn-sm"
                           onClick={handleCustomerCopy}
-                          title={copyFeedback ? 'Service visit details copied!' : 'Copy customer service details'}
+                          title={copyFeedback ? 'Enquiry details copied!' : 'Copy complete enquiry details'}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
