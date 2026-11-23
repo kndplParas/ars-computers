@@ -163,9 +163,6 @@ export function parseSpecStringToAttributes(spec, raw = {}) {
   if (raw.name && !attrs['product_type']) {
     attrs['product_type'] = raw.name
   }
-  if (!attrs['compatibility']) {
-    attrs['compatibility'] = 'Standard commercial, office and desktop hardware compatibility — verified by ARS Computers'
-  }
 
   return attrs
 }
