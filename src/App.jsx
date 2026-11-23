@@ -20,6 +20,7 @@ const AdminStaffPage = lazy(() => import('./pages/admin/AdminStaffPage'))
 const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'))
 const SearchResultsPage = lazy(() => import('./pages/SearchResultsPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+const ImageCreditsPage = lazy(() => import('./pages/ImageCreditsPage'))
 
 // Lightweight page transition shell that preserves page layout and prevents shifts
 function RouteTransitionShell() {
@@ -70,6 +71,8 @@ function App() {
                 <Route path="/category/:slug" element={<CategoryRouteWrapper />} />
                 <Route path="/products/:slug" element={<ProductRouteWrapper />} />
                 <Route path="/search" element={<SearchResultsPage />} />
+                <Route path="/credits" element={<ImageCreditsPage />} />
+                <Route path="/image-credits" element={<Navigate to="/credits" replace />} />
 
                 {/* Admin Authentication & Console Routes */}
                 <Route path="/admin/login" element={<AdminLoginPage />} />

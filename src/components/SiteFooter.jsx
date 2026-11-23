@@ -76,6 +76,7 @@ export default function SiteFooter() {
             <li><button onClick={() => handleNavClick('products')}>Product Catalog</button></li>
             <li><button onClick={() => handleNavClick('services')}>Services &amp; AMC</button></li>
             <li><button onClick={() => handleNavClick('contact')}>Contact &amp; Quotes</button></li>
+            <li><button onClick={() => navigate('/credits')}>Image Credits &amp; Licences</button></li>
             <li><button onClick={() => navigate('/admin')} style={{ color: '#0284c7', fontWeight: 600 }}>🔒 Staff Admin Portal</button></li>
           </ul>
         </div>
@@ -124,6 +125,14 @@ export default function SiteFooter() {
       <div className="footer-bottom">
         <span>&copy; {CURRENT_YEAR} ARS Computers. All rights reserved.</span>
         <span>GSTIN: 05FFNPB4737Q12V</span>
+        <button
+          type="button"
+          onClick={() => navigate('/credits')}
+          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.82rem', padding: '4px 8px', borderRadius: '4px' }}
+          title="Creative Commons &amp; Open-Access Media Attributions"
+        >
+          Image Credits &amp; Licences
+        </button>
         <button
           type="button"
           onClick={() => navigate('/admin')}

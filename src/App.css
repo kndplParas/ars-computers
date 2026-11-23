@@ -16570,3 +16570,345 @@
     font-size: 11px;
   }
 }
+
+
+/* ============================================================================
+   ARS Computers — Image Credits & Licences Page Styles
+   ============================================================================ */
+
+.credits-page-main {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+  width: 100%;
+}
+
+.credits-hero-section {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 40px 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25);
+}
+
+.credits-hero-content {
+  max-width: 960px;
+}
+
+.credits-hero-badge {
+  display: inline-block;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.credits-hero-title {
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 14px;
+  color: #ffffff;
+}
+
+.credits-hero-tagline {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #cbd5e1;
+  margin: 0 0 24px;
+}
+
+.credits-legal-notice-box {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.credits-legal-notice-box .notice-point {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #e2e8f0;
+}
+
+.credits-legal-notice-box .notice-point strong {
+  color: #38bdf8;
+}
+
+.credits-controls-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.credits-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.credits-search-box .search-icon {
+  position: absolute;
+  left: 14px;
+  color: #64748b;
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.credits-search-input {
+  width: 100%;
+  padding: 12px 40px 12px 42px;
+  font-size: 0.95rem;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.credits-search-input:focus {
+  border-color: #0284c7;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.credits-clear-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+}
+
+.credits-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.credits-filter-pills .filter-pill {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.credits-filter-pills .filter-pill:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.credits-filter-pills .filter-pill.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+}
+
+.credits-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  font-size: 0.92rem;
+  color: #64748b;
+  padding: 0 4px;
+}
+
+.credits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.credit-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.credit-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  border-color: #cbd5e1;
+}
+
+.credit-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.credit-index-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.credit-heading {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+  margin: 0;
+  flex: 1;
+}
+
+.credit-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.credit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.credit-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.credit-value {
+  color: #1e293b;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.credit-author {
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.credit-product-link {
+  color: #0284c7;
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.credit-product-link:hover {
+  text-decoration: underline;
+}
+
+.credit-license-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.license-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.license-badge.badge-sa {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.license-badge.badge-cc {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.credit-link, .credit-source-link {
+  color: #0284c7;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.credit-link:hover, .credit-source-link:hover {
+  text-decoration: underline;
+}
+
+.credit-sa-notice {
+  background: #f8fafc;
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.credit-sa-notice .sa-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.credits-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
+}
+
+.credits-empty-state p {
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 640px) {
+  .credits-hero-section {
+    padding: 24px 18px;
+  }
+  .credits-grid {
+    grid-template-columns: 1fr;
+  }
+}

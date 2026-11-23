@@ -48,7 +48,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Maurizio Pesce from Milan, Italia
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAcer_laptop_keyboard_(12461949813).jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -60,7 +60,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** www.Pixel.la Free Stock Photos
 * **License:** CC0
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAcer_laptop_with_magazines.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -216,7 +216,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Solomon203
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AASUS_TUF_Gaming_X3_20190601.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -228,7 +228,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Solomon203
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AASUS_TUF_Gaming_motherboards_20190601.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -240,7 +240,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** UnifiedFunctionality
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ARestaurant_order_management_keypad.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -312,7 +312,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Michael Coté
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ABrother_MFC-440CN.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -324,7 +324,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Brother France
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AImprimante_multifonction_A3_Brother.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -336,7 +336,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Solomon203
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ASharp_MX-M465_of_Aurora_Office_Equipment_20161029.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -348,7 +348,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Mr.ちゅらさん
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AKyocera_Office_Printer_Maschine.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -360,7 +360,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Cheon Fong Liew from Kluang, Malaysia
 * **License:** CC BY-SA 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ABrother_HL-2070N_Network_Laser_Printer_ports.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -372,7 +372,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Hubert Berberich (HubiB)
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ABrother_HL-1050_01.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -384,7 +384,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** BrokenSphere
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACanon_Laser_Class_710_fax_machine.JPG
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -396,7 +396,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Cheon Fong Liew from Kluang, Malaysia
 * **License:** CC BY-SA 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ADell_Color_Laser_Network_Printer_1320cn_ports.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -408,7 +408,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Dinkun Chen
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACanon_PIXMA_TS_5380_Multifunction_ink-jet_Printer.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -420,7 +420,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Dinkun Chen
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACanon_PIXMA_MG3080_Multifunction_ink-jet_Printer.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -552,7 +552,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Intel Free Press
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAll-in-One_PC_Concept_Circa_2000.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -564,7 +564,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** Intel Free Press
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAll-in-One_PC_Concept_Circa_2000_(2).jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -576,7 +576,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 * **Author / Creator:** User Smial on de.wikipedia
 * **License:** CC BY-SA 2.0 de
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AKorn_HP4_ISO1600.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -590,7 +590,7 @@ This document records legal attributions, licensing deeds, sources, authors, and
 Later versions were uploaded by -Majestic- at en.wikipedia.
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_LaserJet_4.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -722,7 +722,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Tamasflex
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACCTV_Cameras.png
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -734,7 +734,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Marcoswiki1982
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACamara_PTZ.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -746,7 +746,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Nïall Green
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACCTV_dome_camera.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -758,7 +758,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** KRoock74
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ADome_CCTV_cameras.JPG
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -770,7 +770,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Lvova
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ARfid-reader(table).JPG
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -782,7 +782,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Wikipeder
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ARfid-reader(portal).JPG
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -830,7 +830,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** SankalpSasnur
 * **License:** CC0
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ARGB_gaming_headset_on_desk_with_ambient_lighting.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -842,7 +842,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Shixart1985
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ADual_monitor_setup_in_a_gaming_room_with_keyboard_and_mouse_in_focus.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -854,7 +854,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Jitze Couperus from Los Altos Hills, California, USA
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AETA_Systems_ETA10_supercomputer_(1987-1989)_where_CPU_is_mounted_in_a_liquid_nitrogen_tank_for_liquid_cooling_(End_of_an_ERA)_-_Computer_History_Museum%2C_2010-01-21_15.43.38_by_Jitze_Couperus.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -866,7 +866,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Dave Monk
 * **License:** CC BY-SA 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AWater_Cooled_PC.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -926,7 +926,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** The original uploader was Yellowye at Chinese Wikipedia.
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ADell_inspiron_700m.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -938,7 +938,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Shielder95
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ADell_Inspiron_1525_250618.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -998,7 +998,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** PolarisLakewell
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ADell_Latitude_E6540.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1010,7 +1010,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Thelichprince
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ADell_Latitude_E6410_laptop_with_Kiwix.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1274,7 +1274,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Mooinglemur
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AMagnetic_Lock.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1286,7 +1286,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Willh26
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAvocet_ABS_Magnetic_Key.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1298,7 +1298,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Intel Free Press
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAll-in-One_PC_Concept_Circa_2000.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1310,7 +1310,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Intel Free Press
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAll-in-One_PC_Concept_Circa_2000_(2).jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1322,7 +1322,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** YasmaSA1991
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AC11CB57201_Inyecci%C3%B3n%2Bde%2Btinta_Epson%2BEcoTank%2BL800_ES.png
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1334,7 +1334,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** N509FZ
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AGE8888_at_Cross_Harbour_Tunnel_Toll_Plaza_(20181116111104).jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1382,7 +1382,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** NVO
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AKashira_Vvedenskaya_tower_10.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1394,7 +1394,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** NVO
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AKashira_Vvedenskaya_tower_11.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1730,7 +1730,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Leon Brooks
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ASecurity_camera_(1).jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1742,7 +1742,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Amirecoy
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACampion-CCTV-Camera-CN-7611HS.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1754,7 +1754,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Leon Brooks
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ASecurity_camera_currambine_railway_station.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1766,7 +1766,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Artechvideo
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ASecurity_Dome_Camera.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1778,7 +1778,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Delta News Hub
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACustomer_cleared_to_board_flight_(46092017161).jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1790,7 +1790,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Delta News Hub
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AFacial_recognition_technology_at_gate_(44275734970).jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1802,7 +1802,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** DarienLizard
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3APERCo_CR11_Time_and_Attendance_terminal.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1814,7 +1814,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Wikimedia Commons Contributor
 * **License:** GPL
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ABiometric_DAB.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1850,7 +1850,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Achim Raschka
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_LaserJet_Enterprise_M558_01.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1862,7 +1862,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Achim Raschka
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_LaserJet_Enterprise_M558_03.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1874,7 +1874,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** ThisIsNotABetter
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_EliteBook_8460p_bottom.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1886,7 +1886,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** WKA Zisan
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_EliteBook_Folio_8490m_(1).jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1946,7 +1946,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Shleiderbmx
 * **License:** CC BY 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_Pavilion_dv6000_laptop.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1958,7 +1958,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** LupisSM
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_Pavilion_(laptop).jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -1970,7 +1970,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Pelehti
 * **License:** Public domain
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_ProBook_6560b.png
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -1982,7 +1982,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Jugendpresse Deutschland
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AHP_ProBook_(SzwdL_Jurysitzung_2020_102).jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -2066,7 +2066,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** André Karwath aka Aka
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AIBM_Thinkpad_R51.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -2078,7 +2078,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Intel Free Press
 * **License:** CC BY-SA 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ALenovo_ThinkPad_X1_Ultrabook_(Nov_16%2C_2012).png
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -2198,7 +2198,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Mark Pellegrini
 * **License:** CC BY-SA 2.5
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AFingerprint_scanner_1.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -2210,7 +2210,7 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 * **Author / Creator:** Mark Pellegrini
 * **License:** CC BY-SA 2.5
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AFingerprint_scanner_2.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -2594,7 +2594,7 @@ derivative work: Minipipo1 (talk)
 * **Author / Creator:** Gibson Torreon C
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3ACCTV_Camera_Philippines_at_Gigaworkz_Technologies_Inc.JPG
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -2606,7 +2606,7 @@ derivative work: Minipipo1 (talk)
 * **Author / Creator:** FaddeyMacerio
 * **License:** CC BY-SA 4.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/4.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AFourth_Vision_Cameras.jpg
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
@@ -2858,7 +2858,7 @@ derivative work: Minipipo1 (talk)
 * **Author / Creator:** Intel Free Press
 * **License:** CC BY 2.0
 * **License Deed:** https://creativecommons.org/licenses/by/2.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AAsus_x21_ultrabook.jpg
 * **Commercial Notice:** Open commercial use permitted with attribution.
 
 ---
@@ -2870,7 +2870,7 @@ derivative work: Minipipo1 (talk)
 * **Author / Creator:** Gisling
 * **License:** CC BY-SA 3.0
 * **License Deed:** https://creativecommons.org/licenses/by-sa/3.0/
-* **Direct Asset URL:** undefined
+* **Direct Asset URL:** https://commons.wikimedia.org/wiki/File%3AACER_S3_ULTRABOOK.JPG
 * **Commercial Notice:** ShareAlike copyleft applies to adaptations. Used unmodified for nominative hardware identification.
 
 ---
