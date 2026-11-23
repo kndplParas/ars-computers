@@ -323,7 +323,7 @@ export const PRODUCT_IMAGES = {
   // --------------------------------------------------------------------------
   // Storage & Memory
   'samsung-870-evo-sata-ssd': [accSamsungSsd870],
-  'seagate-barracuda-3-5-inch-hdd': [accSeagateBarracudaHdd],
+  'seagate-barracuda-3-5-inch-hdd': [accSeagateBarracudaHdd, accSeagateHddPlatter],
   'corsair-vengeance-lpx-ddr4-ram': [gamingRamCorsairLpx],
   'kingston-desktop-ddr-ram-module': [accKingstonDdrRam],
   'high-speed-nvme-m2-ssds-external-drives': [accNvmeGen4Ssd],
@@ -488,5 +488,72 @@ export const PRODUCT_IMAGE_CAPTIONS = {
   'cctv-3-plus-1-coaxial-video-cable': [
     'CCTV 3+1 Shielded Coaxial Video Cable Bundle Roll',
     'RG59 White Coaxial Video Transmission Cable'
+  ],
+  'standard-male-to-male-hdmi-cable': [
+    'High-Speed HDMI Male-to-Male Digital Audio/Video Cable',
+    'Gold-Plated HDMI Connector Housing & Terminal Pins',
+    'Heavy-Duty PVC Cable Jacket with Molded Strain Relief',
+    'Factory Coiled Cable Package for Bulk Supply',
+    'Standard Display Connection Setup & Compliance View'
+  ],
+  'terabyte-hd-2-0v-premium-hdmi-cable': [
+    'Terabyte 4K Ultra HD 2.0V High-Speed Cable Overview',
+    'Dual-Color Braided Shielding with Zinc Alloy Casing',
+    '18Gbps High-Bandwidth Display Connector Close-Up'
+  ],
+  'adnet-ad-001-laptop-power-cable': [
+    'ADNet AD-001 3-Pin Laptop Power Cord Overview',
+    'Molded Indian 3-Pin Wall Plug (IS 1293 Compliant)'
+  ],
+  'laptop-power-cable-c5-cloverleaf': [
+    'Universal 3-Pin C5 Cloverleaf Adapter Power Cord',
+    'C5 Female Connector with Grounded Earth Pin Detail'
+  ],
+  'desktop-pc-monitor-iec-c13-power-cable': [
+    'Heavy-Duty 3-Pin Desktop PC & Monitor Power Cable (IEC C13)',
+    '10A Molded Indian 3-Pin Grounded Wall Plug',
+    'Reinforced Cable Strain Relief & Heavy-Gauge Core'
+  ],
+  'usb-2-0-type-a-male-to-female-extension-cable': [
+    'USB 2.0 Type-A Male to Female Extension Cable (White)',
+    'Precision Nickel-Plated USB Female Port Interface',
+    'Flexible White Shielded Cable Profile'
+  ],
+  'usb-2-0-type-a-to-type-b-printer-cable': [
+    'USB 2.0 Type-A to Type-B High-Speed Printer Cable',
+    'Square USB Type-B Printer Device Connector',
+    'Standard USB Type-A Host Computer Plug'
+  ],
+  'shielded-white-vga-cable-dual-ferrite': [
+    'Heavy-Duty Shielded VGA Monitor Cable with Dual Ferrite Cores',
+    'VGA DB-15 Connector with Integrated Ferrite Choke Bead'
+  ],
+  'cat6-rj45-gigabit-ethernet-patch-cable-grey': [
+    'CAT6 RJ-45 Gigabit Ethernet Patch Cable (Grey)',
+    'Snagless Molded Boot & 50-Micron Gold-Plated RJ45 Pins',
+    'UTP 4-Pair Pure Copper Twisted-Pair Shielding View',
+    'Network Switch & Patch Panel Interface Demonstration'
+  ],
+  'usb-to-internal-5pin-terminal-data-cable': [
+    'USB Type-A to Internal 5-Pin Terminal / Barcode Scanner Cable',
+    '5-Pin JST Terminal Pitch Connector Close-Up'
+  ],
+  'compact-hdmi-female-to-vga-male-adapter-converter': [
+    'Compact HDMI Female to VGA Male Direct-Plug Converter',
+    'Integrated 3.5mm Stereo Audio Output & Micro-USB Power Port'
+  ],
+  'sata-2-5-inch-hdd-ssd-enclosure-black': [
+    '2.5-Inch SATA to USB 3.0 External Enclosure (Black)',
+    'Tool-Free Slide Open Drive Bay Architecture',
+    'High-Speed SATA III to USB 3.0 Bridge Controller Board',
+    'Included SuperSpeed USB 3.0 Connection Cable'
+  ],
+  'universal-sata-2nd-hdd-caddy': [
+    'Universal SATA 2nd HDD / SSD Optical Drive Bay Caddy',
+    'SATA 22-Pin Internal Drive Connector & Securing Screws'
+  ],
+  'crotomax-wall-mount-dvr-rack-cabinet': [
+    'CROTOMAX Wall Mount DVR & Network Server Rack Cabinet',
+    'Toughened Glass Front Door with Lock & Side Ventilation Louvers'
   ]
-}
+};
