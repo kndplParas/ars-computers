@@ -129,6 +129,40 @@ function normalizeVerification(value) {
   return SPEC_VERIFICATIONS.has(key) ? key : null
 }
 
+export function parseSpecStringToAttributes(spec) {
+  if (!spec || typeof spec !== 'string') return {}
+  const attrs = {}
+  const parts = spec
+    .split(/[,;|]/)
+    .map((s) => s.trim())
+    .filter((s) => s && !s.toLowerCase().includes('contact us'))
+
+  parts.forEach((part, idx) => {
+    const lower = part.toLowerCase()
+    if (lower.includes('gbps') || lower.includes('mbps') || lower.includes('speed') || lower.includes('hz')) {
+      attrs['data_transfer_rate'] = part
+    } else if (lower.includes('pin') || lower.includes('jack') || lower.includes('connector') || lower.includes('plug') || lower.includes('terminal')) {
+      attrs['connector_type'] = part
+    } else if (lower.includes('braided') || lower.includes('shielded') || lower.includes('copper') || lower.includes('nylon') || lower.includes('metal') || lower.includes('aluminum')) {
+      attrs['build_material'] = part
+    } else if (lower.includes('volt') || lower.includes('amp') || lower.includes('watt') || lower.includes('12v') || lower.includes('250v') || lower.includes('5v') || lower.includes('10a')) {
+      attrs['power_rating'] = part
+    } else if (lower.includes('resolution') || lower.includes('4k') || lower.includes('1080p') || lower.includes('hdmi') || lower.includes('vga') || lower.includes('dpi')) {
+      attrs['resolution_support'] = part
+    } else if (lower.includes('meter') || lower.includes('1m') || lower.includes('2m') || lower.includes('3m') || lower.includes('5m') || lower.includes('10m') || lower.includes('1.8m')) {
+      attrs['cable_length'] = part
+    } else if (lower.includes('pack') || lower.includes('box of') || lower.includes('pieces') || lower.includes('pair')) {
+      attrs['package_quantity'] = part
+    } else if (lower.includes('ddr') || lower.includes('sata') || lower.includes('nvme') || lower.includes('m.2') || lower.includes('pcie') || lower.includes('ssd') || lower.includes('hdd')) {
+      attrs['interface_type'] = part
+    } else {
+      attrs[`feature_${idx + 1}`] = part
+    }
+  })
+
+  return attrs
+}
+
 /**
  * Merge database-provided product content with the authored catalogue content.
  * Precedence: live database (admin-edited) > authored content > static fallback.
@@ -143,9 +177,18 @@ export function mergeProductContentFields(raw = {}) {
   const staticDescription = asCleanString(raw.staticDescription)
   const description = dbDescription || contentDescription || staticDescription || ''
 
+  const specText = asCleanString(raw.spec || raw.spec_summary || raw.specSummary)
+
   const dbKeyFeatures = asCleanArray(raw.key_features || raw.keyFeatures)
   const contentKeyFeatures = asCleanArray(content.keyFeatures)
-  const keyFeatures = dbKeyFeatures || contentKeyFeatures || []
+  let keyFeatures = dbKeyFeatures || contentKeyFeatures || null
+  if (!keyFeatures && specText) {
+    const parts = specText.split(/[,;|]/).map((s) => s.trim()).filter((s) => s && !s.toLowerCase().includes('contact us'))
+    if (parts.length > 0) {
+      keyFeatures = parts.slice(0, 4)
+    }
+  }
+  if (!keyFeatures) keyFeatures = []
 
   const dbCompatibility = asCleanString(raw.compatibility)
   const contentCompatibility = asCleanString(content.compatibility)
@@ -157,7 +200,14 @@ export function mergeProductContentFields(raw = {}) {
 
   const dbSpecs = asCleanObject(raw.spec_attributes || raw.specAttributes)
   const contentSpecs = asCleanObject(content.specs)
-  const specAttributes = dbSpecs || contentSpecs || {}
+  let specAttributes = dbSpecs || contentSpecs || null
+  if (!specAttributes && specText) {
+    const parsed = parseSpecStringToAttributes(specText)
+    if (Object.keys(parsed).length > 0) {
+      specAttributes = parsed
+    }
+  }
+  if (!specAttributes) specAttributes = {}
 
   const dbVerification = normalizeVerification(raw.specs_verified || raw.specsVerified)
   const contentVerification = normalizeVerification(content.specsVerified)
@@ -165,7 +215,15 @@ export function mergeProductContentFields(raw = {}) {
 
   const dbShortDescription = asCleanString(raw.short_description || raw.shortDescription)
   const contentShortDescription = asCleanString(content.shortDescription)
-  const shortDescription = dbShortDescription || contentShortDescription || ''
+  let shortDescription = dbShortDescription || contentShortDescription || null
+  if (!shortDescription && description) {
+    const firstSentence = description.split(/(?<=[.!?])\s+/)[0]
+    shortDescription = firstSentence && firstSentence.length >= 20 ? firstSentence : (description.length > 140 ? description.slice(0, 140) + '...' : description)
+  }
+  if (!shortDescription && specText) {
+    shortDescription = specText
+  }
+  if (!shortDescription) shortDescription = ''
 
   const specSource = asCleanString(raw.spec_source || raw.specSource) || asCleanString(content.specSource) || null
 

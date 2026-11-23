@@ -54,6 +54,7 @@ import printerDesktopMonoLaser from '../assets/WhatsApp Image 2026-10-20 at 3.05
 import printerBrotherMfpAdf from '../assets/WhatsApp Image 2026-10-21 at 4.53.10 PM (2).jpeg'
 import printerBrotherColorCopierAdf from '../assets/WhatsApp Image 2026-10-20 at 3.05.18 PM (1).jpeg'
 import printerHpColorLaserJet from '../assets/WhatsApp Image 2026-10-21 at 4.53.10 PM (1).jpeg'
+import accThermalPosPrinter from '../assets/acc-thermal-pos-receipt-printer.jpg'
 
 // ============================================================================
 // 5. Biometric Attendance & Access Devices (5 Distinct Hardware Units)
@@ -63,6 +64,8 @@ import bioHikvisionFaceWall from '../assets/WhatsApp Image 2026-10-21 at 4.53.48
 import bioMantraFingerprint from '../assets/WhatsApp Image 2026-10-21 at 4.53.47 PM.jpeg'
 import bioEsslX990RfidKeypad from '../assets/WhatsApp Image 2026-10-21 at 4.53.48 PM (3).jpeg'
 import bioCpPlusTerminal from '../assets/WhatsApp Image 2026-10-21 at 4.53.48 PM (1).jpeg'
+import accElectroDoorLock from '../assets/acc-electromagnetic-door-lock.jpg'
+import cctvKit8Ch from '../assets/WhatsApp Image 2026-11-19 at 2.50.15 PM.jpeg'
 
 // ============================================================================
 // 6. Accessories: Storage & Memory (4 Distinct Hardware Products)
@@ -273,17 +276,17 @@ export const PRODUCT_IMAGES = {
   'cp-plus-full-hd-dome-camera': [cctvCpPlusDome],
   'smart-outdoor-wifi-bullet-camera': [cctvWifiBullet],
   'hikvision-colorvu-4k-bullet-camera': [cctvHikvision4kBullet],
-  'multi-channel-cctv-dvr-nvr-recorder': [cctvDvr4Ch],
+  'multi-channel-cctv-dvr-nvr-recorder': [cctvDvr4Ch, cctvKit8Ch],
   'cp-plus-360-ptz-smart-camera': [cctvPtzCpPlus360],
 
   // Legacy Category 2 Slugs
   'full-hd-dome-bullet-ip-cameras': [cctvHikvisionDome],
   '4k-colorvu-starlight-cameras': [cctvHikvision4kBullet],
-  'network-video-recorders-nvr-dvr': [cctvDvr4Ch],
+  'network-video-recorders-nvr-dvr': [cctvDvr4Ch, cctvKit8Ch],
   'ptz-360-zoom-cameras': [cctvPtzCpPlus360],
 
   // --------------------------------------------------------------------------
-  // Category 3: Printer (9 Products: 8 Physical + 1 Placeholder)
+  // Category 3: Printer (9 Products: 9 Physical)
   // --------------------------------------------------------------------------
   'epson-ecotank-ink-tank-printer': [printerEpsonEcoTank],
   'canon-pixma-ink-tank-printer': [printerCanonPixmaInkTank],
@@ -293,7 +296,7 @@ export const PRODUCT_IMAGES = {
   'brother-color-mfp-copier-adf': [printerBrotherMfpAdf],
   'brother-commercial-color-copier': [printerBrotherColorCopierAdf],
   'hp-color-laserjet-enterprise-mfp': [printerHpColorLaserJet],
-  'barcode-thermal-receipt-printers': [],
+  'barcode-thermal-receipt-printers': [accThermalPosPrinter],
 
   // Legacy Category 3 Slugs
   'continuous-ink-tank-multifunction-printers': [printerEpsonEcoTank],
@@ -301,14 +304,14 @@ export const PRODUCT_IMAGES = {
   'color-laser-multi-function-copiers': [printerBrotherMfpAdf],
 
   // --------------------------------------------------------------------------
-  // Category 4: Biometric Machine (6 Products: 5 Physical + 1 Placeholder)
+  // Category 4: Biometric Machine (6 Products: 6 Physical)
   // --------------------------------------------------------------------------
   'hikvision-minmoe-face-terminal': [bioHikvisionFaceTerminal],
   'hikvision-wall-mount-face-terminal': [bioHikvisionFaceWall],
   'mantra-optical-fingerprint-scanner': [bioMantraFingerprint],
   'essl-rfid-card-keypad-terminal': [bioEsslX990RfidKeypad],
   'cp-plus-rfid-attendance-device': [bioCpPlusTerminal],
-  'electromagnetic-door-access-controllers': [],
+  'electromagnetic-door-access-controllers': [accElectroDoorLock],
 
   // Legacy Category 4 Slugs
   'ai-face-recognition-attendance-system': [bioHikvisionFaceTerminal],
@@ -460,6 +463,16 @@ export const PRODUCT_IMAGES = {
  * Image Captions Dictionary for Multi-Angle Hardware Views
  */
 export const PRODUCT_IMAGE_CAPTIONS = {
+  'multi-channel-cctv-dvr-nvr-recorder': [
+    'Standalone 4/8/16-Channel CCTV DVR/NVR Hardware Unit',
+    'Complete Multi-Channel IP CCTV Security Kit Solution'
+  ],
+  'barcode-thermal-receipt-printers': [
+    'Direct-Thermal POS Receipt & Barcode Label Printer'
+  ],
+  'electromagnetic-door-access-controllers': [
+    'Commercial Electromagnetic Door Lock Hardware Unit & Armature Plate'
+  ],
   'seagate-barracuda-3-5-inch-hdd': [
     'Seagate BarraCuda 3.5" Hard Drive Front Casing',
     'Seagate Hard Drive Opened Architecture with Platter & Read/Write Arm'

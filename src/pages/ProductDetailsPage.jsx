@@ -551,14 +551,24 @@ export default function ProductDetailsPage() {
                         {specTable.sections.map((section) => (
                           <section className="spec-group" key={section.title}>
                             <h4 className="spec-group-title">{section.title}</h4>
-                            <dl className="spec-list">
-                              {section.rows.map((row) => (
-                                <div className="spec-line" key={row.key}>
-                                  <dt className="spec-line-label">{row.label}</dt>
-                                  <dd className="spec-line-value">{row.value}</dd>
-                                </div>
-                              ))}
-                            </dl>
+                            <div className="spec-table-container">
+                              <table className="spec-table">
+                                <thead>
+                                  <tr>
+                                    <th className="spec-th-label">Specification Parameter</th>
+                                    <th className="spec-th-value">Hardware Standard / Details</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {section.rows.map((row) => (
+                                    <tr key={row.key} className="spec-tr">
+                                      <td className="spec-td-label">{row.label}</td>
+                                      <td className="spec-td-value">{row.value}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </section>
                         ))}
                       </div>
@@ -621,8 +631,22 @@ export default function ProductDetailsPage() {
                         className="related-product-card"
                         onClick={() => navigate(`/products/${item.slug}`)}
                       >
+                        <div className="related-card-img-wrap">
+                          {item.images && item.images.length > 0 && item.images[0] ? (
+                            <img
+                              src={item.images[0]}
+                              alt={item.name}
+                              className="related-card-img"
+                              loading="lazy"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none'
+                              }}
+                            />
+                          ) : (
+                            <span className="related-card-icon">{category?.icon || '💻'}</span>
+                          )}
+                        </div>
                         <div className="related-card-top">
-                          <span className="related-card-icon">{category?.icon || '💻'}</span>
                           <span className="related-card-category">{category?.shortTitle || category?.title}</span>
                         </div>
                         <h4 className="related-card-title">{item.name}</h4>

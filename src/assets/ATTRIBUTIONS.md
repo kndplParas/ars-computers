@@ -25,3 +25,20 @@ This document records the licenses and attributions for third-party media assets
 * **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
 * **Source Page:** https://commons.wikimedia.org/wiki/File:NVMe_SSd.jpg
 * **Direct Image URL:** https://upload.wikimedia.org/wikipedia/commons/9/94/NVMe_SSd.jpg
+
+---
+
+### 3. Thermal POS Receipt & Barcode Label Printer
+* **Asset Filename:** `src/assets/acc-thermal-pos-receipt-printer.jpg`
+* **Product Mapping:** `barcode-thermal-receipt-printers` (Thermal POS Receipt & Barcode Label Printer)
+* **Description:** Dedicated studio product photograph of commercial direct-thermal POS billing receipt & barcode label printer.
+* **License / Usage:** ARS Computers Custom Catalog Asset.
+
+---
+
+### 4. Electromagnetic Door Lock & Access Controller System
+* **Asset Filename:** `src/assets/acc-electromagnetic-door-lock.jpg`
+* **Product Mapping:** `electromagnetic-door-access-controllers` (Electromagnetic Door Lock & Access Controller System)
+* **Description:** Dedicated studio product photograph of commercial aluminum electromagnetic lock bar, armature plate, mounting hardware and exit interface.
+* **License / Usage:** ARS Computers Custom Catalog Asset.
+
