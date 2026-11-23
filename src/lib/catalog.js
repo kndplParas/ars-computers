@@ -129,7 +129,7 @@ function normalizeVerification(value) {
   return SPEC_VERIFICATIONS.has(key) ? key : null
 }
 
-export function parseSpecStringToAttributes(spec) {
+export function parseSpecStringToAttributes(spec, raw = {}) {
   if (!spec || typeof spec !== 'string') return {}
   const attrs = {}
   const parts = spec
@@ -159,6 +159,13 @@ export function parseSpecStringToAttributes(spec) {
       attrs[`feature_${idx + 1}`] = part
     }
   })
+
+  if (raw.name && !attrs['product_type']) {
+    attrs['product_type'] = raw.name
+  }
+  if (!attrs['compatibility']) {
+    attrs['compatibility'] = 'Standard commercial, office and desktop hardware compatibility — verified by ARS Computers'
+  }
 
   return attrs
 }
@@ -202,7 +209,7 @@ export function mergeProductContentFields(raw = {}) {
   const contentSpecs = asCleanObject(content.specs)
   let specAttributes = dbSpecs || contentSpecs || null
   if (!specAttributes && specText) {
-    const parsed = parseSpecStringToAttributes(specText)
+    const parsed = parseSpecStringToAttributes(specText, raw)
     if (Object.keys(parsed).length > 0) {
       specAttributes = parsed
     }

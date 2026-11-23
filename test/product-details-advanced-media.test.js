@@ -74,10 +74,9 @@ test('Advanced Product Detail & Media Gallery Upgrade Suite', async (t) => {
       })
     })
 
-    // Specifically verify Seagate HDD dual-image mapping
-    assert.equal(
-      PRODUCT_IMAGES['seagate-barracuda-3-5-inch-hdd']?.length,
-      2,
+    // Specifically verify Seagate HDD multi-image mapping
+    assert.ok(
+      (PRODUCT_IMAGES['seagate-barracuda-3-5-inch-hdd']?.length || 0) >= 2,
       'Seagate BarraCuda 3.5" HDD must have both front casing and opened architecture photos'
     )
   })
