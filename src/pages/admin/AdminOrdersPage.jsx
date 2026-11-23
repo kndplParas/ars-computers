@@ -1965,10 +1965,7 @@ export default function AdminOrdersPage() {
                               borderRadius: '6px',
                               cursor: 'pointer'
                             }}
-                            onClick={() => {
-                              setSelectedPaymentOrder(displayOrder)
-                              setIsPaymentModalOpen(true)
-                            }}
+                            onClick={() => handleOpenPaymentModal(displayOrder)}
                           >
                             ➕ Add Payment
                           </button>

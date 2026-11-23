@@ -22,7 +22,10 @@ import CustomerEmailModal from '../../components/admin/CustomerEmailModal'
 import CreateEnquiryModal from '../../components/admin/CreateEnquiryModal'
 import {
   downloadMonthlyEnquiriesExcel,
+  exportLiveRegisterViewToExcel,
   filterEnquiriesByReportingMonth,
+  formatDateTimeParts,
+  getDailyEnquiryReportFilename,
   getMonthlyReportFilename,
   MONTH_NAMES
 } from '../../utils/excelReportGenerator'
@@ -296,8 +299,10 @@ export default function AdminEnquiriesPage() {
 
   // Monthly & Daily Excel Report States (Available to ALL active staff)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
+  const [exportReportType, setExportReportType] = useState('monthly') // 'monthly' | 'daily'
   const [exportMonthIndex, setExportMonthIndex] = useState(() => new Date().getMonth())
   const [exportYear, setExportYear] = useState(() => new Date().getFullYear())
+  const [exportDailyDate, setExportDailyDate] = useState(() => formatDateTimeParts(new Date().toISOString()).date)
   const [isExporting, setIsExporting] = useState(false)
 
   // Derive effective tab: non-superadmin users are restricted from the Bin tab
@@ -321,13 +326,36 @@ export default function AdminEnquiriesPage() {
     [enquiries, exportMonthIndex, exportYear]
   )
 
+  // Count active enquiries eligible for selected daily operations reporting
+  const eligibleDailyEnquiries = useMemo(() => {
+    if (!exportDailyDate) return []
+    return enquiries.filter((e) => {
+      if (!e || e.is_in_bin || e.is_removed) return false
+      if (!e.created_at) return false
+      const istDate = formatDateTimeParts(e.created_at).date
+      return istDate === exportDailyDate
+    })
+  }, [enquiries, exportDailyDate])
+
+  const eligibleDailyExportCount = eligibleDailyEnquiries.length
+
   const handleDownloadReport = async () => {
     setIsExporting(true)
     try {
-      const res = await downloadMonthlyEnquiriesExcel(enquiries, exportMonthIndex, exportYear, {
-        exportedBy: adminUser?.email
-      })
-      showNotification(`Report generated: ${res.filename} (${res.count} records)`, 'success')
+      if (exportReportType === 'daily') {
+        const filename = getDailyEnquiryReportFilename(exportDailyDate)
+        const res = await exportLiveRegisterViewToExcel(eligibleDailyEnquiries, {
+          filename,
+          customTitle: `Daily Enquiry Operations Report — ${exportDailyDate}`,
+          exportedBy: adminUser?.email
+        })
+        showNotification(`Daily report generated: ${res.filename} (${res.count} records)`, 'success')
+      } else {
+        const res = await downloadMonthlyEnquiriesExcel(enquiries, exportMonthIndex, exportYear, {
+          exportedBy: adminUser?.email
+        })
+        showNotification(`Report generated: ${res.filename} (${res.count} records)`, 'success')
+      }
       setIsExportModalOpen(false)
     } catch (err) {
       showNotification(`Failed to generate Excel report: ${err.message}`, 'error')
@@ -822,6 +850,7 @@ export default function AdminEnquiriesPage() {
       showNotification('Failed to generate download URL: ' + err.message, 'error')
     }
   }
+
 
   const handleOpenUploadProofModal = () => {
     setProofFile(null)
@@ -4574,21 +4603,6 @@ export default function AdminEnquiriesPage() {
                                 >
                                   ⬇️ Download
                                 </button>
-                                {isSuperadmin && (
-                                  <button
-                                    type="button"
-                                    className="btn-outline btn-sm"
-                                    onClick={() => handleToggleProofShareability(p)}
-                                    style={{
-                                      fontSize: '0.78rem',
-                                      padding: '3px 8px',
-                                      borderColor: p.is_customer_shareable ? '#cbd5e1' : '#86efac',
-                                      color: p.is_customer_shareable ? '#475569' : '#16a34a'
-                                    }}
-                                  >
-                                    {p.is_customer_shareable ? '🔒 Mark Internal' : '📢 Mark Shareable'}
-                                  </button>
-                                )}
                                 {canVoid && (
                                   <button
                                     type="button"

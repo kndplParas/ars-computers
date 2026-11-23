@@ -1835,7 +1835,7 @@ export function AdminDataProvider({ children }) {
 
   // --- Register Staff Member Profile in public.admin_users (Superadmin Only, Permitted roles: 'admin' | 'inventory_staff') ---
   const addStaffMember = useCallback(
-    async ({ id, email, fullName, role = 'admin', phoneNumber = null }) => {
+    async ({ id, email, fullName, role = 'admin', phoneNumber = null, employeeCode = null, aadhaarNumber = null }) => {
       if (adminUser?.role !== 'superadmin') {
         throw new Error('Unauthorized: Only superadministrators can register staff profiles.')
       }

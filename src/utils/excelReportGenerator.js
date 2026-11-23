@@ -41,21 +41,47 @@ export const MONTH_NAMES = [
 /**
  * Format ISO datetime into separate human-readable Date (YYYY-MM-DD) and Time (HH:mm:ss)
  */
+/**
+ * Format ISO datetime into separate human-readable Date (YYYY-MM-DD) and Time (HH:mm:ss)
+ * strictly in Indian Standard Time (Asia/Kolkata, UTC+5:30).
+ */
 export function formatDateTimeParts(isoString) {
   if (!isoString) return { date: '—', time: '—' }
   const d = new Date(isoString)
   if (Number.isNaN(d.getTime())) return { date: '—', time: '—' }
 
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hours = String(d.getHours()).padStart(2, '0')
-  const minutes = String(d.getMinutes()).padStart(2, '0')
-  const seconds = String(d.getSeconds()).padStart(2, '0')
-
-  return {
-    date: `${year}-${month}-${day}`,
-    time: `${hours}:${minutes}:${seconds}`
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+    const parts = formatter.formatToParts(d)
+    const map = {}
+    for (const p of parts) {
+      map[p.type] = p.value
+    }
+    const hour = map.hour === '24' ? '00' : (map.hour || '00')
+    return {
+      date: `${map.year}-${map.month}-${map.day}`,
+      time: `${hour}:${map.minute}:${map.second}`
+    }
+  } catch {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    const seconds = String(d.getSeconds()).padStart(2, '0')
+    return {
+      date: `${year}-${month}-${day}`,
+      time: `${hours}:${minutes}:${seconds}`
+    }
   }
 }
 
@@ -78,13 +104,14 @@ export function filterEnquiriesByReportingMonth(enquiries, targetMonthIndex, tar
     // Strictly requires completion_approved_at
     if (!item.completion_approved_at) return false
 
-    const approvalDate = new Date(item.completion_approved_at)
-    if (Number.isNaN(approvalDate.getTime())) return false
+    const parts = formatDateTimeParts(item.completion_approved_at)
+    if (!parts.date || parts.date === '—') return false
 
-    return (
-      approvalDate.getFullYear() === targetYear &&
-      approvalDate.getMonth() === targetMonthIndex
-    )
+    const [yearStr, monthStr] = parts.date.split('-')
+    const year = parseInt(yearStr, 10)
+    const monthIndex = parseInt(monthStr, 10) - 1
+
+    return year === targetYear && monthIndex === targetMonthIndex
   })
 }
 
@@ -95,6 +122,15 @@ export function filterEnquiriesByReportingMonth(enquiries, targetMonthIndex, tar
 export function getMonthlyReportFilename(targetMonthIndex, targetYear) {
   const monthName = MONTH_NAMES[targetMonthIndex] || `Month_${targetMonthIndex + 1}`
   return `ARS_Enquiries_${monthName}_${targetYear}.xlsx`
+}
+
+/**
+ * Builds standard filename for the daily operations report.
+ * Format: ARS_Enquiries_Daily_YYYY-MM-DD.xlsx
+ */
+export function getDailyEnquiryReportFilename(targetDate) {
+  const d = targetDate || new Date().toISOString().slice(0, 10)
+  return `ARS_Enquiries_Daily_${d}.xlsx`
 }
 
 /**
@@ -302,7 +338,7 @@ export function getLiveRegisterFilename(targetDate = new Date()) {
  */
 export async function exportLiveRegisterViewToExcel(filteredEnquiries = [], meta = {}) {
   const exportDate = meta.date || new Date()
-  const filename = getLiveRegisterFilename(exportDate)
+  const filename = meta.filename || getLiveRegisterFilename(exportDate)
 
   const ExcelJS = await getExcelJS()
   const workbook = new ExcelJS.Workbook()
