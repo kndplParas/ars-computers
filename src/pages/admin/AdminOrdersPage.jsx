@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout.jsx'
 import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
@@ -76,10 +77,44 @@ export default function AdminOrdersPage() {
 
 
 
+  const [searchParams] = useSearchParams()
+
   // Tabs & Filters
-  const [activeTab, setActiveTab] = useState('active') // 'active' | 'pending' | 'completed' | 'cancelled' | 'all'
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = searchParams.get('tab')
+    if (['active', 'pending', 'completed', 'cancelled', 'all', 'bin'].includes(t)) return t
+    const s = searchParams.get('status')
+    if (['new', 'processing'].includes(s)) return 'active'
+    if (s === 'completion_requested') return 'pending'
+    if (s === 'completed') return 'completed'
+    if (s === 'cancelled') return 'cancelled'
+    return 'active'
+  })
   const [searchQuery, setSearchQuery] = useState('')
-  const [paymentFilter, setPaymentFilter] = useState('all')
+  const [paymentFilter, setPaymentFilter] = useState(() => {
+    const p = searchParams.get('payment')
+    if (['paid', 'partial', 'pending'].includes(p)) return p
+    return 'all'
+  })
+
+  // Synchronize when searchParams change
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    if (['active', 'pending', 'completed', 'cancelled', 'all', 'bin'].includes(t)) {
+      setActiveTab(t)
+    } else {
+      const s = searchParams.get('status')
+      if (['new', 'processing'].includes(s)) setActiveTab('active')
+      else if (s === 'completion_requested') setActiveTab('pending')
+      else if (s === 'completed') setActiveTab('completed')
+      else if (s === 'cancelled') setActiveTab('cancelled')
+    }
+
+    const p = searchParams.get('payment')
+    if (['paid', 'partial', 'pending'].includes(p)) {
+      setPaymentFilter(p)
+    }
+  }, [searchParams])
 
   // Modals & Drawers
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)

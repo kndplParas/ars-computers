@@ -1,8 +1,22 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { useAdminData } from '../../context/adminDataContext'
+import {
+  canViewFinancialAnalytics,
+  deriveExecutiveSalesMetrics,
+  deriveOrderPipelineCounts,
+  deriveOperationalFulfillmentMetrics,
+  getAvailableYears,
+  getISTOperatingMonth
+} from '../../utils/dashboardModule2Helper.js'
+import {
+  MONTH_NAMES,
+  fetchMonthlyBusinessData
+} from '../../utils/businessAnalyticsHelper.js'
+import { getISTCalendarDate } from '../../utils/enquiryClassification.js'
+import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 
 /**
  * ============================================================================
@@ -119,6 +133,81 @@ function AdminDashboardPage() {
   const userRole = adminUser?.role || 'inventory_staff'
   const isSuperadminOrAdmin = ENQUIRY_ROLES.includes(userRole)
   const smartMetrics = metrics?.smartMetrics
+
+  // Module 2: Monthly Sales & Revenue State (IST Operating Month)
+  const istMonth = useMemo(() => getISTOperatingMonth(new Date()), [])
+  const [selectedYear, setSelectedYear] = useState(istMonth.year)
+  const [selectedMonth, setSelectedMonth] = useState(istMonth.monthIndex)
+  const [monthlyAnalyticsData, setMonthlyAnalyticsData] = useState(null)
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false)
+  const [analyticsError, setAnalyticsError] = useState(null)
+
+  const isFinancialRole = canViewFinancialAnalytics(userRole)
+
+  useEffect(() => {
+    if (!isFinancialRole) return
+
+    let isMounted = true
+
+    async function loadAnalytics() {
+      setIsLoadingAnalytics(true)
+      setAnalyticsError(null)
+      try {
+        if (isLiveDatabase && isSupabaseConfigured && supabase) {
+          const data = await fetchMonthlyBusinessData(selectedYear, selectedMonth, supabase)
+          if (isMounted) {
+            setMonthlyAnalyticsData(data)
+          }
+        } else {
+          if (isMounted) {
+            setMonthlyAnalyticsData({
+              year: selectedYear,
+              month_index: selectedMonth,
+              orders: orders || [],
+              payments: [],
+              products: products || []
+            })
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setAnalyticsError(err.message || 'Failed to load monthly sales analytics.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingAnalytics(false)
+        }
+      }
+    }
+
+    loadAnalytics()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isFinancialRole, selectedYear, selectedMonth, isLiveDatabase, orders, products])
+
+  const executiveMetrics = useMemo(() => {
+    return deriveExecutiveSalesMetrics({
+      analyticsData: monthlyAnalyticsData,
+      role: userRole,
+      year: selectedYear,
+      monthIndex: selectedMonth,
+      orders
+    })
+  }, [monthlyAnalyticsData, userRole, selectedYear, selectedMonth, orders])
+
+  const pipelineCounts = useMemo(() => {
+    return deriveOrderPipelineCounts(orders)
+  }, [orders])
+
+  const operationalFulfillment = useMemo(() => {
+    return deriveOperationalFulfillmentMetrics({
+      orders,
+      role: userRole,
+      staffUser: adminUser
+    })
+  }, [orders, userRole, adminUser])
   const isDashboardLoading =
     isLoadingProducts ||
     isLoadingCategories ||
@@ -474,6 +563,404 @@ function AdminDashboardPage() {
             </div>
           </div>
         )}
+
+        {/* =========================================================================
+            MODULE 2: Executive Monthly Sales & Revenue Performance
+            Strictly gated to Management & Accounts (Superadmin, Admin, Account)
+            ========================================================================= */}
+        {isFinancialRole && (
+          <div className="admin-module2-sales-section" style={{ marginBottom: '28px' }}>
+            <div
+              className="admin-workload-header"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+                marginBottom: '16px'
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>💼</span> Monthly Sales &amp; Revenue Performance
+                </h2>
+                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                  Verified revenue, gross profit, and payment collections for {MONTH_NAMES[selectedMonth]} {selectedYear}
+                </span>
+              </div>
+
+              {/* Operating Month & Year Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <select
+                  className="form-select"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '0.85rem',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#0f172a'
+                  }}
+                  aria-label="Select Operating Month"
+                >
+                  {MONTH_NAMES.map((name, idx) => (
+                    <option key={name} value={idx}>{name}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="form-select"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '0.85rem',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#0f172a'
+                  }}
+                  aria-label="Select Operating Year"
+                >
+                  {getAvailableYears().map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => {
+                    setSelectedMonth(istMonth.monthIndex)
+                    setSelectedYear(istMonth.year)
+                  }}
+                  title="Reset to current month"
+                  style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                >
+                  Current IST
+                </button>
+              </div>
+            </div>
+
+            {analyticsError && (
+              <div
+                className="admin-banner-disclaimer"
+                style={{
+                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                  background: 'rgba(254, 242, 242, 0.9)',
+                  marginBottom: '16px'
+                }}
+              >
+                <span className="banner-badge" style={{ background: '#dc2626', color: '#fff' }}>⚠️ Notice</span>
+                <p>Could not refresh monthly sales data: {analyticsError}</p>
+              </div>
+            )}
+
+            <div className="admin-summary-grid four-cards">
+              {/* Card 1: Completed Sales Revenue */}
+              <div
+                className="admin-stat-card interactive"
+                onClick={() => navigate('/admin/orders?tab=completed')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/orders?tab=completed') }}
+                aria-label="Filter completed orders"
+              >
+                <div className="stat-card-icon green">💰</div>
+                <div className="stat-card-content">
+                  <span className="stat-label">Completed Sales Revenue</span>
+                  <div className="stat-number-wrap">
+                    <span className="stat-number">
+                      {isLoadingAnalytics ? '…' : (executiveMetrics.salesRevenueFormatted || '₹0.00')}
+                    </span>
+                    <span className="stat-badge green">
+                      {executiveMetrics.completedSalesCount} Approved
+                    </span>
+                  </div>
+                  <span className="stat-subtext">Approved completion sales in {executiveMetrics.monthName}</span>
+                </div>
+              </div>
+
+              {/* Card 2: Verified Gross Profit & Margin */}
+              <div
+                className="admin-stat-card interactive"
+                onClick={() => navigate('/admin/orders?tab=completed')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/orders?tab=completed') }}
+                aria-label="View verified gross margins"
+              >
+                <div className="stat-card-icon blue">📈</div>
+                <div className="stat-card-content">
+                  <span className="stat-label">Verified Gross Profit</span>
+                  <div className="stat-number-wrap">
+                    <span className="stat-number">
+                      {isLoadingAnalytics ? '…' : (executiveMetrics.verifiedGrossProfitFormatted || '₹0.00')}
+                    </span>
+                    <span className="stat-badge blue">
+                      {executiveMetrics.grossMarginFormatted || 'N/A'} Margin
+                    </span>
+                  </div>
+                  <span className="stat-subtext">Derived from snapshotted purchase costs</span>
+                </div>
+              </div>
+
+              {/* Card 3: Total Collected Cash/Bank */}
+              <div
+                className="admin-stat-card"
+                aria-label="Total collected payments"
+              >
+                <div className="stat-card-icon teal">💳</div>
+                <div className="stat-card-content">
+                  <span className="stat-label">Collected Payments</span>
+                  <div className="stat-number-wrap">
+                    <span className="stat-number">
+                      {isLoadingAnalytics ? '…' : (executiveMetrics.totalCollectedFormatted || '₹0.00')}
+                    </span>
+                    <span className="stat-badge teal">Cash / Bank</span>
+                  </div>
+                  <span className="stat-subtext">Ledger receipts received in {executiveMetrics.monthName}</span>
+                </div>
+              </div>
+
+              {/* Card 4: Outstanding Receivables */}
+              <div
+                className="admin-stat-card interactive"
+                onClick={() => navigate('/admin/orders?tab=active&payment=pending')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/orders?tab=active&payment=pending') }}
+                aria-label="Filter orders with pending balances"
+              >
+                <div className="stat-card-icon amber">⏳</div>
+                <div className="stat-card-content">
+                  <span className="stat-label">Pending Receivables</span>
+                  <div className="stat-number-wrap">
+                    <span className="stat-number">
+                      {isLoadingAnalytics ? '…' : (executiveMetrics.pendingBalanceFormatted || '₹0.00')}
+                    </span>
+                    <span className={`stat-badge ${executiveMetrics.pendingBalance > 0 ? 'amber' : 'green'}`}>
+                      {executiveMetrics.pendingBalance > 0 ? 'Due' : 'Cleared'}
+                    </span>
+                  </div>
+                  <span className="stat-subtext">Unpaid balances for orders in {executiveMetrics.monthName}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            MODULE 2: Order Fulfillment & Delivery Pipeline
+            Visible to ALL operational roles (Superadmin, Admin, Technical, Engineer,
+            HR, Account, Inventory Staff) with zero financial leakage.
+            ========================================================================= */}
+        <div className="admin-module2-pipeline-section" style={{ marginBottom: '28px' }}>
+          <div
+            className="admin-workload-header"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
+              marginBottom: '16px'
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>📦</span> Orders &amp; Fulfilment Pipeline
+              </h2>
+              <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                Live order progression across intake, assembly, supervisor approval, and completion
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn-outline btn-sm"
+              onClick={() => navigate('/admin/orders')}
+            >
+              Open Orders Register →
+            </button>
+          </div>
+
+          <div className="admin-summary-grid four-cards">
+            {/* Stage 1: New Orders */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/orders?tab=active&status=new')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/orders?tab=active&status=new') }}
+              aria-label="Filter new sales orders"
+            >
+              <div className="stat-card-icon blue">🆕</div>
+              <div className="stat-card-content">
+                <span className="stat-label">New Orders</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(pipelineCounts.newOrders, isLoadingOrders)}</span>
+                  <span className={`stat-badge ${pipelineCounts.newOrders > 0 ? 'blue' : 'green'}`}>
+                    {pipelineCounts.newOrders > 0 ? 'Awaiting Start' : 'Zero Open'}
+                  </span>
+                </div>
+                <span className="stat-subtext">Received orders awaiting initial processing</span>
+              </div>
+            </div>
+
+            {/* Stage 2: Processing / Assembly */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/orders?tab=active&status=processing')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/orders?tab=active&status=processing') }}
+              aria-label="Filter processing sales orders"
+            >
+              <div className="stat-card-icon purple">⚙️</div>
+              <div className="stat-card-content">
+                <span className="stat-label">In Processing / Build</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(pipelineCounts.processing, isLoadingOrders)}</span>
+                  <span className="stat-badge purple">Active Work</span>
+                </div>
+                <span className="stat-subtext">Hardware assembly, testing, or field setup</span>
+              </div>
+            </div>
+
+            {/* Stage 3: Completion Requested */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/orders?tab=pending')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/orders?tab=pending') }}
+              aria-label="Filter completion requested orders"
+            >
+              <div className="stat-card-icon amber">⏳</div>
+              <div className="stat-card-content">
+                <span className="stat-label">Completion Requested</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(pipelineCounts.completionRequested, isLoadingOrders)}</span>
+                  <span className={`stat-badge ${pipelineCounts.completionRequested > 0 ? 'amber' : 'green'}`}>
+                    {pipelineCounts.completionRequested > 0 ? 'Review Queue' : 'Clear'}
+                  </span>
+                </div>
+                <span className="stat-subtext">Submitted for Superadmin sign-off</span>
+              </div>
+            </div>
+
+            {/* Stage 4: Completed Orders */}
+            <div
+              className="admin-stat-card interactive"
+              onClick={() => navigate('/admin/orders?tab=completed')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate('/admin/orders?tab=completed') }}
+              aria-label="Filter completed orders"
+            >
+              <div className="stat-card-icon green">✅</div>
+              <div className="stat-card-content">
+                <span className="stat-label">Completed &amp; Approved</span>
+                <div className="stat-number-wrap">
+                  <span className="stat-number">{formatCount(pipelineCounts.completed, isLoadingOrders)}</span>
+                  <span className="stat-badge green">Delivered</span>
+                </div>
+                <span className="stat-subtext">Permanently locked &amp; archived sales</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Role-Specific Operational Card: Technical & Field Engineer */}
+          {operationalFulfillment.category === 'technical_fulfillment' && (
+            <div className="admin-personal-workload-card" style={{ marginTop: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🔧</span> Technical &amp; Field Engineer Orders Queue
+                </h3>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => navigate('/admin/orders?tab=active')}
+                >
+                  View Active Orders →
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>MY ACTIVE ORDERS</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#1d4ed8' }}>{operationalFulfillment.myActiveCount}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>MY COMPLETED SALES</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#047857' }}>{operationalFulfillment.myCompletedCount}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>UNASSIGNED ORDERS FOR PICKUP</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#d97706' }}>{operationalFulfillment.unassignedTeamCount}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Role-Specific Operational Card: Inventory Staff */}
+          {operationalFulfillment.category === 'inventory_dispatch' && (
+            <div className="admin-personal-workload-card" style={{ marginTop: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>📦</span> Warehouse &amp; Inventory Dispatch Queue
+                </h3>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => navigate('/admin/orders?tab=active')}
+                >
+                  View Orders to Pack →
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>ORDERS PENDING DISPATCH</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#1d4ed8' }}>{operationalFulfillment.dispatchPendingCount}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>TOTAL HARDWARE UNITS TO PACK</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#047857' }}>{operationalFulfillment.totalUnitsToDispatch}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Role-Specific Operational Card: HR */}
+          {operationalFulfillment.category === 'hr_operations' && (
+            <div className="admin-personal-workload-card" style={{ marginTop: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>👥</span> Personnel Order Assignment Overview
+                </h3>
+                <button
+                  type="button"
+                  className="btn-outline btn-sm"
+                  onClick={() => navigate('/admin/orders?tab=all')}
+                >
+                  View Orders Directory →
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>ENGINEER-ASSIGNED ORDERS</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#1d4ed8' }}>{operationalFulfillment.assignedOrdersCount}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block' }}>UNASSIGNED ORDERS</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#d97706' }}>{operationalFulfillment.unassignedOrdersCount}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Operational Field & Technical Workload (Head Superadmin View) */}
         {userRole === 'superadmin' && smartMetrics?.staffWorkload && smartMetrics.staffWorkload.length > 0 && (
