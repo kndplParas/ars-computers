@@ -59,7 +59,7 @@ export const SHORT_PRODUCT_DESCRIPTIONS = {
     'A Hikvision ColorVu 4K outdoor bullet camera for detail-rich surveillance in low light, using a large-aperture lens and warm-light supplement for full-colour night imaging. Exact model is confirmed at order.',
 
   'multi-channel-cctv-dvr-nvr-recorder':
-    'A multi-channel DVR/NVR recorder that captures and plays back surveillance footage locally and over a network. Channel count, camera technology and storage are selected at order.',
+    'A multi-channel surveillance recorder available in 4-channel (1080p real-time), 8-channel (IP PoE kit), and 16-channel tiers with configuration confirmed per quotation.',
 
   'cp-plus-360-ptz-smart-camera':
     'A motorised CP PLUS 360-degree pan-tilt smart Wi-Fi camera for indoor rooms, with motion tracking and two-way audio. Exact resolution, storage and app features are confirmed at order.',

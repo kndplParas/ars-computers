@@ -153,36 +153,33 @@ export const CCTV_CONTENT = {
 
   'multi-channel-cctv-dvr-nvr-recorder': {
     description:
-      'This multi-channel CCTV recorder is the recording and playback hub for a surveillance installation. It accepts multiple camera channels, records continuously or on schedule, and provides local HDMI and VGA output for a monitor. SATA drive bays allow internal storage, while network connectivity supports remote viewing. Because the listing covers both DVR and NVR configurations, the channel count, camera type, drive capacity and network features are confirmed with sales.',
+      'This multi-channel CCTV surveillance video recorder family supports 4-channel, 8-channel, and 16-channel surveillance installations. The 4-channel DVR tier provides H.264 real-time 1080p recording, dedicated front-panel LED channel indicators (CH1–CH4), and USB connectivity. The 8-channel NVR tier supports complete IP CCTV deployments with an 8-channel NVR and an 8-port PoE switch; pictured package components (including 8 IP cameras, 1TB WD hard disk, 4U rack, and cabling) represent a complete solution package and are supplied as itemised on the customer quotation. The 16-channel tier accommodates commercial multi-camera installations, with exact recorder hardware, inputs, and storage capacity configured to order. View 3 is an illustrative reference image until a dedicated 16-channel photograph is provided.',
     keyFeatures: [
-      'Multi-channel DVR/NVR recording platform',
-      'HDMI and VGA monitor outputs',
-      'Internal SATA storage support',
-      'Continuous, scheduled and motion-based recording options',
-      'Network viewing and playback on supported models',
-      'Channel count and camera type confirmed with sales'
+      '4-Channel standalone DVR tier with H.264 1080p real-time recording, CH1–CH4 channel LEDs, and front USB',
+      '8-Channel IP CCTV security solution kit featuring an 8-channel NVR and 8-port PoE switch',
+      '8-Channel kit graphic illustrates 8 IP cameras, 1TB WD HDD, 4U rack, and cabling (package items quoted per order)',
+      '16-Channel commercial surveillance tier (configuration-dependent; exact model and hardware quoted to order)',
+      'Tier-specific hardware: channel capacity, inputs, outputs, and storage matched to customer installation requirements'
     ],
     specs: {
-      device_type: 'Standalone CCTV video recorder',
-      model_number: 'Multi-channel DVR/NVR — exact model confirmed with sales',
-      channels: '4/8/16/32-channel options — confirm with sales',
-      recording_resolution: 'Up to 4K/8 MP depending on model',
-      hdd_support: '1–2 internal SATA drives depending on model',
-      playback: 'Local and network playback',
-      video_output: 'HDMI and VGA',
-      network_interface: 'RJ45 Ethernet',
-      connectivity: 'Network remote viewing on supported models',
-      power: '12 V DC adapter (model-dependent)',
-      storage_compatibility: 'Surveillance-grade SATA HDD — capacity confirmed with sales',
+      device_type: 'Multi-Channel Standalone CCTV Video Recorder (DVR/NVR)',
+      model_number: 'Multi-Channel Surveillance Series (4-CH DVR / 8-CH NVR / 16-CH DVR/NVR)',
+      channels: '4-Channel (4CH DVR), 8-Channel (8CH NVR), and 16-Channel options',
+      four_channel_specs: '4CH DVR: H.264 video compression, 1080p real-time recording, CH1–CH4 LEDs, front USB',
+      eight_channel_specs: '8CH NVR Kit: 8-channel NVR, 8-port PoE switch; pictured kit items supplied as quoted',
+      sixteen_channel_specs: '16CH DVR/NVR: Configuration-dependent; exact model, inputs, and storage confirmed on quotation',
+      video_compression: 'H.264 on 4CH unit; model-dependent on 8CH and 16CH units',
+      recording_resolution: '1080p Real-Time on 4CH DVR; configuration-dependent on 8CH and 16CH options',
+      storage_support: 'Configuration-dependent (1TB WD HDD pictured in 8CH kit; hard drives quoted per customer requirements)',
       operating_temperature: 'Configuration-dependent — confirm with sales'
     },
     compatibility:
-      'Must be matched to the camera type (HD analog, AHD, TVI, CVI or IP) and to the required channel count. Confirm hard-drive capacity, monitor resolution and remote-viewing requirements with ARS Computers before purchase.',
+      'Camera technology (HD analog, AHD, TVI, CVI, or IP) must match the recorder inputs. Network viewing, monitor resolution, PoE power, and storage capacity are configured to site requirements and confirmed on quotation.',
     boxContents:
-      'Recorder unit, power adapter, mouse/remote where supplied, and documentation. Hard drive and cameras are supplied separately unless included on the quotation.',
+      'Standard supply includes the recorder unit, power adapter, USB mouse, and documentation. When ordering the pictured 8-Camera IP CCTV Kit solution, package items (such as the 8-port PoE switch, 8 IP cameras, 1TB WD surveillance HDD, 4U rack, and CAT6 cabling) are supplied as configured on the customer specific quotation. For standalone 4-channel and 16-channel orders, hard drives and cameras are quoted separately.',
     specsVerified: 'configuration_dependent',
     specSource:
-      'Multi-brand DVR/NVR solution listing. Exact model, channel count, supported camera technology and storage capacity are confirmed by ARS Computers at the time of sale.'
+      'Hardware attributes verified from physical image labels (4CH DVR: H.264, 1080p real-time, CH1–CH4 LEDs, USB; 8-camera kit graphic: 8CH NVR, 8-port PoE switch, 8 IP cameras, 1TB WD HDD, 4U rack). 16-channel specifications and illustrative image are configuration-dependent and confirmed by ARS Computers at the time of quotation.'
   },
 
   'cp-plus-360-ptz-smart-camera': {

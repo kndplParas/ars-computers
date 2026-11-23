@@ -208,10 +208,35 @@ export const CATEGORIES = [
         name: 'Multi-Channel CCTV Network Video Recorder (DVR/NVR)',
         brand: null,
         model: 'Multi-Channel Standalone Recorder',
-        spec: 'HDMI & VGA Dual Output, Multi-Drive SATA Storage Support',
-        description: 'Standalone multi-channel CCTV surveillance video recorder (DVR/NVR) providing synchronous multi-camera recording, local monitor playback via HDMI/VGA, and network streaming support.',
+        spec: '4-Channel (H.264 1080p Real-Time), 8-Channel (IP NVR PoE Kit), and 16-Channel Options',
+        description: 'Standalone multi-channel CCTV surveillance video recorder (DVR/NVR) providing synchronous multi-camera recording across 4-channel, 8-channel, and 16-channel configurations, with specifications confirmed per quotation.',
         isGeneric: true,
-        images: PRODUCT_IMAGES['multi-channel-cctv-dvr-nvr-recorder'] || []
+        images: PRODUCT_IMAGES['multi-channel-cctv-dvr-nvr-recorder'] || [],
+        variantSelectorLabel: 'Select Channel Configuration',
+        variantType: 'channels',
+        variants: [
+          {
+            id: '4-channel',
+            label: '4-Channel DVR',
+            name: '4-Channel Standalone CCTV DVR Recorder',
+            spec: '4-Channel Video Recording, H.264 Compression, 1080p Real-Time, Channel Status LEDs (CH1-CH4), Front USB',
+            imageIndex: 0
+          },
+          {
+            id: '8-channel',
+            label: '8-Channel NVR',
+            name: '8-Channel IP CCTV NVR Security System',
+            spec: '8-Channel IP NVR with 8-Port PoE Switch; Pictured Kit Items (8 IP Cameras, 1TB WD HDD, 4U Rack, Cabling) Supplied per Quotation',
+            imageIndex: 1
+          },
+          {
+            id: '16-channel',
+            label: '16-Channel DVR/NVR',
+            name: '16-Channel CCTV Network Video Recorder',
+            spec: '16-Channel Video Capacity — Configuration-Dependent (Exact model, inputs, and storage confirmed per quotation; illustrative image)',
+            imageIndex: 2
+          }
+        ]
       },
       {
         slug: 'cp-plus-360-ptz-smart-camera',

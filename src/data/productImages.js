@@ -811,9 +811,9 @@ export const PRODUCT_IMAGE_CAPTIONS = {
     'Hikvision ColorVu 4K Full-Color Night Bullet Camera — Additional Hardware View (Heavy-duty commercial metal mounting base)'
   ],
   'multi-channel-cctv-dvr-nvr-recorder': [
-    'Multi-Channel CCTV Network Video Recorder (DVR/NVR) — Primary Product Overview',
-    'Multi-Channel CCTV Network Video Recorder (DVR/NVR) — Precision Connector & Interface Detail',
-    'Multi-Channel CCTV Network Video Recorder (DVR/NVR) — Illustrative Hardware View (multi channel cctv dvr nvr recorder — Commercial Hardware Deployment & Installation Profile)'
+    '4-Channel Standalone CCTV DVR Recorder (H.264 1080p Real-Time) — Front Panel & Channel LEDs',
+    '8-Channel IP CCTV Security Kit Solution — 8-Channel NVR & 8-Port PoE Switch Overview (Pictured Package Quoted per Order)',
+    '16-Channel CCTV Recorder Hub — Illustrative Image (Illustrative Reference — Not an Exact Product Photograph)'
   ],
   'cp-plus-360-ptz-smart-camera': [
     'CP PLUS 360° Pan-Tilt Smart Wi-Fi Camera — Primary Product Overview',
@@ -827,8 +827,9 @@ export const PRODUCT_IMAGE_CAPTIONS = {
     '4k colorvu starlight cameras — Primary Product Overview'
   ],
   'network-video-recorders-nvr-dvr': [
-    'network video recorders nvr dvr — Primary Product Overview',
-    'network video recorders nvr dvr — Precision Connector & Interface Detail'
+    '4-Channel Standalone CCTV DVR Recorder (H.264 1080p Real-Time) — Front Panel & Channel LEDs',
+    '8-Channel IP CCTV Security Kit Solution — 8-Channel NVR & 8-Port PoE Switch Overview (Pictured Package Quoted per Order)',
+    '16-Channel CCTV Recorder Hub — Illustrative Image (Illustrative Reference — Not an Exact Product Photograph)'
   ],
   'ptz-360-zoom-cameras': [
     'ptz 360 zoom cameras — Primary Product Overview'
