@@ -149,4 +149,16 @@ test('Product Catalogue Enhancements Suite', async (t) => {
     const homeContent = fs.readFileSync(path.join(rootDir, 'src/pages/CustomerHomePage.jsx'), 'utf8')
     assert.ok(homeContent.includes('ARS Computers') && homeContent.includes('id="contact"'), 'Homepage layout preserved')
   })
+
+  await t.test('6. CategoryPage Subfilters: All 5 categories define and derive valid subfilter structures', () => {
+    const categoryPageContent = fs.readFileSync(path.join(rootDir, 'src/pages/CategoryPage.jsx'), 'utf8')
+    assert.ok(categoryPageContent.includes('const currentSubfilters = CATEGORY_SUBFILTERS[categoryKey]'), 'currentSubfilters must be derived from CATEGORY_SUBFILTERS')
+    assert.ok(categoryPageContent.includes('const filteredProducts = useMemo'), 'filteredProducts must be computed via useMemo')
+    assert.ok(!categoryPageContent.includes('ACCESSORY_GROUPS }'), 'Unused ACCESSORY_GROUPS import should not be present')
+
+    const expectedCategories = ['computer-laptop', 'cctv', 'printer', 'biometric-machine', 'accessories']
+    expectedCategories.forEach((slug) => {
+      assert.ok(categoryPageContent.includes(`'${slug}': [`) || categoryPageContent.includes(`${slug}: [`), `Subfilters for ${slug} must be defined`)
+    })
+  })
 })

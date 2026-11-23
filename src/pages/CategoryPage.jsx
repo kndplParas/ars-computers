@@ -7,7 +7,7 @@ import {
   getInstantCatalog,
   normalizeCategorySlug
 } from '../lib/catalog'
-import { groupAccessories, ACCESSORY_GROUPS } from '../data/accessoryGroups'
+import { groupAccessories } from '../data/accessoryGroups'
 import { formatSpecLabel } from '../data/specSchemas'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
@@ -293,9 +293,25 @@ export default function CategoryPage() {
   const { selected, clear } = useProductSelection()
 
   const isAccessories = category?.id === 'accessories' || normalizedSlug === 'accessories'
+  const categoryKey = normalizedSlug || category?.id || slug
+  const currentSubfilters = CATEGORY_SUBFILTERS[categoryKey] || null
+
   const groupedAccessories = useMemo(() => {
-    return isAccessories ? groupAccessories(products) : []
-  }, [isAccessories, products])
+    if (!isAccessories) return []
+    const allGroups = groupAccessories(products)
+    if (activeSubfilter === 'all') return allGroups
+    return allGroups.filter((grp) => grp.id === activeSubfilter)
+  }, [isAccessories, products, activeSubfilter])
+
+  const filteredProducts = useMemo(() => {
+    if (isAccessories) return products
+    if (activeSubfilter === 'all') return products
+    const subfilterDef = currentSubfilters?.find((sf) => sf.id === activeSubfilter)
+    if (subfilterDef?.match) {
+      return products.filter(subfilterDef.match)
+    }
+    return products
+  }, [isAccessories, products, activeSubfilter, currentSubfilters])
 
   // Retry handler for user clicks
   const handleRetry = async () => {
@@ -337,6 +353,7 @@ export default function CategoryPage() {
 
   // Scroll to top and trigger async background revalidation
   useEffect(() => {
+    setActiveSubfilter('all')
     window.scrollTo({ top: 0, behavior: 'instant' })
 
     let isMounted = true
@@ -547,8 +564,22 @@ export default function CategoryPage() {
                         View Other Categories
                       </Link>
                     </div>
-                  ) : isAccessories && groupedAccessories.length > 0 ? (
-                    <div className="accessories-grouped-container">
+                  ) : isAccessories ? (
+                    groupedAccessories.length === 0 ? (
+                      <div className="category-empty-state" style={{ padding: '32px 20px', textAlign: 'center' }}>
+                        <p style={{ fontSize: '1.05rem', color: '#64748b', marginBottom: '16px' }}>
+                          No models found matching the selected filter.
+                        </p>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => setActiveSubfilter('all')}
+                        >
+                          Show All {category.title} Models
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="accessories-grouped-container">
                       {/* Section Quick Jump Bar */}
                       <div className="accessories-group-jump-bar" aria-label="Jump to accessory section">
                         <span className="group-jump-label">Jump to Section:</span>
@@ -596,6 +627,7 @@ export default function CategoryPage() {
                         </section>
                       ))}
                     </div>
+                    )
                   ) : (
                     filteredProducts.length === 0 ? (
                       <div className="category-empty-state" style={{ padding: '32px 20px', textAlign: 'center' }}>
