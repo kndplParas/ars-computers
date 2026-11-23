@@ -74,11 +74,11 @@ export default function ImageCreditsPage() {
             <div className="credits-legal-notice-box">
               <div className="notice-point">
                 <strong>Creative Commons ShareAlike (CC BY-SA) Compliance:</strong>{' '}
-                Images marked with ShareAlike (CC BY-SA) require any derivative adaptation to be released under the same license. ARS Computers utilizes these photographic assets in their original, unmodified form solely for nominative hardware identification and consumer transparency.
+                Images marked with ShareAlike (CC BY-SA) require any derivative adaptation to be released under the same license. ARS Computers utilizes these photographic assets in their original, unmodified form solely for factual hardware identification and consumer transparency.
               </div>
               <div className="notice-point">
-                <strong>Nominative Fair Use &amp; Trademarks:</strong>{' '}
-                All manufacturer trademarks, logos, and model names (including Dell, HP, Lenovo, ASUS, Acer, Hikvision, CP PLUS, Epson, Canon, Brother, Samsung, Seagate, Corsair, Kingston, D-Link, Zebronics) remain the exclusive property of their respective trademark holders and are cited nominatively to signify hardware compatibility and OEM provenance.
+                <strong>Third-Party Trademarks &amp; Product Identification:</strong>{' '}
+                Third-party product names, logos and trademarks belong to their respective owners. They are referenced only to identify products, manufacturers and compatibility. ARS Computers is independently operated and is not affiliated with or endorsed by these manufacturers unless expressly stated.
               </div>
               <div className="notice-point">
                 <strong>Commercial Legal Compliance:</strong>{' '}

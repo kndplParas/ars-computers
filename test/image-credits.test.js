@@ -87,7 +87,11 @@ test('Image Credits & Licences Verification Suite', async (t) => {
   await t.test('5. Legal Compliance Disclosures in ImageCreditsPage', () => {
     const pageContent = fs.readFileSync(path.join(rootDir, 'src/pages/ImageCreditsPage.jsx'), 'utf8')
     assert.ok(pageContent.includes('Section 52(1)'), 'Must disclose Section 52(1) compliance boundary')
-    assert.ok(pageContent.includes('Nominative Fair Use'), 'Must disclose nominative trademark fair use')
+    assert.ok(
+      pageContent.includes('Third-party product names, logos and trademarks belong to their respective owners'),
+      'Must include neutral factual trademark disclaimer'
+    )
+    assert.ok(!pageContent.includes('Nominative Fair Use'), 'Must not claim Nominative Fair Use')
     assert.ok(pageContent.includes('ShareAlike (CC BY-SA) Compliance'), 'Must state CC BY-SA ShareAlike terms')
   })
 })

@@ -7,9 +7,8 @@ This document records legal attributions, licensing deeds, sources, authors, and
 - **Commercial Attribution & ShareAlike (CC BY-SA) Notice**:
   - Images licensed under CC BY-SA require that any derivative work or adaptation be distributed under the same licence. ARS Computers uses these assets in their unmodified photographic form for factual hardware identification.
   - Attribution is provided herein in compliance with Section 3 of the CC licences.
-- **Nominative Fair Use & Trademark Ownership**:
-  - Brand names, logos, model designations, and trademarks (e.g., Dell, HP, Lenovo, ASUS, Acer, Hikvision, CP PLUS, Epson, Canon, Brother, Samsung, Seagate, Corsair, Kingston, Cooler Master, Logitech, D-Link, Zebronics) are the property of their respective trademark holders.
-  - Their mention in this catalogue is purely nominative to indicate hardware compatibility, OEM provenance, and genuine product identification. ARS Computers claims no affiliation with or endorsement by these brand owners beyond that of an independent retailer and IT solution distributor.
+- **Third-Party Trademarks & Product Identification**:
+  - Third-party product names, logos and trademarks belong to their respective owners. They are referenced only to identify products, manufacturers and compatibility. ARS Computers is independently operated and is not affiliated with or endorsed by these manufacturers unless expressly stated.
 - **Exclusion of Blanket Fair Dealing Claims**:
   - This catalogue does not claim blanket exemption under Section 52(1) of the Indian Copyright Act, 1957 for commercial retail sales. All media assets rely strictly on verified open-access licences (CC0, CC BY, CC BY-SA) or ARS Computers proprietary store stock photography.
 
