@@ -1115,7 +1115,7 @@ export function AdminDataProvider({ children }) {
         throw new Error('Please enter a valid customer name (minimum 2 characters).')
       }
 
-      const cleanContact = (contact_info || (phone && email ? `${phone} | ${email}` : phone || email || '')).trim()
+      const cleanContact = (contact_info || (phone && email ? `${phone} | ${email}` : phone || email || '')).replace(/\|\s*$/, '').trim()
       if (!cleanContact || cleanContact.length < 5) {
         throw new Error('Please provide valid contact information.')
       }

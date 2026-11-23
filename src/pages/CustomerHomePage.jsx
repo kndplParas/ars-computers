@@ -213,23 +213,14 @@ function CustomerHomePage() {
       return
     }
 
-    // Email is required: OTP verification codes and enquiry tracking updates
-    // are sent to this address, so an enquiry without it cannot be tracked.
+    // Email is optional. If provided, validate its format.
     const emailPattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
     const email = formData.email.trim().toLowerCase()
-    if (!email) {
+    if (email && !emailPattern.test(email)) {
       setFormStatus({
         loading: false,
         success: false,
-        error: 'Email address is required. Your verification code and enquiry tracking updates are sent to this email address.'
-      })
-      return
-    }
-    if (!emailPattern.test(email)) {
-      setFormStatus({
-        loading: false,
-        success: false,
-        error: 'Please provide a valid email address (e.g. name@domain.com).'
+        error: 'Please provide a valid email address (e.g. name@domain.com) or leave it blank.'
       })
       return
     }
@@ -241,6 +232,16 @@ function CustomerHomePage() {
         loading: false,
         success: false,
         error: 'Please provide a valid phone number (e.g. +91 9876543210).'
+      })
+      return
+    }
+
+    // Ensure at least one contact channel (phone or email) is provided.
+    if (!contactInfo && !email) {
+      setFormStatus({
+        loading: false,
+        success: false,
+        error: 'Please provide at least a mobile number or an email address.'
       })
       return
     }
@@ -259,7 +260,7 @@ function CustomerHomePage() {
         // the customer can verify with either the mobile number or the email.
         const submitPromise = supabase.rpc('create_customer_enquiry', {
           p_name: name,
-          p_contact_info: contactInfo ? `${contactInfo} | ${email}` : email,
+          p_contact_info: contactInfo && email ? `${contactInfo} | ${email}` : (contactInfo || email),
           p_category_interest: formData.category_interest,
           p_message: message
         })
@@ -837,18 +838,17 @@ function CustomerHomePage() {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="email">Email Address *</label>
+                    <label htmlFor="email">Email Address <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 400 }}>(Optional)</span></label>
                     <input
                       id="email"
                       name="email"
                       type="email"
-                      required
-                      placeholder="e.g. john@example.com"
+                      placeholder="e.g. john@example.com (optional)"
                       value={formData.email}
                       onChange={handleInputChange}
                     />
                     <small className="form-field-hint">
-                      Required — your verification code and enquiry tracking updates are sent to this email address.
+                      Optional — provide your email to receive tracking updates and formal quotes.
                     </small>
                   </div>
 

@@ -135,19 +135,11 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
       return
     }
 
-    // Email is required: OTP verification codes and enquiry tracking updates are
-    // sent to this address, so a service request without it cannot be tracked.
+    // Email is optional. If provided, validate its format.
     const emailPattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
     const cleanEmail = formData.email ? formData.email.trim().toLowerCase() : ''
-    if (!cleanEmail) {
-      setErrorMessage(
-        'Email address is required. Your verification code and enquiry tracking updates are sent to this email address.'
-      )
-      return
-    }
-
-    if (!emailPattern.test(cleanEmail)) {
-      setErrorMessage('Please enter a valid email address (e.g. rajesh@company.com).')
+    if (cleanEmail && !emailPattern.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address (e.g. rajesh@company.com) or leave it blank.')
       return
     }
 
@@ -294,7 +286,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
         attachmentUrl ? `• Attachment: ${attachmentUrl}` : null
       ].filter(Boolean).join('\n')
 
-      const contactInfo = `${cleanMobile} | ${cleanEmail}`
+      const contactInfo = cleanEmail ? `${cleanMobile} | ${cleanEmail}` : cleanMobile
 
       const enquiryPayload = {
         p_name: cleanName,
@@ -559,7 +551,7 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
 
             <div className="service-field-group">
               <label htmlFor="sr-email">
-                Email Address <span className="required-star">*</span>
+                Email Address <span className="optional-tag" style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 400 }}>(Optional)</span>
               </label>
               <input
                 id="sr-email"
@@ -567,11 +559,10 @@ export default function CustomerServiceRequestForm({ initialCategory = 'Desktop 
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="e.g. rajesh@company.com"
-                required
+                placeholder="e.g. rajesh@company.com (optional)"
               />
               <span className="field-hint">
-                Required — your verification code and enquiry tracking updates are sent to this email.
+                Optional — provide your email to receive enquiry tracking updates and service receipts.
               </span>
             </div>
 

@@ -106,8 +106,8 @@ export default function CreateEnquiryModal({ isOpen, onClose, onEnquiryCreated }
 
     const cleanEmail = email.trim().toLowerCase()
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!cleanEmail || !emailPattern.test(cleanEmail)) {
-      setFormError('Valid email address is required. Verification codes and tracking updates are sent to this address.')
+    if (cleanEmail && !emailPattern.test(cleanEmail)) {
+      setFormError('Please enter a valid email address (e.g. rajesh@company.com) or leave it blank.')
       return
     }
 
@@ -124,7 +124,7 @@ export default function CreateEnquiryModal({ isOpen, onClose, onEnquiryCreated }
 
     setIsSubmitting(true)
     try {
-      const contactInfo = `${normPhone} | ${cleanEmail}`
+      const contactInfo = cleanEmail ? `${normPhone} | ${cleanEmail}` : normPhone
       const formattedMessage = [
         `Customer Type: ${customerType}`,
         company.trim() ? `Company: ${company.trim()}` : null,
@@ -143,7 +143,7 @@ export default function CreateEnquiryModal({ isOpen, onClose, onEnquiryCreated }
           category_interest: categoryInterest,
           message: formattedMessage,
           phone: normPhone,
-          email: cleanEmail,
+          email: cleanEmail || null,
           company: company.trim() || null,
           address: siteAddress.trim() || null,
           service_location: serviceLocation
@@ -323,16 +323,15 @@ export default function CreateEnquiryModal({ isOpen, onClose, onEnquiryCreated }
 
                 <div>
                   <label htmlFor="enq-cust-email" style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                    Email Address <span style={{ color: '#ef4444' }}>*</span>
+                    Email Address <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 400 }}>(Optional)</span>
                   </label>
                   <input
                     id="enq-cust-email"
                     type="email"
                     className="admin-input"
-                    placeholder="e.g. rajesh@company.com"
+                    placeholder="e.g. rajesh@company.com (optional)"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required
                     disabled={isSubmitting || isInventoryStaff}
                     style={{ width: '100%', height: '36px', fontSize: '0.86rem' }}
                   />
