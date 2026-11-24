@@ -351,6 +351,95 @@ function extractBulletField(message, fieldName) {
 }
 
 /**
+ * Builds a unified chronological timeline from customer tracking history and internal enquiry activities.
+ * Standardizes category, author, role, content description, and sort order.
+ */
+export function buildUnifiedTimeline(customerTrackingHistory = [], enquiryActivities = []) {
+  const historyList = Array.isArray(customerTrackingHistory) ? customerTrackingHistory : []
+  const activityList = Array.isArray(enquiryActivities) ? enquiryActivities : []
+
+  const kindLabels = {
+    status: { icon: '📶', label: 'Tracking Status' },
+    engineer_contact: { icon: '📞', label: 'Customer Contact' },
+    visit: { icon: '📅', label: 'Visit Schedule' },
+    note: { icon: '📝', label: 'Customer Note' }
+  }
+
+  const trackingEvents = historyList.map((entry) => {
+    const kind = kindLabels[entry.change_kind] || { icon: '📶', label: 'Tracking Event' }
+    let description = ''
+    if (entry.change_kind === 'status') {
+      const prevOpt = formatCustomerTrackingStatus(entry.previous_value || entry.previous_status) || entry.previous_value || 'Initial'
+      const newOpt = formatCustomerTrackingStatus(entry.new_value || entry.tracking_status) || entry.tracking_status
+      description = `${prevOpt} → ${newOpt}`
+    } else if (entry.change_kind === 'visit') {
+      const prevVisit = formatVisitStatusLabel(entry.previous_value) || entry.previous_value || '—'
+      const newVisit = formatVisitStatusLabel(entry.new_value) || entry.new_value || '—'
+      description = `${prevVisit} → ${newVisit}`
+    } else if (entry.new_value) {
+      description = String(entry.new_value)
+    }
+    return {
+      id: `tracking-${entry.id}`,
+      source: 'tracking',
+      icon: kind.icon,
+      category: kind.label,
+      badgeColor: '#1d4ed8',
+      badgeBg: '#eff6ff',
+      author: entry.updated_by_name || 'Staff',
+      role: entry.updated_by_employee_code ? `[${entry.updated_by_employee_code}]` : '',
+      content: description,
+      timestamp: entry.created_at
+    }
+  })
+
+  const internalActivities = activityList.map((act) => {
+    const isSystem = act.activity_type === 'system_event'
+    const isStatus = act.activity_type === 'status_change'
+    const isRejectionReq = act.activity_type === 'rejection_requested'
+    const isRejectionRev = act.activity_type === 'rejection_reviewed'
+    const isCompletionReq = act.activity_type === 'completion_requested'
+    const isCompletionRev = act.activity_type === 'completion_reviewed'
+    const isBinEntered = act.activity_type === 'bin_entered'
+    const isBinRestored = act.activity_type === 'bin_restored'
+    const isBinPurged = act.activity_type === 'bin_purged'
+    const isArchive = act.activity_type === 'archived' || act.activity_type === 'restored'
+    const isAssign = act.activity_type === 'assigned' || act.activity_type === 'reassigned' || act.activity_type === 'unassigned'
+
+    let icon = '📝'
+    let badgeColor = '#475569'
+    let badgeBg = '#f1f5f9'
+
+    if (isSystem) { icon = '🌐'; badgeColor = '#0284c7'; badgeBg = '#e0f2fe' }
+    else if (isStatus) { icon = '🔄'; badgeColor = '#16a34a'; badgeBg = '#dcfce7' }
+    else if (isAssign) { icon = '👤'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
+    else if (isRejectionReq) { icon = '⚠️'; badgeColor = '#d97706'; badgeBg = '#fef3c7' }
+    else if (isRejectionRev) { icon = '⚖️'; badgeColor = '#9333ea'; badgeBg = '#f3e8ff' }
+    else if (isCompletionReq) { icon = '⏳'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
+    else if (isCompletionRev) { icon = '✅'; badgeColor = '#059669'; badgeBg = '#d1fae5' }
+    else if (isBinEntered) { icon = '🗑️'; badgeColor = '#dc2626'; badgeBg = '#fee2e2' }
+    else if (isBinRestored) { icon = '♻️'; badgeColor = '#0d9488'; badgeBg = '#ccfbf1' }
+    else if (isBinPurged) { icon = '🧹'; badgeColor = '#475569'; badgeBg = '#f1f5f9' }
+    else if (isArchive) { icon = '📦'; badgeColor = '#64748b'; badgeBg = '#f1f5f9' }
+
+    return {
+      id: `activity-${act.id}`,
+      source: 'internal',
+      icon,
+      category: (act.activity_type || 'note').replace(/_/g, ' '),
+      badgeColor,
+      badgeBg,
+      author: act.actor_email || (isSystem ? 'Customer Submission' : 'System'),
+      role: act.actor_role ? `(${act.actor_role})` : '',
+      content: act.content,
+      timestamp: act.created_at
+    }
+  })
+
+  return [...trackingEvents, ...internalActivities].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+}
+
+/**
  * Comprehensive customer-facing pure formatter: builds complete enquiry details text for copying to clipboard.
  * Includes every customer-facing field for both General and Service/Repair enquiries.
  * 
@@ -365,7 +454,7 @@ function extractBulletField(message, fieldName) {
  * - Complete, untruncated customer message & problem description
  * - Clear headings and consistent fallback 'Not Provided' for missing fields
  */
-export function formatEnquiryDetailsForCopy(enquiry) {
+export function formatEnquiryDetailsForCopy(enquiry, options = {}) {
   if (!enquiry) return ''
 
   const service = parseServiceEnquiry(enquiry)
@@ -405,7 +494,11 @@ export function formatEnquiryDetailsForCopy(enquiry) {
 
   // Enquiry ID / Reference
   if (enquiry.enquiry_number) {
-    lines.push(`Enquiry ID: ARS-ENQ-${String(enquiry.enquiry_number).padStart(5, '0')}`)
+    const rawNum = String(enquiry.enquiry_number).trim()
+    const formattedId = rawNum.startsWith('ARS-ENQ-')
+      ? rawNum
+      : `ARS-ENQ-${rawNum.padStart(5, '0')}`
+    lines.push(`Enquiry ID: ${formattedId}`)
   } else if (!isService || !serviceTicket) {
     lines.push(`Enquiry ID: ${resolveTicketId(enquiry, service)}`)
   }
@@ -613,7 +706,67 @@ export function formatEnquiryDetailsForCopy(enquiry) {
   }
   lines.push('')
 
-  // 8. Footer
+  // 8. Activity & Tracking Timeline (when present or provided in options)
+  let timeline = null
+  if (options && Array.isArray(options.timeline)) {
+    timeline = options.timeline
+  } else if (Array.isArray(enquiry?.timeline)) {
+    timeline = enquiry.timeline
+  } else if ((options && (options.activities || options.customerTrackingHistory)) || enquiry?.activities || enquiry?.customerTrackingHistory) {
+    const trackingHistory = (options && options.customerTrackingHistory) || enquiry?.customerTrackingHistory || []
+    const activities = (options && options.activities) || enquiry?.activities || []
+    timeline = buildUnifiedTimeline(trackingHistory, activities)
+  }
+
+  if (timeline) {
+    lines.push('ACTIVITY & TRACKING TIMELINE')
+    lines.push('────────────────────────────')
+    if (timeline.length === 0) {
+      lines.push('No activity or tracking records logged yet.')
+    } else {
+      timeline.forEach((ev, idx) => {
+        const dateStr = formatDateTime(ev.timestamp) || 'Date Not Specified'
+        const categoryStr = (ev.category || 'EVENT').toUpperCase()
+        const authorRoleParts = []
+        if (ev.author) authorRoleParts.push(ev.author)
+        if (ev.role) authorRoleParts.push(ev.role)
+        const authorRoleStr = authorRoleParts.join(' ')
+
+        let headerLine = `• ${dateStr} | ${categoryStr}`
+        if (authorRoleStr) {
+          headerLine += ` | ${authorRoleStr}`
+        }
+        lines.push(headerLine)
+
+        if (ev.content && typeof ev.content === 'string' && ev.content.trim()) {
+          const contentLines = ev.content.trim().split('\n')
+          contentLines.forEach((cl) => {
+            lines.push(`  ${cl}`)
+          })
+        }
+        if (idx < timeline.length - 1) {
+          lines.push('')
+        }
+      })
+    }
+    lines.push('')
+  }
+
+  // Standalone / legacy admin notes if explicitly requested via options
+  const standaloneAdminNote = (options && typeof options.adminNotes === 'string' && options.adminNotes.trim())
+    ? options.adminNotes.trim()
+    : null
+  if (standaloneAdminNote) {
+    const alreadyInTimeline = timeline && timeline.some(ev => ev.content && ev.content.includes(standaloneAdminNote))
+    if (!alreadyInTimeline) {
+      lines.push('ADMIN FOLLOW-UP NOTE')
+      lines.push('────────────────────────────')
+      lines.push(standaloneAdminNote)
+      lines.push('')
+    }
+  }
+
+  // 9. Footer
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   lines.push('ARS Computers — Service Desk & Customer Records')
 
@@ -623,8 +776,8 @@ export function formatEnquiryDetailsForCopy(enquiry) {
 /**
  * Alias for formatEnquiryDetailsForCopy.
  */
-export function formatCompleteEnquiryDetails(enquiry) {
-  return formatEnquiryDetailsForCopy(enquiry)
+export function formatCompleteEnquiryDetails(enquiry, options = {}) {
+  return formatEnquiryDetailsForCopy(enquiry, options)
 }
 
 /**
@@ -633,7 +786,7 @@ export function formatCompleteEnquiryDetails(enquiry) {
  */
 export function formatEnquiryCustomerDispatch(enquiry, options = {}) {
   if (options && options.complete) {
-    return formatEnquiryDetailsForCopy(enquiry)
+    return formatEnquiryDetailsForCopy(enquiry, options)
   }
   if (!enquiry) return ''
 

@@ -27,6 +27,7 @@ import {
   formatEnquiryDetailsForCopy,
   formatCompleteEnquiryDetails,
   formatEnquiryCustomerDispatch,
+  buildUnifiedTimeline,
   formatDateTime,
   formatWorkflowStatus,
   formatCustomerTrackingStatus,
@@ -432,4 +433,202 @@ test('Scenario 11: Clipboard error handling catches failures gracefully without 
   assert.ok(copiedText.includes('ARS-ENQ-00999'))
   assert.equal(notificationMessage, 'Enquiry details copied to clipboard')
   assert.equal(notificationType, 'success')
+})
+
+test('Scenario 12: buildUnifiedTimeline merges tracking events and internal activities chronologically', () => {
+  const trackingHistory = [
+    {
+      id: 101,
+      change_kind: 'status',
+      previous_status: 'received',
+      tracking_status: 'in_progress',
+      updated_by_name: 'Ankit Bathla',
+      updated_by_employee_code: 'EMP-001',
+      created_at: '2026-11-24T10:00:00.000Z'
+    },
+    {
+      id: 102,
+      change_kind: 'visit',
+      previous_value: '',
+      new_value: 'scheduled',
+      updated_by_name: 'Ankit Bathla',
+      updated_by_employee_code: 'EMP-001',
+      created_at: '2026-11-24T11:00:00.000Z'
+    }
+  ]
+
+  const enquiryActivities = [
+    {
+      id: 201,
+      activity_type: 'assigned',
+      actor_email: 'ankitbathla.ind@gmail.com',
+      actor_role: 'superadmin',
+      content: 'Enquiry assigned to Divyanshu Prasad by Ankit Bathla',
+      created_at: '2026-11-24T11:56:00.000Z'
+    },
+    {
+      id: 202,
+      activity_type: 'note',
+      actor_email: 'ankitbathla.ind@gmail.com',
+      actor_role: 'superadmin',
+      content: 'We have received the laptop from Goodware. We will recover the data from the existing SSD.',
+      created_at: '2026-11-24T11:54:00.000Z'
+    },
+    {
+      id: 203,
+      activity_type: 'system_event',
+      actor_email: 'ankitbathla.ind@gmail.com',
+      actor_role: 'superadmin',
+      content: 'Customer enquiry submitted through website',
+      created_at: '2026-11-21T08:46:00.000Z'
+    }
+  ]
+
+  const timeline = buildUnifiedTimeline(trackingHistory, enquiryActivities)
+  assert.equal(timeline.length, 5)
+
+  // Verify descending chronological order
+  assert.equal(timeline[0].id, 'activity-201')
+  assert.equal(timeline[0].category, 'assigned')
+  assert.equal(timeline[0].author, 'ankitbathla.ind@gmail.com')
+  assert.equal(timeline[0].role, '(superadmin)')
+  assert.equal(timeline[0].content, 'Enquiry assigned to Divyanshu Prasad by Ankit Bathla')
+
+  assert.equal(timeline[1].id, 'activity-202')
+  assert.equal(timeline[1].category, 'note')
+
+  assert.equal(timeline[2].id, 'tracking-102')
+  assert.equal(timeline[2].category, 'Visit Schedule')
+  assert.ok(timeline[2].content.includes('Visit Scheduled'))
+
+  assert.equal(timeline[3].id, 'tracking-101')
+  assert.equal(timeline[3].category, 'Tracking Status')
+  assert.ok(timeline[3].content.includes('Received → In Progress'))
+
+  assert.equal(timeline[4].id, 'activity-203')
+  assert.equal(timeline[4].category, 'system event')
+})
+
+test('Scenario 13: formatEnquiryDetailsForCopy includes ACTIVITY & TRACKING TIMELINE when timeline is provided', () => {
+  const enq = {
+    enquiry_number: 1023,
+    enquiry_type: 'service_request',
+    customer_name: 'Rahul Sharma',
+    phone: '+919876543210',
+    status: 'in_progress',
+    service_details: {
+      product_category: 'Laptop',
+      brand: 'Dell',
+      model_number: 'Inspiron 15'
+    },
+    message: 'Screen flickering issue'
+  }
+
+  const timeline = [
+    {
+      id: 'activity-1',
+      category: 'ENQUIRY ASSIGNED',
+      author: 'ankitbathla.ind@gmail.com',
+      role: '(superadmin)',
+      content: 'Enquiry assigned to Divyanshu Prasad by Ankit Bathla',
+      timestamp: '2026-11-24T17:26:00.000Z'
+    },
+    {
+      id: 'activity-2',
+      category: 'NOTE',
+      author: 'ankitbathla.ind@gmail.com',
+      role: '(superadmin)',
+      content: 'We have received the laptop from Goodware. We will recover the data from the existing SSD and provide a temporary SSD for use in the meantime.',
+      timestamp: '2026-11-24T17:24:00.000Z'
+    },
+    {
+      id: 'activity-3',
+      category: 'SYSTEM EVENT',
+      author: 'ankitbathla.ind@gmail.com',
+      role: '(superadmin)',
+      content: 'Customer enquiry submitted through website',
+      timestamp: '2026-11-21T14:16:00.000Z'
+    }
+  ]
+
+  const output = formatEnquiryDetailsForCopy(enq, { timeline })
+
+  // Verify basic enquiry details still present
+  assert.ok(output.includes('Enquiry ID: ARS-ENQ-01023'))
+  assert.ok(output.includes('CUSTOMER DETAILS'))
+  assert.ok(output.includes('Rahul Sharma'))
+
+  // Verify ACTIVITY & TRACKING TIMELINE section is present
+  assert.ok(output.includes('ACTIVITY & TRACKING TIMELINE'))
+  assert.ok(output.includes('────────────────────────────'))
+
+  // Verify all timeline events are included with their authors, roles, and contents
+  assert.ok(output.includes('ENQUIRY ASSIGNED | ankitbathla.ind@gmail.com (superadmin)'))
+  assert.ok(output.includes('Enquiry assigned to Divyanshu Prasad by Ankit Bathla'))
+  assert.ok(output.includes('NOTE | ankitbathla.ind@gmail.com (superadmin)'))
+  assert.ok(output.includes('We have received the laptop from Goodware.'))
+  assert.ok(output.includes('SYSTEM EVENT | ankitbathla.ind@gmail.com (superadmin)'))
+  assert.ok(output.includes('Customer enquiry submitted through website'))
+
+  // Verify footer comes after timeline
+  const timelineIdx = output.indexOf('ACTIVITY & TRACKING TIMELINE')
+  const footerIdx = output.indexOf('ARS Computers — Service Desk & Customer Records')
+  assert.ok(timelineIdx !== -1 && footerIdx !== -1 && footerIdx > timelineIdx)
+})
+
+test('Scenario 14: formatEnquiryDetailsForCopy handles empty timeline with friendly message', () => {
+  const enq = {
+    enquiry_number: 1024,
+    customer_name: 'Amit Verma'
+  }
+
+  const output = formatEnquiryDetailsForCopy(enq, { timeline: [] })
+  assert.ok(output.includes('ACTIVITY & TRACKING TIMELINE'))
+  assert.ok(output.includes('No activity or tracking records logged yet.'))
+})
+
+test('Scenario 15: formatEnquiryDetailsForCopy builds timeline from activities and customerTrackingHistory options', () => {
+  const enq = {
+    enquiry_number: 1025,
+    customer_name: 'Pooja Rawat'
+  }
+
+  const activities = [
+    {
+      id: 301,
+      activity_type: 'note',
+      actor_email: 'admin@arscomputer.com',
+      actor_role: 'admin',
+      content: 'Customer confirmed pickup time tomorrow 11 AM',
+      created_at: '2026-11-24T12:00:00.000Z'
+    }
+  ]
+
+  const output = formatEnquiryDetailsForCopy(enq, { activities })
+  assert.ok(output.includes('ACTIVITY & TRACKING TIMELINE'))
+  assert.ok(output.includes('NOTE | admin@arscomputer.com (admin)'))
+  assert.ok(output.includes('Customer confirmed pickup time tomorrow 11 AM'))
+})
+
+test('Scenario 16: formatEnquiryDetailsForCopy does not duplicate ARS-ENQ- prefix when enquiry_number already contains it', () => {
+  const enq = {
+    enquiry_number: 'ARS-ENQ-01023',
+    customer_name: 'Goodwear Fashion Unit'
+  }
+
+  const output = formatEnquiryDetailsForCopy(enq)
+  assert.ok(output.includes('Enquiry ID: ARS-ENQ-01023'))
+  assert.ok(!output.includes('ARS-ENQ-ARS-ENQ-01023'))
+})
+
+test('Scenario 17: formatEnquiryDetailsForCopy includes standalone adminNotes when requested and not already in timeline', () => {
+  const enq = {
+    enquiry_number: 1026,
+    customer_name: 'Goodwear Fashion Unit',
+    admin_notes: 'Initial quotation sent via phone: ₹3,500'
+  }
+
+  const output = formatEnquiryDetailsForCopy(enq, { adminNotes: enq.admin_notes })
+  assert.ok(output.includes('ADMIN FOLLOW-UP NOTE'))
+  assert.ok(output.includes('Initial quotation sent via phone: ₹3,500'))
 })

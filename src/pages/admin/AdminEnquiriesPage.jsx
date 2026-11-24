@@ -12,6 +12,7 @@ import {
   formatEnquiryCustomerDispatch,
   formatEnquiryDetailsForCopy,
   formatCompleteEnquiryDetails,
+  buildUnifiedTimeline,
   buildCustomerWhatsAppUrl,
   buildCustomerEmailSubject,
   resolveCustomerPhone,
@@ -630,10 +631,16 @@ export default function AdminEnquiriesPage() {
     }
   }
 
-  const handleCustomerCopy = async () => {
+  const handleCustomerCopy = async (timelineOverride) => {
     if (!selectedEnquiry) return
     try {
-      const text = formatEnquiryDetailsForCopy(selectedEnquiry)
+      const activeTimeline = Array.isArray(timelineOverride)
+        ? timelineOverride
+        : buildUnifiedTimeline(customerTrackingHistory, enquiryActivities)
+      const text = formatEnquiryDetailsForCopy(selectedEnquiry, {
+        timeline: activeTimeline,
+        adminNotes: selectedEnquiry.admin_notes
+      })
       if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         await navigator.clipboard.writeText(text)
       } else if (typeof document !== 'undefined') {
@@ -651,7 +658,7 @@ export default function AdminEnquiriesPage() {
         throw new Error('Clipboard API is not available')
       }
       setCopyFeedback(true)
-      showNotification('Enquiry details copied to clipboard', 'success')
+      showNotification('Enquiry details & timeline copied to clipboard', 'success')
       setTimeout(() => setCopyFeedback(false), 2500)
     } catch (err) {
       setCopyFeedback(false)
@@ -3580,83 +3587,7 @@ export default function AdminEnquiriesPage() {
         )
 
         // Step 2: Unified Chronological Timeline (Tracking Events + Internal Activities)
-        const unifiedTimeline = [
-          ...customerTrackingHistory.map((entry) => {
-            const kindLabels = {
-              status: { icon: '📶', label: 'Tracking Status' },
-              engineer_contact: { icon: '📞', label: 'Customer Contact' },
-              visit: { icon: '📅', label: 'Visit Schedule' },
-              note: { icon: '📝', label: 'Customer Note' }
-            }
-            const kind = kindLabels[entry.change_kind] || { icon: '📶', label: 'Tracking Event' }
-            let description = ''
-            if (entry.change_kind === 'status') {
-              const prevOpt = TRACKING_OPTIONS.find((o) => o.value === (entry.previous_value || entry.previous_status))
-              const newOpt = TRACKING_OPTIONS.find((o) => o.value === (entry.new_value || entry.tracking_status))
-              description = `${prevOpt ? prevOpt.label : (entry.previous_value || 'Initial')} → ${newOpt ? newOpt.label : entry.tracking_status}`
-            } else if (entry.change_kind === 'visit') {
-              const prevVisit = VISIT_STATUS_OPTIONS.find((o) => o.value === entry.previous_value)
-              const newVisit = VISIT_STATUS_OPTIONS.find((o) => o.value === entry.new_value)
-              description = `${prevVisit ? prevVisit.label : (entry.previous_value || '—')} → ${newVisit ? newVisit.label : (entry.new_value || '—')}`
-            } else if (entry.new_value) {
-              description = String(entry.new_value)
-            }
-            return {
-              id: `tracking-${entry.id}`,
-              source: 'tracking',
-              icon: kind.icon,
-              category: kind.label,
-              badgeColor: '#1d4ed8',
-              badgeBg: '#eff6ff',
-              author: entry.updated_by_name || 'Staff',
-              role: entry.updated_by_employee_code ? `[${entry.updated_by_employee_code}]` : '',
-              content: description,
-              timestamp: entry.created_at
-            }
-          }),
-          ...enquiryActivities.map((act) => {
-            const isSystem = act.activity_type === 'system_event'
-            const isStatus = act.activity_type === 'status_change'
-            const isRejectionReq = act.activity_type === 'rejection_requested'
-            const isRejectionRev = act.activity_type === 'rejection_reviewed'
-            const isCompletionReq = act.activity_type === 'completion_requested'
-            const isCompletionRev = act.activity_type === 'completion_reviewed'
-            const isBinEntered = act.activity_type === 'bin_entered'
-            const isBinRestored = act.activity_type === 'bin_restored'
-            const isBinPurged = act.activity_type === 'bin_purged'
-            const isArchive = act.activity_type === 'archived' || act.activity_type === 'restored'
-            const isAssign = act.activity_type === 'assigned' || act.activity_type === 'reassigned' || act.activity_type === 'unassigned'
-
-            let icon = '📝'
-            let badgeColor = '#475569'
-            let badgeBg = '#f1f5f9'
-
-            if (isSystem) { icon = '🌐'; badgeColor = '#0284c7'; badgeBg = '#e0f2fe' }
-            else if (isStatus) { icon = '🔄'; badgeColor = '#16a34a'; badgeBg = '#dcfce7' }
-            else if (isAssign) { icon = '👤'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
-            else if (isRejectionReq) { icon = '⚠️'; badgeColor = '#d97706'; badgeBg = '#fef3c7' }
-            else if (isRejectionRev) { icon = '⚖️'; badgeColor = '#9333ea'; badgeBg = '#f3e8ff' }
-            else if (isCompletionReq) { icon = '⏳'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
-            else if (isCompletionRev) { icon = '✅'; badgeColor = '#059669'; badgeBg = '#d1fae5' }
-            else if (isBinEntered) { icon = '🗑️'; badgeColor = '#dc2626'; badgeBg = '#fee2e2' }
-            else if (isBinRestored) { icon = '♻️'; badgeColor = '#0d9488'; badgeBg = '#ccfbf1' }
-            else if (isBinPurged) { icon = '🧹'; badgeColor = '#475569'; badgeBg = '#f1f5f9' }
-            else if (isArchive) { icon = '📦'; badgeColor = '#64748b'; badgeBg = '#f1f5f9' }
-
-            return {
-              id: `activity-${act.id}`,
-              source: 'internal',
-              icon,
-              category: (act.activity_type || 'note').replace(/_/g, ' '),
-              badgeColor,
-              badgeBg,
-              author: act.actor_email || (isSystem ? 'Customer Submission' : 'System'),
-              role: act.actor_role ? `(${act.actor_role})` : '',
-              content: act.content,
-              timestamp: act.created_at
-            }
-          })
-        ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        const unifiedTimeline = buildUnifiedTimeline(customerTrackingHistory, enquiryActivities)
 
         return (
           <div
@@ -5111,8 +5042,8 @@ export default function AdminEnquiriesPage() {
                           type="button"
                           id="customer-copy-btn"
                           className="btn-outline btn-sm"
-                          onClick={handleCustomerCopy}
-                          title={copyFeedback ? 'Enquiry details copied!' : 'Copy complete enquiry details'}
+                          onClick={() => handleCustomerCopy(unifiedTimeline)}
+                          title={copyFeedback ? 'Enquiry details & timeline copied!' : 'Copy complete enquiry details and activity timeline'}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
