@@ -524,16 +524,18 @@ function CustomerHomePage() {
                       <div className="card-icon">{category.icon}</div>
                       <span className="card-badge">{category.badge}</span>
                     </div>
-                    <h4 className="card-title">
-                      <span className="card-title-link">
-                        {category.title}
-                      </span>
-                    </h4>
-                    <div className="card-tagline">{category.tagline}</div>
+                    <div className="category-card-text-panel">
+                      <h4 className="card-title">
+                        <span className="card-title-link">
+                          {category.title}
+                        </span>
+                      </h4>
+                      <div className="card-tagline">{category.tagline}</div>
 
-                    {category.description && (
-                      <p className="card-desc">{category.description}</p>
-                    )}
+                      {category.description && (
+                        <p className="card-desc">{category.description}</p>
+                      )}
+                    </div>
                   </div>
                 </article>
               )
