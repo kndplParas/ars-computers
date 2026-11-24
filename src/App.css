@@ -1491,12 +1491,14 @@
 .category-card.has-bg {
   padding: 0;
   overflow: hidden;
+  border-color: rgba(191, 219, 254, 0.8);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
 .category-card:hover {
   transform: translateY(-4px);
   border-color: #93c5fd;
-  box-shadow: 0 12px 24px -4px rgba(37, 99, 235, 0.12), 0 4px 10px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 24px -4px rgba(37, 99, 235, 0.16), 0 6px 14px rgba(15, 23, 42, 0.08);
 }
 
 .category-card-bg {
@@ -1517,13 +1519,13 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.94) 0%,
-    rgba(255, 255, 255, 0.88) 52%,
-    rgba(240, 247, 255, 0.93) 100%
+    160deg,
+    rgba(255, 255, 255, 0.36) 0%,
+    rgba(255, 255, 255, 0.24) 52%,
+    rgba(240, 247, 255, 0.30) 100%
   );
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
   z-index: 1;
   pointer-events: none;
   transition: background 0.3s ease;
@@ -1531,10 +1533,10 @@
 
 .category-card:hover .category-card-overlay {
   background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.89) 0%,
-    rgba(255, 255, 255, 0.81) 52%,
-    rgba(235, 245, 255, 0.88) 100%
+    160deg,
+    rgba(255, 255, 255, 0.26) 0%,
+    rgba(255, 255, 255, 0.16) 52%,
+    rgba(235, 245, 255, 0.22) 100%
   );
 }
 
@@ -1563,14 +1565,16 @@
   font-size: 28px;
   width: 54px;
   height: 54px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid #bfdbfe;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--primary);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
 .card-badge {
@@ -1578,12 +1582,14 @@
   font-weight: 700;
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  background: rgba(239, 246, 255, 0.94);
+  background: rgba(239, 246, 255, 0.95);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   color: #1e40af;
   border: 1px solid #bfdbfe;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
 }
 
 .card-title {
@@ -1593,20 +1599,24 @@
   color: var(--text-main);
   font-weight: 700;
   transition: color 0.2s ease;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.95), 0 0 12px rgba(255, 255, 255, 0.9);
 }
 
 .card-tagline {
   font-size: 13px;
-  color: var(--primary);
-  font-weight: 600;
+  color: #1d4ed8;
+  font-weight: 700;
   margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.95), 0 0 10px rgba(255, 255, 255, 0.85);
 }
 
 .card-desc {
   font-size: 14px;
-  color: #334155;
+  color: #0f172a;
   line-height: 1.55;
   margin-bottom: 0;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.95), 0 0 10px rgba(255, 255, 255, 0.85);
 }
 
 .category-card-footer {
