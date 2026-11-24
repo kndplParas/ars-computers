@@ -500,7 +500,7 @@ function CustomerHomePage() {
               return (
                 <article
                   key={category.id}
-                  className={`category-card ${bgImg ? 'has-bg' : ''}`}
+                  className="category-card"
                   onClick={() => navigate(`/category/${categoryKey}`)}
                   role="button"
                   tabIndex={0}
@@ -511,30 +511,41 @@ function CustomerHomePage() {
                     }
                   }}
                 >
-                  {bgImg && (
-                    <div
-                      className="category-card-bg"
-                      style={{ backgroundImage: `url(${bgImg})` }}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <div className="category-card-overlay" aria-hidden="true" />
-                  <div className="category-card-content">
+                  <div className="category-card-image-wrap">
+                    {bgImg ? (
+                      <img
+                        src={bgImg}
+                        alt={category.title}
+                        className="category-card-image"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="category-card-image-placeholder">
+                        <span className="placeholder-icon">{category.icon}</span>
+                      </div>
+                    )}
+                    <div className="category-card-image-overlay" aria-hidden="true" />
                     <div className="card-top">
                       <div className="card-icon">{category.icon}</div>
                       <span className="card-badge">{category.badge}</span>
                     </div>
-                    <div className="category-card-text-panel">
-                      <h4 className="card-title">
-                        <span className="card-title-link">
-                          {category.title}
-                        </span>
-                      </h4>
-                      <div className="card-tagline">{category.tagline}</div>
+                  </div>
+                  <div className="category-card-content">
+                    <h4 className="card-title">
+                      <span className="card-title-link">
+                        {category.title}
+                      </span>
+                    </h4>
+                    <div className="card-tagline">{category.tagline}</div>
 
-                      {category.description && (
-                        <p className="card-desc">{category.description}</p>
-                      )}
+                    {category.description && (
+                      <p className="card-desc">{category.description}</p>
+                    )}
+
+                    <div className="category-card-footer">
+                      <span className="category-explore-btn">
+                        Explore Category <span>→</span>
+                      </span>
                     </div>
                   </div>
                 </article>
