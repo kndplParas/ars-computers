@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { fetchPublicCatalog, getInstantCatalog } from '../lib/catalog'
+import { CATEGORY_BACKGROUND_IMAGES } from '../data/categories'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import CustomerServiceRequestForm from '../components/CustomerServiceRequestForm'
@@ -492,36 +493,51 @@ function CustomerHomePage() {
               </button>
             </div>
           ) : (
-            filteredCategories.map((category) => (
-              <article
-                key={category.id}
-                className="category-card"
-                onClick={() => navigate(`/category/${category.slug || category.id}`)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    navigate(`/category/${category.slug || category.id}`)
-                  }
-                }}
-              >
-                <div className="card-top">
-                  <div className="card-icon">{category.icon}</div>
-                  <span className="card-badge">{category.badge}</span>
-                </div>
-                <h4 className="card-title">
-                  <span className="card-title-link">
-                    {category.title}
-                  </span>
-                </h4>
-                <div className="card-tagline">{category.tagline}</div>
+            filteredCategories.map((category) => {
+              const categoryKey = category.slug || category.id
+              const bgImg = category.bgImage || CATEGORY_BACKGROUND_IMAGES[categoryKey]
 
-                {category.description && (
-                  <p className="card-desc">{category.description}</p>
-                )}
-              </article>
-            ))
+              return (
+                <article
+                  key={category.id}
+                  className={`category-card ${bgImg ? 'has-bg' : ''}`}
+                  onClick={() => navigate(`/category/${categoryKey}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(`/category/${categoryKey}`)
+                    }
+                  }}
+                >
+                  {bgImg && (
+                    <div
+                      className="category-card-bg"
+                      style={{ backgroundImage: `url(${bgImg})` }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <div className="category-card-overlay" aria-hidden="true" />
+                  <div className="category-card-content">
+                    <div className="card-top">
+                      <div className="card-icon">{category.icon}</div>
+                      <span className="card-badge">{category.badge}</span>
+                    </div>
+                    <h4 className="card-title">
+                      <span className="card-title-link">
+                        {category.title}
+                      </span>
+                    </h4>
+                    <div className="card-tagline">{category.tagline}</div>
+
+                    {category.description && (
+                      <p className="card-desc">{category.description}</p>
+                    )}
+                  </div>
+                </article>
+              )
+            })
           )}
         </div>
       </section>

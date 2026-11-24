@@ -1,4 +1,17 @@
 import { PRODUCT_IMAGES } from './productImages.js'
+import bgComputerLaptop from '../assets/Gemini_Generated_Image_y11puiy11puiy11p.png'
+import bgCctv from '../assets/Gemini_Generated_Image_s9c9hcs9c9hcs9c9.png'
+import bgPrinter from '../assets/Gemini_Generated_Image_mxzvngmxzvngmxzv.png'
+import bgBiometricMachine from '../assets/Gemini_Generated_Image_ai0jcrai0jcrai0j.png'
+import bgAccessories from '../assets/Gemini_Generated_Image_asbo3gasbo3gasbo.png'
+
+export const CATEGORY_BACKGROUND_IMAGES = {
+  'computer-laptop': bgComputerLaptop,
+  'cctv': bgCctv,
+  'printer': bgPrinter,
+  'biometric-machine': bgBiometricMachine,
+  'accessories': bgAccessories
+}
 
 export const CATEGORIES = [
   // ==========================================================================
@@ -13,6 +26,7 @@ export const CATEGORIES = [
     description: 'Distinct business laptops, dedicated gaming notebooks, custom-assembled liquid-cooled desktop rigs, and enterprise CAD workstations.',
     icon: '💻',
     badge: 'Popular',
+    bgImage: bgComputerLaptop,
     products: [
       // --- Laptops ---
       {
@@ -162,6 +176,7 @@ export const CATEGORIES = [
     description: 'High-definition dome and bullet IP cameras, full-color ColorVu night vision, motorized PTZ surveillance, and standalone video recorders.',
     icon: '📹',
     badge: 'Security',
+    bgImage: bgCctv,
     products: [
       {
         slug: 'hikvision-full-hd-dome-camera',
@@ -263,6 +278,7 @@ export const CATEGORIES = [
     description: 'Continuous ink tank multifunction printers, high-speed monochrome laser printers, heavy-duty color laser copiers, and POS billing units.',
     icon: '🖨️',
     badge: 'Office',
+    bgImage: bgPrinter,
     products: [
       {
         slug: 'epson-ecotank-ink-tank-printer',
@@ -369,6 +385,7 @@ export const CATEGORIES = [
     description: 'AI facial recognition attendance systems, optical fingerprint sensors, RFID card punching terminals, and door access controller hardware.',
     icon: '🛡️',
     badge: 'Enterprise',
+    bgImage: bgBiometricMachine,
     products: [
       {
         slug: 'hikvision-minmoe-face-terminal',
@@ -445,6 +462,7 @@ export const CATEGORIES = [
     description: 'Individual solid-state drives, hard drives, RAM modules, cooling components, power supplies, keyboards, mice, and connectivity cables.',
     icon: '🔌',
     badge: 'Essentials',
+    bgImage: bgAccessories,
     products: [
       // --- Storage & Memory Components ---
       {

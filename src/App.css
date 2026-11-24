@@ -1488,10 +1488,64 @@
   cursor: pointer;
 }
 
+.category-card.has-bg {
+  padding: 0;
+  overflow: hidden;
+}
+
 .category-card:hover {
   transform: translateY(-4px);
   border-color: #93c5fd;
-  box-shadow: 0 12px 24px -4px rgba(37, 99, 235, 0.08), 0 4px 10px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 12px 24px -4px rgba(37, 99, 235, 0.12), 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+
+.category-card-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.category-card:hover .category-card-bg {
+  transform: scale(1.06);
+}
+
+.category-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.94) 0%,
+    rgba(255, 255, 255, 0.88) 52%,
+    rgba(240, 247, 255, 0.93) 100%
+  );
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 1;
+  pointer-events: none;
+  transition: background 0.3s ease;
+}
+
+.category-card:hover .category-card-overlay {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.89) 0%,
+    rgba(255, 255, 255, 0.81) 52%,
+    rgba(235, 245, 255, 0.88) 100%
+  );
+}
+
+.category-card-content {
+  position: relative;
+  z-index: 2;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
 }
 
 .category-card:hover .card-title {
@@ -1509,25 +1563,27 @@
   font-size: 28px;
   width: 54px;
   height: 54px;
-  background: var(--bg-ice);
-  border: 1px solid #dbeafe;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #bfdbfe;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
 }
 
 .card-badge {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  background: var(--bg-ice);
+  background: rgba(239, 246, 255, 0.94);
   color: #1e40af;
   border: 1px solid #bfdbfe;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
 }
 
 .card-title {
@@ -1548,7 +1604,7 @@
 
 .card-desc {
   font-size: 14px;
-  color: var(--text-muted);
+  color: #334155;
   line-height: 1.55;
   margin-bottom: 0;
 }

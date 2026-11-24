@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase.js'
-import { CATEGORIES } from '../data/categories.js'
+import { CATEGORIES, CATEGORY_BACKGROUND_IMAGES } from '../data/categories.js'
 import { PRODUCT_IMAGES } from '../data/productImages.js'
 import { getProductContent } from '../data/productContent.js'
 
@@ -706,6 +706,7 @@ export async function fetchPublicCatalog({ forceRefresh = false } = {}) {
             description: cat.description || (staticCat?.description || ''),
             icon: cat.icon || (staticCat?.icon || '💻'),
             badge: cat.badge || (staticCat?.badge || 'Popular'),
+            bgImage: staticCat?.bgImage || CATEGORY_BACKGROUND_IMAGES[categorySlug] || null,
             products: productsList
           }
         })
