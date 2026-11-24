@@ -70,6 +70,7 @@ function App() {
                 <Route path="/" element={<CustomerHomePage />} />
                 <Route path="/category/:slug" element={<CategoryRouteWrapper />} />
                 <Route path="/products/:slug" element={<ProductRouteWrapper />} />
+                <Route path="/product/:slug" element={<ProductRouteWrapper />} />
                 <Route path="/search" element={<SearchResultsPage />} />
                 <Route path="/credits" element={<ImageCreditsPage />} />
                 <Route path="/image-credits" element={<Navigate to="/credits" replace />} />

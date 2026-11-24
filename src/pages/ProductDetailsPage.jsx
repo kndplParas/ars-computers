@@ -268,18 +268,19 @@ export default function ProductDetailsPage() {
     }
   }, [slug])
 
-  const specTable = getSpecTable(category || product?.categoryId, product?.specAttributes)
+  const specTable = getSpecTable(category?.slug || category?.id || product?.categoryId, product?.specAttributes)
   const verification = product
     ? SPEC_VERIFICATION_META[product.specsVerified] || SPEC_VERIFICATION_META.configuration_dependent
     : null
 
   const richDetails = product ? getProductRichDetails(product, category) : null
 
-  const currentCaption =
-    (product?.slug && PRODUCT_IMAGE_CAPTIONS[product.slug]?.[activeImageIndex]) ||
-    (product?.images && product.images.length > 1
-      ? `${product.name} — Hardware View ${activeImageIndex + 1}`
-      : `${product.name} — Certified Hardware Supply`)
+  const currentCaption = product
+    ? (product.slug && PRODUCT_IMAGE_CAPTIONS[product.slug]?.[activeImageIndex]) ||
+      (product.images && product.images.length > 1
+        ? `${product.name} — Hardware View ${activeImageIndex + 1}`
+        : `${product.name} — Certified Hardware Supply`)
+    : ''
 
   return (
     <div className="app-container">
@@ -305,7 +306,7 @@ export default function ProductDetailsPage() {
               </>
             )}
             <span className="breadcrumb-current" aria-current="page">
-              {product ? product.name : (isLoading ? 'Hardware Specifications' : slug)}
+              {product?.name || (isLoading ? 'Hardware Specifications' : (slug || 'Hardware Product'))}
             </span>
           </nav>
 
@@ -315,7 +316,7 @@ export default function ProductDetailsPage() {
               className="breadcrumb-back-btn"
               onClick={() => navigate(`/category/${category.slug || category.id}`)}
             >
-              ← Back to {category.title}
+              ← Back to {category?.title || 'Category'}
             </button>
           )}
         </div>
@@ -1111,7 +1112,7 @@ export default function ProductDetailsPage() {
                   <div className="lightbox-modal">
                     <div className="lightbox-header">
                       <div className="lightbox-title-info">
-                        <span className="lightbox-product-title">{product.name}</span>
+                        <span className="lightbox-product-title">{product?.name}</span>
                         {product.images && product.images.length > 1 && (
                           <span className="lightbox-counter">
                             Photo {activeImageIndex + 1} of {product.images.length}
@@ -1158,7 +1159,7 @@ export default function ProductDetailsPage() {
                       <div className="lightbox-img-viewport">
                         <img
                           src={product.images[activeImageIndex] || product.images[0]}
-                          alt={`${product.name} enlarged view`}
+                          alt={`${product?.name || 'Product'} enlarged view`}
                           className="lightbox-zoomed-img"
                           style={{ transform: `scale(${modalZoom})` }}
                         />

@@ -650,9 +650,13 @@ export async function fetchPublicCatalog({ forceRefresh = false } = {}) {
           const categorySlug = cat.slug || cat.id
 
           const dbProductsList = categoryProducts.map((p) => {
-            const productImages = Array.isArray(p.images) && p.images.length > 0
-              ? p.images
-              : (PRODUCT_IMAGES[p.slug] || [])
+            const staticMatch = staticCat?.products?.find((sp) => sp.slug === p.slug)
+            const curatedImages = PRODUCT_IMAGES[p.slug] || staticMatch?.images
+            // For multi-channel CCTV recorder kit solutions, prioritize the curated original 4/8/16-channel infographics
+            const isCctvMultiChannel = p.slug === 'multi-channel-cctv-dvr-nvr-recorder' || p.slug === 'network-video-recorders-nvr-dvr'
+            const productImages = (isCctvMultiChannel && Array.isArray(curatedImages) && curatedImages.length > 0)
+              ? curatedImages
+              : (Array.isArray(p.images) && p.images.length > 0 ? p.images : (curatedImages || []))
             const merged = mergeProductContentFields(p)
 
             return enrichProductWithVariants({
