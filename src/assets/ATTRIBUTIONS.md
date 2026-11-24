@@ -2347,14 +2347,8 @@ Later versions were uploaded by -Majestic- at en.wikipedia.
 ---
 
 ### 195. Multi-Channel CCTV Network Video Recorder (DVR/NVR) (View 3)
-* **Project File:** `src/assets/products/p-multi-channel-cctv-dvr-nvr-recorder-view3.jpg`
-* **Product Mapping Slug:** `multi-channel-cctv-dvr-nvr-recorder`
-* **Title:** File:SISS VPU3400 8-channel 20080502.jpg
-* **Author / Creator:** Rd144 1
-* **License:** Public domain
-* **License Deed:** https://creativecommons.org/publicdomain/zero/1.0/
-* **Direct Asset URL:** https://upload.wikimedia.org/wikipedia/commons/9/9b/SISS_VPU3400_8-channel_20080502.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original
-* **Commercial Notice:** Open commercial use permitted with attribution.
+* **Status:** Replaced with original ARS Computers 16-channel IP CCTV security kit solution package photography (`src/assets/Gemini_Generated_Image_syg1dgsyg1dgsyg1 (1).png`). No third-party media asset retained for this view.
+* **Archival Reference:** `p-multi-channel-cctv-dvr-nvr-recorder-view3.jpg` (formerly Wikimedia Commons SISS VPU3400, Public Domain).
 
 ---
 

@@ -57,7 +57,7 @@ const SECTION_DEFS = {
       },
       {
         title: 'Recorder Specifications',
-        fields: ['channels', 'recording_resolution', 'hdd_support', 'playback', 'video_output', 'network_interface']
+        fields: ['channels', 'recording_resolution', 'hdd_support', 'playback', 'video_output', 'network_interface', 'four_channel_specs', 'eight_channel_specs', 'sixteen_channel_specs']
       },
       {
         title: 'Pan / Tilt / Zoom',
@@ -207,6 +207,9 @@ export const SPEC_LABELS = {
   playback: 'Playback',
   video_output: 'Video Output',
   network_interface: 'Network Interface',
+  four_channel_specs: '4-Channel Tier Specifications',
+  eight_channel_specs: '8-Channel Tier Specifications',
+  sixteen_channel_specs: '16-Channel Tier Specifications',
   pan_range: 'Pan Range',
   tilt_range: 'Tilt Range',
   tracking: 'Motion Tracking',

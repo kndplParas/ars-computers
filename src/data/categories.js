@@ -207,9 +207,9 @@ export const CATEGORIES = [
         slug: 'multi-channel-cctv-dvr-nvr-recorder',
         name: 'Multi-Channel CCTV Network Video Recorder (DVR/NVR)',
         brand: null,
-        model: 'Multi-Channel Standalone Recorder',
-        spec: '4-Channel (H.264 1080p Real-Time), 8-Channel (IP NVR PoE Kit), and 16-Channel Options',
-        description: 'Standalone multi-channel CCTV surveillance video recorder (DVR/NVR) providing synchronous multi-camera recording across 4-channel, 8-channel, and 16-channel configurations, with specifications confirmed per quotation.',
+        model: 'Multi-Channel IP CCTV Security Kit Series',
+        spec: '4-Channel, 8-Channel, and 16-Channel Complete IP CCTV Security Solution Packages',
+        description: 'Complete multi-camera IP CCTV security solution packages featuring NVR recorders, multi-port PoE switches, indoor and outdoor IP cameras, 1TB surveillance storage, and full installation accessories across 4-channel, 8-channel, and 16-channel configurations.',
         isGeneric: true,
         images: PRODUCT_IMAGES['multi-channel-cctv-dvr-nvr-recorder'] || [],
         variantSelectorLabel: 'Select Channel Configuration',
@@ -217,23 +217,23 @@ export const CATEGORIES = [
         variants: [
           {
             id: '4-channel',
-            label: '4-Channel DVR',
-            name: '4-Channel Standalone CCTV DVR Recorder',
-            spec: '4-Channel Video Recording, H.264 Compression, 1080p Real-Time, Channel Status LEDs (CH1-CH4), Front USB',
+            label: '4 Channels',
+            name: '4 Camera IP CCTV Kit Complete Security Solution',
+            spec: '4-Channel NVR (4-Port PoE); Pictured Kit Components (Cameras, 1TB HDD, 4U Rack, Cabling & Accessories) Supplied per Quotation',
             imageIndex: 0
           },
           {
             id: '8-channel',
-            label: '8-Channel NVR',
-            name: '8-Channel IP CCTV NVR Security System',
-            spec: '8-Channel IP NVR with 8-Port PoE Switch; Pictured Kit Items (8 IP Cameras, 1TB WD HDD, 4U Rack, Cabling) Supplied per Quotation',
+            label: '8 Channels',
+            name: '8 Camera IP CCTV Kit Complete Security Solution',
+            spec: '8-Channel NVR (8-Port PoE); Pictured Kit Components (Cameras, 1TB HDD, 4U Rack, Cabling & Accessories) Supplied per Quotation',
             imageIndex: 1
           },
           {
             id: '16-channel',
-            label: '16-Channel DVR/NVR',
-            name: '16-Channel CCTV Network Video Recorder',
-            spec: '16-Channel Video Capacity — Configuration-Dependent (Exact model, inputs, and storage confirmed per quotation; illustrative image)',
+            label: '16 Channels',
+            name: '16 Camera IP CCTV Kit Complete Security Solution',
+            spec: '16-Channel NVR (16-Port PoE); Pictured Kit Components (Cameras, 1TB HDD, 4U Rack, Cabling & Accessories) Supplied per Quotation',
             imageIndex: 2
           }
         ]

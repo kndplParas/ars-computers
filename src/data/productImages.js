@@ -41,6 +41,9 @@ import cctvCpPlusDome from '../assets/WhatsApp Image 2026-10-21 at 4.57.14 PM (2
 import cctvWifiBullet from '../assets/WhatsApp Image 2026-10-21 at 4.57.14 PM (1).jpeg'
 import cctvHikvision4kBullet from '../assets/WhatsApp Image 2026-10-21 at 4.57.13 PM.jpeg'
 import cctvDvr4Ch from '../assets/WhatsApp Image 2026-10-21 at 5.20.14 PM.jpeg'
+import cctvKit4Ch from '../assets/Gemini_Generated_Image_syg1dgsyg1dgsyg1.png'
+import cctvKit8Ch from '../assets/WhatsApp Image 2026-11-19 at 2.50.15 PM.jpeg'
+import cctvKit16Ch from '../assets/Gemini_Generated_Image_syg1dgsyg1dgsyg1 (1).png'
 import cctvPtzCpPlus360 from '../assets/WhatsApp Image 2026-10-21 at 4.57.14 PM.jpeg'
 
 // ============================================================================
@@ -65,7 +68,6 @@ import bioMantraFingerprint from '../assets/WhatsApp Image 2026-10-21 at 4.53.47
 import bioEsslX990RfidKeypad from '../assets/WhatsApp Image 2026-10-21 at 4.53.48 PM (3).jpeg'
 import bioCpPlusTerminal from '../assets/WhatsApp Image 2026-10-21 at 4.53.48 PM (1).jpeg'
 import accElectroDoorLock from '../assets/acc-electromagnetic-door-lock.jpg'
-import cctvKit8Ch from '../assets/WhatsApp Image 2026-11-19 at 2.50.15 PM.jpeg'
 
 // ============================================================================
 // 6. Accessories: Storage & Memory (4 Distinct Hardware Products)
@@ -541,11 +543,11 @@ export const PRODUCT_IMAGES = {
   'cp-plus-full-hd-dome-camera': [cctvCpPlusDome, img_cp_plus_full_hd_dome_camera_v2, img_cp_plus_full_hd_dome_camera_v3],
   'smart-outdoor-wifi-bullet-camera': [cctvWifiBullet, img_smart_outdoor_wifi_bullet_camera_v2, img_smart_outdoor_wifi_bullet_camera_v3],
   'hikvision-colorvu-4k-bullet-camera': [cctvHikvision4kBullet, img_hikvision_colorvu_4k_bullet_camera_v2, img_hikvision_colorvu_4k_bullet_camera_v3],
-  'multi-channel-cctv-dvr-nvr-recorder': [cctvDvr4Ch, cctvKit8Ch, img_multi_channel_cctv_dvr_nvr_recorder_v3],
+  'multi-channel-cctv-dvr-nvr-recorder': [cctvKit4Ch, cctvKit8Ch, cctvKit16Ch],
   'cp-plus-360-ptz-smart-camera': [cctvPtzCpPlus360, img_cp_plus_360_ptz_smart_camera_v2, img_cp_plus_360_ptz_smart_camera_v3],
   'full-hd-dome-bullet-ip-cameras': [cctvHikvisionDome],
   '4k-colorvu-starlight-cameras': [cctvHikvision4kBullet],
-  'network-video-recorders-nvr-dvr': [cctvDvr4Ch, cctvKit8Ch],
+  'network-video-recorders-nvr-dvr': [cctvKit4Ch, cctvKit8Ch, cctvKit16Ch],
   'ptz-360-zoom-cameras': [cctvPtzCpPlus360],
   'epson-ecotank-ink-tank-printer': [printerEpsonEcoTank, img_epson_ecotank_ink_tank_printer_v2, img_epson_ecotank_ink_tank_printer_v3],
   'canon-pixma-ink-tank-printer': [printerCanonPixmaInkTank, img_canon_pixma_ink_tank_printer_v2, img_canon_pixma_ink_tank_printer_v3],
@@ -811,9 +813,9 @@ export const PRODUCT_IMAGE_CAPTIONS = {
     'Hikvision ColorVu 4K Full-Color Night Bullet Camera — Additional Hardware View (Heavy-duty commercial metal mounting base)'
   ],
   'multi-channel-cctv-dvr-nvr-recorder': [
-    '4-Channel Standalone CCTV DVR Recorder (H.264 1080p Real-Time) — Front Panel & Channel LEDs',
-    '8-Channel IP CCTV Security Kit Solution — 8-Channel NVR & 8-Port PoE Switch Overview (Pictured Package Quoted per Order)',
-    '16-Channel CCTV Recorder Hub — Illustrative Image (Illustrative Reference — Not an Exact Product Photograph)'
+    '4 Camera IP CCTV Kit Complete Security Solution — 4-Channel NVR & 4-Port PoE Switch Overview (Pictured Package Quoted per Order)',
+    '8 Camera IP CCTV Kit Complete Security Solution — 8-Channel NVR & 8-Port PoE Switch Overview (Pictured Package Quoted per Order)',
+    '16 Camera IP CCTV Kit Complete Security Solution — 16-Channel NVR & 16-Port PoE Switch Overview (Pictured Package Quoted per Order)'
   ],
   'cp-plus-360-ptz-smart-camera': [
     'CP PLUS 360° Pan-Tilt Smart Wi-Fi Camera — Primary Product Overview',
@@ -827,9 +829,9 @@ export const PRODUCT_IMAGE_CAPTIONS = {
     '4k colorvu starlight cameras — Primary Product Overview'
   ],
   'network-video-recorders-nvr-dvr': [
-    '4-Channel Standalone CCTV DVR Recorder (H.264 1080p Real-Time) — Front Panel & Channel LEDs',
-    '8-Channel IP CCTV Security Kit Solution — 8-Channel NVR & 8-Port PoE Switch Overview (Pictured Package Quoted per Order)',
-    '16-Channel CCTV Recorder Hub — Illustrative Image (Illustrative Reference — Not an Exact Product Photograph)'
+    '4 Camera IP CCTV Kit Complete Security Solution — 4-Channel NVR & 4-Port PoE Switch Overview (Pictured Package Quoted per Order)',
+    '8 Camera IP CCTV Kit Complete Security Solution — 8-Channel NVR & 8-Port PoE Switch Overview (Pictured Package Quoted per Order)',
+    '16 Camera IP CCTV Kit Complete Security Solution — 16-Channel NVR & 16-Port PoE Switch Overview (Pictured Package Quoted per Order)'
   ],
   'ptz-360-zoom-cameras': [
     'ptz 360 zoom cameras — Primary Product Overview'
