@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { fetchPublicCatalog, getInstantCatalog } from '../lib/catalog'
 import { CATEGORY_BACKGROUND_IMAGES } from '../data/categories'
+import serviceCustomPcImg from '../assets/Gemini_Generated_Image_qx3vpzqx3vpzqx3v.png'
+import serviceCctvImg from '../assets/Gemini_Generated_Image_t9ckf7t9ckf7t9ck.png'
+import serviceBiometricImg from '../assets/Gemini_Generated_Image_t9ckf7t9ckf7t9ck (1).png'
+import servicePrinterImg from '../assets/Gemini_Generated_Image_qx3vpzqx3vpzqx3v (4).png'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import CustomerServiceRequestForm from '../components/CustomerServiceRequestForm'
@@ -525,10 +529,11 @@ function CustomerHomePage() {
                       </div>
                     )}
                     <div className="category-card-image-overlay" aria-hidden="true" />
-                    <div className="card-top">
-                      <div className="card-icon">{category.icon}</div>
-                      <span className="card-badge">{category.badge}</span>
-                    </div>
+                    {category.badge && (
+                      <div className="card-top">
+                        <span className="card-badge">{category.badge}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="category-card-content">
                     <h4 className="card-title">
@@ -589,110 +594,150 @@ function CustomerHomePage() {
             <div id="service-panel-offerings" role="tabpanel" aria-labelledby="service-tab-offerings">
               <div className="services-grid">
                 <div className="service-card">
-                  <div className="service-icon">💻</div>
-                  <h4>Custom PC Assembly &amp; Upgrades</h4>
-                  <p>Tailored workstations and gaming rigs configured to your performance requirements. SSD, RAM, GPU, and cooling upgrades.</p>
-                  <ul className="service-features">
-                    <li>✓ Stress-tested thermal stability</li>
-                    <li>✓ Clean cable management</li>
-                    <li>✓ OS &amp; driver pre-configuration</li>
-                  </ul>
-                  <div className="service-card-actions">
-                    <button
-                      type="button"
-                      className="btn-primary service-action-btn"
-                      onClick={() => handleRaiseServiceCard('Desktop Computer')}
-                    >
-                      🛠️ Raise PC / Laptop Ticket
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-outline service-cta-btn"
-                      onClick={() => handleInquireCategory('service')}
-                    >
-                      General Enquiry →
-                    </button>
+                  <div className="service-card-image-wrap">
+                    <img
+                      src={serviceCustomPcImg}
+                      alt="Custom PC Assembly & Upgrades"
+                      className="service-card-image"
+                      loading="lazy"
+                    />
+                    <div className="service-card-image-overlay" aria-hidden="true" />
+                  </div>
+                  <div className="service-card-content">
+                    <h4>Custom PC Assembly &amp; Upgrades</h4>
+                    <p>Tailored workstations and gaming rigs configured to your performance requirements. SSD, RAM, GPU, and cooling upgrades.</p>
+                    <ul className="service-features">
+                      <li>✓ Stress-tested thermal stability</li>
+                      <li>✓ Clean cable management</li>
+                      <li>✓ OS &amp; driver pre-configuration</li>
+                    </ul>
+                    <div className="service-card-actions">
+                      <button
+                        type="button"
+                        className="btn-primary service-action-btn"
+                        onClick={() => handleRaiseServiceCard('Desktop Computer')}
+                      >
+                        🛠️ Raise PC / Laptop Ticket
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline service-cta-btn"
+                        onClick={() => handleInquireCategory('service')}
+                      >
+                        General Enquiry →
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="service-card">
-                  <div className="service-icon">📹</div>
-                  <h4>CCTV Surveillance Setup &amp; AMC</h4>
-                  <p>Turnkey security camera installations, NVR cabling, IP network configurations, and remote smartphone monitoring setup.</p>
-                  <ul className="service-features">
-                    <li>✓ Site survey &amp; blind-spot analysis</li>
-                    <li>✓ Weatherproof outdoor conduit piping</li>
-                    <li>✓ Mobile app remote streaming setup</li>
-                  </ul>
-                  <div className="service-card-actions">
-                    <button
-                      type="button"
-                      className="btn-primary service-action-btn"
-                      onClick={() => handleRaiseServiceCard('CCTV Camera')}
-                    >
-                      🛠️ Raise CCTV Service Ticket
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-outline service-cta-btn"
-                      onClick={() => handleInquireCategory('cctv')}
-                    >
-                      General Enquiry →
-                    </button>
+                  <div className="service-card-image-wrap">
+                    <img
+                      src={serviceCctvImg}
+                      alt="CCTV Surveillance Setup & AMC"
+                      className="service-card-image"
+                      loading="lazy"
+                    />
+                    <div className="service-card-image-overlay" aria-hidden="true" />
+                  </div>
+                  <div className="service-card-content">
+                    <h4>CCTV Surveillance Setup &amp; AMC</h4>
+                    <p>Turnkey security camera installations, NVR cabling, IP network configurations, and remote smartphone monitoring setup.</p>
+                    <ul className="service-features">
+                      <li>✓ Site survey &amp; blind-spot analysis</li>
+                      <li>✓ Weatherproof outdoor conduit piping</li>
+                      <li>✓ Mobile app remote streaming setup</li>
+                    </ul>
+                    <div className="service-card-actions">
+                      <button
+                        type="button"
+                        className="btn-primary service-action-btn"
+                        onClick={() => handleRaiseServiceCard('CCTV Camera')}
+                      >
+                        🛠️ Raise CCTV Service Ticket
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline service-cta-btn"
+                        onClick={() => handleInquireCategory('cctv')}
+                      >
+                        General Enquiry →
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="service-card">
-                  <div className="service-icon">🛡️</div>
-                  <h4>Biometric Machine &amp; Access Control</h4>
-                  <p>Attendance machine mounting, network integration, user enrollment, and seamless payroll/HR software synchronization.</p>
-                  <ul className="service-features">
-                    <li>✓ Facial &amp; fingerprint calibration</li>
-                    <li>✓ Automated daily attendance logs</li>
-                    <li>✓ Magnetic door lock integration</li>
-                  </ul>
-                  <div className="service-card-actions">
-                    <button
-                      type="button"
-                      className="btn-primary service-action-btn"
-                      onClick={() => handleRaiseServiceCard('Biometric / Access Control')}
-                    >
-                      🛠️ Raise Biometric Ticket
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-outline service-cta-btn"
-                      onClick={() => handleInquireCategory('biometric-machine')}
-                    >
-                      General Enquiry →
-                    </button>
+                  <div className="service-card-image-wrap">
+                    <img
+                      src={serviceBiometricImg}
+                      alt="Biometric Machine & Access Control"
+                      className="service-card-image"
+                      loading="lazy"
+                    />
+                    <div className="service-card-image-overlay" aria-hidden="true" />
+                  </div>
+                  <div className="service-card-content">
+                    <h4>Biometric Machine &amp; Access Control</h4>
+                    <p>Attendance machine mounting, network integration, user enrollment, and seamless payroll/HR software synchronization.</p>
+                    <ul className="service-features">
+                      <li>✓ Facial &amp; fingerprint calibration</li>
+                      <li>✓ Automated daily attendance logs</li>
+                      <li>✓ Magnetic door lock integration</li>
+                    </ul>
+                    <div className="service-card-actions">
+                      <button
+                        type="button"
+                        className="btn-primary service-action-btn"
+                        onClick={() => handleRaiseServiceCard('Biometric / Access Control')}
+                      >
+                        🛠️ Raise Biometric Ticket
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline service-cta-btn"
+                        onClick={() => handleInquireCategory('biometric-machine')}
+                      >
+                        General Enquiry →
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="service-card">
-                  <div className="service-icon">🖨️</div>
-                  <h4>Printer Care, Refills &amp; Servicing</h4>
-                  <p>Precision laser printer repair, paper jam resolution, printhead unclogging, and genuine cartridge refilling services.</p>
-                  <ul className="service-features">
-                    <li>✓ High-density smudge-free toner</li>
-                    <li>✓ Roller &amp; fuser replacement</li>
-                    <li>✓ Preventive maintenance visits</li>
-                  </ul>
-                  <div className="service-card-actions">
-                    <button
-                      type="button"
-                      className="btn-primary service-action-btn"
-                      onClick={() => handleRaiseServiceCard('Printer / Peripheral')}
-                    >
-                      🛠️ Raise Printer Ticket
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-outline service-cta-btn"
-                      onClick={() => handleInquireCategory('printer')}
-                    >
-                      General Enquiry →
-                    </button>
+                  <div className="service-card-image-wrap">
+                    <img
+                      src={servicePrinterImg}
+                      alt="Printer Care, Refills & Servicing"
+                      className="service-card-image"
+                      loading="lazy"
+                    />
+                    <div className="service-card-image-overlay" aria-hidden="true" />
+                  </div>
+                  <div className="service-card-content">
+                    <h4>Printer Care, Refills &amp; Servicing</h4>
+                    <p>Precision laser printer repair, paper jam resolution, printhead unclogging, and genuine cartridge refilling services.</p>
+                    <ul className="service-features">
+                      <li>✓ High-density smudge-free toner</li>
+                      <li>✓ Roller &amp; fuser replacement</li>
+                      <li>✓ Preventive maintenance visits</li>
+                    </ul>
+                    <div className="service-card-actions">
+                      <button
+                        type="button"
+                        className="btn-primary service-action-btn"
+                        onClick={() => handleRaiseServiceCard('Printer / Peripheral')}
+                      >
+                        🛠️ Raise Printer Ticket
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline service-cta-btn"
+                        onClick={() => handleInquireCategory('printer')}
+                      >
+                        General Enquiry →
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
