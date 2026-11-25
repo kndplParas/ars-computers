@@ -162,6 +162,32 @@ export default {
       })
     }
 
+    // Route: /assets/* — ensure static assets return directly from ASSETS,
+    // but missing static files (JS, CSS, images, fonts) return a true 404 rather than SPA index.html fallback
+    if (url.pathname.startsWith('/assets/')) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response(null, { status: 405, headers: { 'Allow': 'GET, HEAD' } })
+      }
+
+      const assetResponse = await env.ASSETS.fetch(request)
+      const contentType = assetResponse.headers.get('content-type') || ''
+      const isStaticFilePattern = /\.(js|css|png|jpg|jpeg|webp|svg|gif|ico|woff|woff2|ttf|eot|map|json)$/i.test(url.pathname)
+
+      if (isStaticFilePattern && (contentType.includes('text/html') || assetResponse.status === 404)) {
+        const body = request.method === 'HEAD' ? null : 'Asset not found in current deployment'
+        return new Response(body, {
+          status: 404,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-Asset-Missing': 'true'
+          }
+        })
+      }
+
+      return assetResponse
+    }
+
     // Delegate all other requests (static assets, client-side SPA routing, other paths) to ASSETS binding
     return env.ASSETS.fetch(request)
   },
