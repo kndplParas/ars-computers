@@ -1227,6 +1227,204 @@ export function AdminDataProvider({ children }) {
     [isLiveDatabase, adminUser]
   )
 
+  // 2b. Update Complete Enquiry Details (Authorized staff with Head-Person review protections)
+  const updateEnquiryDetails = useCallback(
+    async ({
+      enquiryId,
+      customer_name,
+      customer_phone,
+      customer_email,
+      company,
+      customer_address,
+      category_interest,
+      enquiry_type,
+      service_requested,
+      message,
+      admin_notes,
+      service_details,
+      edit_summary,
+      cleared_fields = []
+    }) => {
+      const role = (adminUser?.role || '').toLowerCase()
+      const isSuperadmin = role === 'superadmin'
+      const CAN_EDIT_ENQUIRY_ROLES = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account']
+
+      if (!CAN_EDIT_ENQUIRY_ROLES.includes(role)) {
+        throw new Error('Access denied: Enquiry editing is restricted to authorized administrative staff.')
+      }
+
+      const effectiveClearedFields = Array.isArray(cleared_fields) ? [...cleared_fields] : []
+      if (customer_email === '' && !effectiveClearedFields.includes('customer_email')) effectiveClearedFields.push('customer_email')
+      if (company === '' && !effectiveClearedFields.includes('company')) effectiveClearedFields.push('company')
+      if (customer_address === '' && !effectiveClearedFields.includes('customer_address')) effectiveClearedFields.push('customer_address')
+      if (service_requested === '' && !effectiveClearedFields.includes('service_requested')) effectiveClearedFields.push('service_requested')
+      if (admin_notes === '' && !effectiveClearedFields.includes('admin_notes')) effectiveClearedFields.push('admin_notes')
+
+      if (isLiveDatabase) {
+        if (!supabase) throw new Error('Supabase client is not available.')
+
+        const { data, error } = await supabase.rpc('update_enquiry_details', {
+          p_enquiry_id: enquiryId,
+          p_customer_name: customer_name !== undefined ? customer_name : null,
+          p_customer_phone: customer_phone !== undefined ? customer_phone : null,
+          p_customer_email: customer_email !== undefined ? customer_email : null,
+          p_company: company !== undefined ? company : null,
+          p_customer_address: customer_address !== undefined ? customer_address : null,
+          p_category_interest: category_interest !== undefined ? category_interest : null,
+          p_enquiry_type: enquiry_type !== undefined ? enquiry_type : null,
+          p_service_requested: service_requested !== undefined ? service_requested : null,
+          p_message: message !== undefined ? message : null,
+          p_admin_notes: admin_notes !== undefined ? admin_notes : null,
+          p_service_details: service_details !== undefined ? service_details : null,
+          p_edit_summary: edit_summary || null,
+          p_cleared_fields: effectiveClearedFields
+        })
+
+        if (error) throw error
+
+        await loadAdminEnquiries()
+        return data
+      }
+
+      // Demo Mode
+      const target = demoEnquiries.find((e) => e.id === enquiryId)
+      if (!target) throw new Error('Enquiry not found.')
+      if (target.is_in_bin || target.status === 'in_bin') {
+        throw new Error('Cannot edit an enquiry currently in the Bin.')
+      }
+      if (target.is_removed) {
+        throw new Error('Cannot edit a removed enquiry record.')
+      }
+      const isApproved = Boolean(target.completion_approved_at || target.status === 'completed')
+      if (isApproved && !isSuperadmin) {
+        throw new Error('Enquiry completion has already been approved by Head Admin. Editing completed records is strictly restricted to Head-Person.')
+      }
+      if ((target.status === 'rejected' || target.status === 'closed') && !isSuperadmin) {
+        throw new Error('Editing closed or rejected enquiries is restricted to Head-Person (Super Admin).')
+      }
+
+      // Compute field delta
+      const changedFields = []
+      const updatedFields = {}
+
+      if (customer_name !== undefined && customer_name !== (target.customer_name || target.name)) {
+        changedFields.push('customer_name')
+        updatedFields.name = customer_name
+        updatedFields.customer_name = customer_name
+      }
+      if (customer_phone !== undefined && customer_phone !== (target.customer_phone || target.phone)) {
+        changedFields.push('customer_phone')
+        updatedFields.phone = customer_phone
+        updatedFields.customer_phone = customer_phone
+      }
+      if (effectiveClearedFields.includes('customer_email') || (customer_email !== undefined && customer_email !== target.customer_email)) {
+        const finalVal = effectiveClearedFields.includes('customer_email') ? null : customer_email
+        if (finalVal !== target.customer_email) {
+          changedFields.push('customer_email')
+          updatedFields.email = finalVal
+          updatedFields.customer_email = finalVal
+        }
+      }
+      if (effectiveClearedFields.includes('company') || (company !== undefined && company !== target.company)) {
+        const finalVal = effectiveClearedFields.includes('company') ? null : company
+        if (finalVal !== target.company) {
+          changedFields.push('company')
+          updatedFields.company = finalVal
+        }
+      }
+      if (effectiveClearedFields.includes('customer_address') || (customer_address !== undefined && customer_address !== (target.customer_address || target.address))) {
+        const finalVal = effectiveClearedFields.includes('customer_address') ? null : customer_address
+        if (finalVal !== (target.customer_address || target.address)) {
+          changedFields.push('customer_address')
+          updatedFields.address = finalVal
+          updatedFields.customer_address = finalVal
+        }
+      }
+      if (category_interest !== undefined && category_interest !== target.category_interest) {
+        changedFields.push('category_interest')
+        updatedFields.category_interest = category_interest
+      }
+      if (enquiry_type !== undefined && enquiry_type !== target.enquiry_type) {
+        changedFields.push('enquiry_type')
+        updatedFields.enquiry_type = enquiry_type
+      }
+      if (effectiveClearedFields.includes('service_requested') || (service_requested !== undefined && service_requested !== target.service_requested)) {
+        const finalVal = effectiveClearedFields.includes('service_requested') ? null : service_requested
+        if (finalVal !== target.service_requested) {
+          changedFields.push('service_requested')
+          updatedFields.service_requested = finalVal
+        }
+      }
+      if (message !== undefined && message !== target.message) {
+        changedFields.push('message')
+        updatedFields.message = message
+      }
+      if (effectiveClearedFields.includes('admin_notes') || (admin_notes !== undefined && admin_notes !== target.admin_notes)) {
+        const finalVal = effectiveClearedFields.includes('admin_notes') ? null : admin_notes
+        if (finalVal !== target.admin_notes) {
+          changedFields.push('admin_notes')
+          updatedFields.admin_notes = finalVal
+        }
+      }
+      if (service_details !== undefined) {
+        const mergedSd = { ...(target.service_details || {}), ...service_details }
+        changedFields.push('service_details')
+        updatedFields.service_details = mergedSd
+      }
+
+      if (changedFields.length === 0) {
+        return { success: true, enquiry_id: enquiryId, changed_fields: [], message: 'No changes detected.' }
+      }
+
+      // Contact info sync
+      const finalPhone = updatedFields.customer_phone || target.customer_phone || target.phone || ''
+      const finalEmail = updatedFields.customer_email || target.customer_email || target.email || ''
+      if (finalPhone && finalEmail) {
+        updatedFields.contact_info = `${finalPhone} | ${finalEmail}`
+      } else if (finalPhone) {
+        updatedFields.contact_info = finalPhone
+      } else if (finalEmail) {
+        updatedFields.contact_info = finalEmail
+      }
+
+      updatedFields.updated_at = new Date().toISOString()
+
+      // Record activity
+      const activitySummary = edit_summary || `Enquiry details updated by ${adminUser?.name || adminUser?.full_name || 'Staff'} (${changedFields.join(', ')})`
+      const newActivity = {
+        id: crypto.randomUUID(),
+        enquiry_id: enquiryId,
+        actor_id: adminUser?.id || null,
+        actor_email: adminUser?.email || null,
+        actor_role: adminUser?.role || 'staff',
+        activity_type: 'note',
+        content: activitySummary,
+        metadata: {
+          action: 'ENQUIRY_DETAILS_EDITED',
+          changed_fields: changedFields,
+          is_privileged_correction: (isApproved && isSuperadmin)
+        },
+        created_at: new Date().toISOString()
+      }
+
+      setDemoEnquiries((prev) =>
+        prev.map((e) => (e.id === enquiryId ? { ...e, ...updatedFields } : e))
+      )
+
+      return {
+        success: true,
+        enquiry_id: enquiryId,
+        changed_fields: changedFields,
+        activity: newActivity,
+        is_privileged_correction: (isApproved && isSuperadmin),
+        message: isApproved && isSuperadmin
+          ? 'Superadministrator privileged correction saved and recorded in audit log.'
+          : 'Enquiry details updated successfully.'
+      }
+    },
+    [adminUser, isLiveDatabase, demoEnquiries, loadAdminEnquiries]
+  )
+
   // Customer-facing tracking status (separate from the internal Head-approved workflow)
   const updateCustomerTrackingStatus = useCallback(
     async (enquiryId, trackingStatus) => {
@@ -4285,6 +4483,7 @@ export function AdminDataProvider({ children }) {
     deleteEnquiry,
     addEnquiryNote,
     updateEnquiryProgress,
+    updateEnquiryDetails,
     updateCustomerTrackingStatus,
     updateCustomerVisitDetails,
     fetchCustomerTrackingHistory,

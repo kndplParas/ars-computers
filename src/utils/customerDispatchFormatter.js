@@ -405,12 +405,14 @@ export function buildUnifiedTimeline(customerTrackingHistory = [], enquiryActivi
     const isBinPurged = act.activity_type === 'bin_purged'
     const isArchive = act.activity_type === 'archived' || act.activity_type === 'restored'
     const isAssign = act.activity_type === 'assigned' || act.activity_type === 'reassigned' || act.activity_type === 'unassigned'
+    const isDetailsEdit = act.metadata?.action === 'ENQUIRY_DETAILS_EDITED' || act.activity_type === 'details_updated'
 
     let icon = '📝'
     let badgeColor = '#475569'
     let badgeBg = '#f1f5f9'
 
-    if (isSystem) { icon = '🌐'; badgeColor = '#0284c7'; badgeBg = '#e0f2fe' }
+    if (isDetailsEdit) { icon = '✏️'; badgeColor = '#2563eb'; badgeBg = '#eff6ff' }
+    else if (isSystem) { icon = '🌐'; badgeColor = '#0284c7'; badgeBg = '#e0f2fe' }
     else if (isStatus) { icon = '🔄'; badgeColor = '#16a34a'; badgeBg = '#dcfce7' }
     else if (isAssign) { icon = '👤'; badgeColor = '#2563eb'; badgeBg = '#dbeafe' }
     else if (isRejectionReq) { icon = '⚠️'; badgeColor = '#d97706'; badgeBg = '#fef3c7' }

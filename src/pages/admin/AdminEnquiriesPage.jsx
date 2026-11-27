@@ -6,12 +6,10 @@ import { useAdminData } from '../../context/adminDataContext'
 import { useAdminAuth } from '../../context/adminAuthContext'
 import { classifyEnquiry, getISTCalendarDate } from '../../utils/enquiryClassification'
 import { parseServiceEnquiry } from '../../utils/serviceEnquiryHelper'
-import { formatAadhaarDisplay } from '../../utils/aadhaarFormatter'
 import { formatJobDispatchText, buildWhatsAppDispatchUrl } from '../../utils/jobDispatchFormatter'
 import {
   formatEnquiryCustomerDispatch,
   formatEnquiryDetailsForCopy,
-  formatCompleteEnquiryDetails,
   buildUnifiedTimeline,
   buildCustomerWhatsAppUrl,
   buildCustomerEmailSubject,
@@ -21,6 +19,8 @@ import {
 } from '../../utils/customerDispatchFormatter'
 import CustomerEmailModal from '../../components/admin/CustomerEmailModal'
 import CreateEnquiryModal from '../../components/admin/CreateEnquiryModal'
+import { normalizeIndianPhone10Digit } from '../../utils/customerCrmAggregator'
+import { SERVICE_CATEGORY_GROUPS } from '../../data/mockServiceRequests'
 import {
   downloadMonthlyEnquiriesExcel,
   exportLiveRegisterViewToExcel,
@@ -146,7 +146,8 @@ export default function AdminEnquiriesPage() {
     getEnquiryServiceProofSignedUrl,
     voidEnquiryServiceProof,
     removeCurrentMonthEnquiry,
-    restoreRemovedEnquiry
+    restoreRemovedEnquiry,
+    updateEnquiryDetails
   } = useAdminData()
 
   // Phase 1: 4 Primary Workflow Sections ('new', 'my_enquiries', 'action_required', 'completed') + Admin Maintenance ('bin', 'removed')
@@ -184,6 +185,12 @@ export default function AdminEnquiriesPage() {
 
   // Modals & Panels State
   const [selectedEnquiry, setSelectedEnquiry] = useState(null)
+  const [isEditingEnquiry, setIsEditingEnquiry] = useState(false)
+  const [editingField, setEditingField] = useState(null) // 'all' or specific field key e.g. 'customer_name'
+  const [editFormData, setEditFormData] = useState({})
+  const [editFormErrors, setEditFormErrors] = useState({})
+  const [editSummaryNote, setEditSummaryNote] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [isCreateEnquiryModalOpen, setIsCreateEnquiryModalOpen] = useState(false)
   const [isCustomerEmailModalOpen, setIsCustomerEmailModalOpen] = useState(false)
   const [statusConfirmTarget, setStatusConfirmTarget] = useState(null) // { enquiry, nextStatus }
@@ -737,6 +744,12 @@ export default function AdminEnquiriesPage() {
 
   const handleCloseDetails = () => {
     setSelectedEnquiry(null)
+    setIsEditingEnquiry(false)
+    setEditingField(null)
+    setEditFormData({})
+    setEditFormErrors({})
+    setEditSummaryNote('')
+    setIsSavingEdit(false)
     setTrackingDraft('received')
     setHasVisitDetailChanges(false)
     setEditingNotes('')
@@ -1810,6 +1823,237 @@ export default function AdminEnquiriesPage() {
       if (loadAdminEnquiries) await loadAdminEnquiries()
     } catch (err) {
       showNotification(`Failed to save notes: ${err.message}`, 'error')
+    }
+  }
+
+  // Complete Enquiry Editing Handlers
+  const populateEditFormData = (enq) => {
+    if (!enq) return {}
+    const sd = enq.service_details || {}
+    return {
+      customer_name: enq.customer_name || enq.name || '',
+      customer_phone: enq.customer_phone || enq.phone || (enq.contact_info && !enq.contact_info.includes('@') ? enq.contact_info.trim() : ''),
+      customer_email: enq.customer_email || enq.email || (enq.contact_info && enq.contact_info.includes('@') ? enq.contact_info.trim() : ''),
+      company: enq.company || '',
+      customer_address: enq.customer_address || enq.address || '',
+      category_interest: enq.category_interest || 'General / Other',
+      enquiry_type: enq.enquiry_type || 'general',
+      service_requested: enq.service_requested || '',
+      message: enq.message || '',
+      admin_notes: enq.admin_notes || '',
+      customer_type: sd.customer_type || 'Individual',
+      product_category: sd.product_category || '',
+      request_type: sd.request_type || 'On-site Service',
+      brand: sd.brand || '',
+      model_number: sd.model_number || '',
+      serial_number: sd.serial_number || '',
+      invoice_number: sd.invoice_number || '',
+      purchase_date: sd.purchase_date || '',
+      service_location: sd.service_location || 'In-shop',
+      site_address: sd.site_address || '',
+      preferred_visit_date: sd.preferred_visit_date || '',
+      diagnostics: sd.diagnostics || (typeof sd.device_details === 'object' && sd.device_details ? Object.keys(sd.device_details).filter((k) => sd.device_details[k] === true).map((k) => k.replace(/^issue_/, '').replace(/_/g, ' ')).join(', ') : '')
+    }
+  }
+
+  const handleStartEdit = (field = 'all') => {
+    if (!selectedEnquiry) return
+    const initialData = populateEditFormData(selectedEnquiry)
+    setEditFormData(initialData)
+    setEditFormErrors({})
+    setEditingField(field)
+    setIsEditingEnquiry(true)
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditingEnquiry(false)
+    setEditingField(null)
+    setEditFormData({})
+    setEditFormErrors({})
+    setEditSummaryNote('')
+  }
+
+  const handleEditFieldChange = (key, val) => {
+    setEditFormData((prev) => ({ ...prev, [key]: val }))
+    if (editFormErrors[key]) {
+      setEditFormErrors((prev) => {
+        const copy = { ...prev }
+        delete copy[key]
+        return copy
+      })
+    }
+  }
+
+  const handleSaveEdit = async (fieldToSave = null) => {
+    if (!selectedEnquiry) return
+    const errors = {}
+
+    // Validation
+    if (!fieldToSave || fieldToSave === 'customer_name') {
+      const nameVal = (editFormData.customer_name || '').trim()
+      if (!nameVal || nameVal.length < 2) {
+        errors.customer_name = 'Customer Name must be at least 2 characters.'
+      }
+    }
+
+    if (!fieldToSave || fieldToSave === 'customer_phone') {
+      const rawPhoneVal = (editFormData.customer_phone || '').trim()
+      if (rawPhoneVal) {
+        const normalizedPhone = normalizeIndianPhone10Digit(rawPhoneVal)
+        if (!normalizedPhone) {
+          errors.customer_phone = 'Phone must be a valid 10-digit Indian mobile number.'
+        }
+      }
+    }
+
+    if (!fieldToSave || fieldToSave === 'customer_email') {
+      const emailVal = (editFormData.customer_email || '').trim()
+      if (emailVal && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(emailVal)) {
+        errors.customer_email = 'Invalid email address format.'
+      }
+    }
+
+    if (!fieldToSave || fieldToSave === 'message') {
+      const messageVal = (editFormData.message || '').trim()
+      if (messageVal && messageVal.length < 3) {
+        errors.message = 'Problem description / message must be at least 3 characters.'
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditFormErrors(errors)
+      return
+    }
+
+    setIsSavingEdit(true)
+    try {
+      const payload = {
+        enquiryId: selectedEnquiry.id,
+        edit_summary: editSummaryNote ? editSummaryNote.trim() : null
+      }
+
+      if (!fieldToSave || fieldToSave === 'customer_name') {
+        payload.customer_name = editFormData.customer_name.trim()
+      }
+      if (!fieldToSave || fieldToSave === 'customer_phone') {
+        const p = (editFormData.customer_phone || '').trim()
+        payload.customer_phone = p ? normalizeIndianPhone10Digit(p) : ''
+      }
+      const clearedList = []
+      if (!fieldToSave || fieldToSave === 'customer_email') {
+        const emailTrim = (editFormData.customer_email || '').trim()
+        payload.customer_email = emailTrim
+        if (!emailTrim) clearedList.push('customer_email')
+      }
+      if (!fieldToSave || fieldToSave === 'company') {
+        const compTrim = (editFormData.company || '').trim()
+        payload.company = compTrim
+        if (!compTrim) clearedList.push('company')
+      }
+      if (!fieldToSave || fieldToSave === 'customer_address') {
+        const addrTrim = (editFormData.customer_address || '').trim()
+        payload.customer_address = addrTrim
+        if (!addrTrim) clearedList.push('customer_address')
+      }
+      if (!fieldToSave || fieldToSave === 'category_interest') {
+        payload.category_interest = editFormData.category_interest
+      }
+      if (!fieldToSave || fieldToSave === 'enquiry_type') {
+        payload.enquiry_type = editFormData.enquiry_type
+      }
+      if (!fieldToSave || fieldToSave === 'service_requested') {
+        const reqTrim = (editFormData.service_requested || '').trim()
+        payload.service_requested = reqTrim
+        if (!reqTrim) clearedList.push('service_requested')
+      }
+      if (!fieldToSave || fieldToSave === 'message') {
+        payload.message = (editFormData.message || '').trim()
+      }
+      if (!fieldToSave || fieldToSave === 'admin_notes') {
+        const notesTrim = (editFormData.admin_notes || '').trim()
+        payload.admin_notes = notesTrim
+        if (!notesTrim) clearedList.push('admin_notes')
+      }
+      payload.cleared_fields = clearedList
+
+      const isServiceField = fieldToSave && [
+        'customer_type', 'product_category', 'request_type', 'brand',
+        'model_number', 'serial_number', 'invoice_number', 'purchase_date',
+        'service_location', 'site_address', 'preferred_visit_date', 'diagnostics'
+      ].includes(fieldToSave)
+
+      if (!fieldToSave || isServiceField) {
+        payload.service_details = {
+          ...(selectedEnquiry.service_details || {}),
+          customer_type: editFormData.customer_type,
+          product_category: editFormData.product_category,
+          request_type: editFormData.request_type,
+          brand: editFormData.brand,
+          model_number: editFormData.model_number,
+          serial_number: editFormData.serial_number,
+          invoice_number: editFormData.invoice_number,
+          purchase_date: editFormData.purchase_date,
+          service_location: editFormData.service_location,
+          site_address: editFormData.site_address,
+          preferred_visit_date: editFormData.preferred_visit_date,
+          diagnostics: editFormData.diagnostics
+        }
+      }
+
+      const res = await updateEnquiryDetails(payload)
+
+      setSelectedEnquiry((prev) => {
+        if (!prev) return null
+        const updated = { ...prev }
+        if (payload.customer_name !== undefined) {
+          updated.customer_name = payload.customer_name
+          updated.name = payload.customer_name
+        }
+        if (payload.customer_phone !== undefined) {
+          updated.customer_phone = payload.customer_phone
+          updated.phone = payload.customer_phone
+        }
+        if (payload.customer_email !== undefined) {
+          updated.customer_email = payload.customer_email
+          updated.email = payload.customer_email
+        }
+        if (payload.company !== undefined) updated.company = payload.company
+        if (payload.customer_address !== undefined) {
+          updated.customer_address = payload.customer_address
+          updated.address = payload.customer_address
+        }
+        if (payload.category_interest !== undefined) updated.category_interest = payload.category_interest
+        if (payload.enquiry_type !== undefined) updated.enquiry_type = payload.enquiry_type
+        if (payload.service_requested !== undefined) updated.service_requested = payload.service_requested
+        if (payload.message !== undefined) updated.message = payload.message
+        if (payload.admin_notes !== undefined) updated.admin_notes = payload.admin_notes
+        if (payload.service_details !== undefined) updated.service_details = payload.service_details
+
+        const p = updated.customer_phone || updated.phone || ''
+        const em = updated.customer_email || updated.email || ''
+        if (p && em) updated.contact_info = `${p} | ${em}`
+        else if (p) updated.contact_info = p
+        else if (em) updated.contact_info = em
+
+        return updated
+      })
+
+      showNotification(res?.message || 'Enquiry details updated successfully.')
+
+      if (reloadActivities) {
+        await reloadActivities(selectedEnquiry.id)
+      }
+
+      setIsEditingEnquiry(false)
+      setEditingField(null)
+      setEditFormData({})
+      setEditFormErrors({})
+      setEditSummaryNote('')
+    } catch (err) {
+      console.error('Failed to update enquiry details:', err)
+      showNotification(`Failed to save enquiry changes: ${err.message}`, 'error')
+    } finally {
+      setIsSavingEdit(false)
     }
   }
 
@@ -3586,6 +3830,18 @@ export default function AdminEnquiriesPage() {
           (isSuperadmin || (isEmployee && selectedEnquiry.assigned_employee_id === adminUser?.id))
         )
 
+        const role = (adminUser?.role || '').toLowerCase()
+        const isAuthorizedRole = ['superadmin', 'admin', 'technical', 'engineer', 'hr', 'account'].includes(role)
+        const isApprovedRecord = Boolean(selectedEnquiry.completion_approved_at || selectedEnquiry.status === 'completed')
+        const isClosedOrRejected = selectedEnquiry.status === 'rejected' || selectedEnquiry.status === 'closed'
+        const isInBinOrRemoved = Boolean(selectedEnquiry.is_in_bin || selectedEnquiry.status === 'in_bin' || selectedEnquiry.is_removed)
+
+        const canUserEditEnquiry = Boolean(
+          isAuthorizedRole &&
+          !isInBinOrRemoved &&
+          (isSuperadmin || (!isApprovedRecord && !isClosedOrRejected))
+        )
+
         // Step 2: Unified Chronological Timeline (Tracking Events + Internal Activities)
         const unifiedTimeline = buildUnifiedTimeline(customerTrackingHistory, enquiryActivities)
 
@@ -3633,17 +3889,62 @@ export default function AdminEnquiriesPage() {
                     Submitted on {formatDateTime(selectedEnquiry.created_at)}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="modal-close-btn"
-                  onClick={handleCloseDetails}
-                  aria-label="Close modal"
-                >
-                  ✕
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {canUserEditEnquiry && !isEditingEnquiry && (
+                    <button
+                      type="button"
+                      id="start-edit-enquiry-btn"
+                      className="btn-outline btn-sm"
+                      onClick={() => handleStartEdit('all')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        borderColor: '#2563eb',
+                        color: '#2563eb',
+                        fontSize: '0.82rem',
+                        padding: '5px 12px',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        background: '#eff6ff',
+                        cursor: 'pointer'
+                      }}
+                      title="Edit all enquiry details"
+                    >
+                      <span>✏️</span> Edit Enquiry
+                    </button>
+                  )}
+                  {isEditingEnquiry && editingField === 'all' && (
+                    <span style={{ fontSize: '0.8rem', background: '#dbeafe', color: '#1e40af', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>
+                      ✏️ Editing All Fields
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={handleCloseDetails}
+                    aria-label="Close modal"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
               <div className="admin-modal-body enquiry-modal-body" style={{ padding: '16px 20px' }}>
+                {/* Privileged Head-Person Correction Banner */}
+                {canUserEditEnquiry && isSuperadmin && (isApprovedRecord || isClosedOrRejected) && (
+                  <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', padding: '10px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '1.2rem' }}>🛡️</span>
+                    <div>
+                      <strong style={{ fontSize: '0.86rem', color: '#92400e', display: 'block' }}>
+                        Head-Person Privileged Correction
+                      </strong>
+                      <span style={{ fontSize: '0.78rem', color: '#78350f' }}>
+                        You are modifying a {isApprovedRecord ? 'completed/approved' : 'closed/rejected'} record. All field modifications are permanently recorded in the immutable audit log.
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {/* Contextual Status Alerts: Only Shown When Applicable */}
 
                 {/* Soft-Removed Notice */}
@@ -4052,137 +4353,820 @@ export default function AdminEnquiriesPage() {
                 {/* Section A & B: Customer Details & Enquiry Details Card */}
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px 16px', marginBottom: '14px' }}>
                   <div className="enquiry-info-grid" style={{ marginBottom: '12px' }}>
+                    {/* 1. Customer Name */}
                     <div className="info-block">
-                      <span className="info-label">Customer Name</span>
-                      <strong className="info-val">{customerName}</strong>
-                    </div>
-
-                    {companyName && (
-                      <div className="info-block">
-                        <span className="info-label">Company</span>
-                        <strong className="info-val">{companyName}</strong>
-                      </div>
-                    )}
-
-                    {phone && (
-                      <div className="info-block">
-                        <span className="info-label">Phone</span>
-                        <a href={`tel:${phone}`} className="info-val-link">{phone}</a>
-                      </div>
-                    )}
-
-                    {email && (
-                      <div className="info-block">
-                        <span className="info-label">Email</span>
-                        <a href={`mailto:${email}`} className="info-val-link">{email}</a>
-                      </div>
-                    )}
-
-                    <div className="info-block">
-                      <span className="info-label">Requirement</span>
-                      <span className="info-val" style={{ fontWeight: 600, color: '#1e293b' }}>{requirement}</span>
-                    </div>
-
-                  </div>
-
-                  {(() => {
-                    const sm = parseServiceEnquiry(selectedEnquiry)
-                    if (!sm.isService) return null
-                    return (
-                      <div className="service-spec-panel">
-                        <div className="service-spec-title">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="service-repair-badge">🛠️ Service / Repair Enquiry</span>
-                            {sm.ticketNumber && (
-                              <span className="service-ticket-tag">{sm.ticketNumber}</span>
-                            )}
-                          </div>
-                          {sm.customerType && (
-                            <span style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>
-                              {sm.customerType} Client
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Customer Name <span style={{ color: '#ef4444' }}>*</span></span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('customer_name')}
+                            title="Edit Customer Name"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'customer_name' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'customer_name' || editingField === 'all') ? (
+                        <div>
+                          <input
+                            type="text"
+                            className="admin-input"
+                            value={editFormData.customer_name ?? ''}
+                            onChange={(e) => handleEditFieldChange('customer_name', e.target.value)}
+                            placeholder="Enter customer name"
+                            style={{ width: '100%', fontSize: '0.9rem', marginTop: '4px', borderColor: editFormErrors.customer_name ? '#ef4444' : undefined }}
+                          />
+                          {editFormErrors.customer_name && (
+                            <span style={{ color: '#ef4444', fontSize: '0.75rem', display: 'block', marginTop: '2px' }}>
+                              {editFormErrors.customer_name}
                             </span>
                           )}
+                          {editingField === 'customer_name' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('customer_name')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <strong className="info-val">{customerName}</strong>
+                      )}
+                    </div>
+
+                    {/* 2. Company */}
+                    <div className="info-block">
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Company / Organization</span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('company')}
+                            title="Edit Company"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'company' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'company' || editingField === 'all') ? (
+                        <div>
+                          <input
+                            type="text"
+                            className="admin-input"
+                            value={editFormData.company ?? ''}
+                            onChange={(e) => handleEditFieldChange('company', e.target.value)}
+                            placeholder="Optional company name"
+                            style={{ width: '100%', fontSize: '0.9rem', marginTop: '4px' }}
+                          />
+                          {editingField === 'company' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('company')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <strong className="info-val">{companyName || '—'}</strong>
+                      )}
+                    </div>
+
+                    {/* 3. Phone */}
+                    <div className="info-block">
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Phone / Mobile</span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('customer_phone')}
+                            title="Edit Phone"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'customer_phone' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'customer_phone' || editingField === 'all') ? (
+                        <div>
+                          <input
+                            type="tel"
+                            className="admin-input"
+                            value={editFormData.customer_phone ?? ''}
+                            onChange={(e) => handleEditFieldChange('customer_phone', e.target.value)}
+                            placeholder="10-digit Indian mobile"
+                            style={{ width: '100%', fontSize: '0.9rem', marginTop: '4px', borderColor: editFormErrors.customer_phone ? '#ef4444' : undefined }}
+                          />
+                          {editFormErrors.customer_phone && (
+                            <span style={{ color: '#ef4444', fontSize: '0.75rem', display: 'block', marginTop: '2px' }}>
+                              {editFormErrors.customer_phone}
+                            </span>
+                          )}
+                          {editingField === 'customer_phone' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('customer_phone')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : phone ? (
+                        <a href={`tel:${phone}`} className="info-val-link">{phone}</a>
+                      ) : (
+                        <strong className="info-val" style={{ color: '#94a3b8' }}>—</strong>
+                      )}
+                    </div>
+
+                    {/* 4. Email */}
+                    <div className="info-block">
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Email Address</span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('customer_email')}
+                            title="Edit Email"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'customer_email' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'customer_email' || editingField === 'all') ? (
+                        <div>
+                          <input
+                            type="email"
+                            className="admin-input"
+                            value={editFormData.customer_email ?? ''}
+                            onChange={(e) => handleEditFieldChange('customer_email', e.target.value)}
+                            placeholder="customer@example.com"
+                            style={{ width: '100%', fontSize: '0.9rem', marginTop: '4px', borderColor: editFormErrors.customer_email ? '#ef4444' : undefined }}
+                          />
+                          {editFormErrors.customer_email && (
+                            <span style={{ color: '#ef4444', fontSize: '0.75rem', display: 'block', marginTop: '2px' }}>
+                              {editFormErrors.customer_email}
+                            </span>
+                          )}
+                          {editingField === 'customer_email' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('customer_email')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : email ? (
+                        <a href={`mailto:${email}`} className="info-val-link">{email}</a>
+                      ) : (
+                        <strong className="info-val" style={{ color: '#94a3b8' }}>—</strong>
+                      )}
+                    </div>
+
+                    {/* 5. Customer Address */}
+                    <div className="info-block" style={{ gridColumn: '1 / -1' }}>
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Customer Address / Location</span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('customer_address')}
+                            title="Edit Address"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'customer_address' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'customer_address' || editingField === 'all') ? (
+                        <div>
+                          <input
+                            type="text"
+                            className="admin-input"
+                            value={editFormData.customer_address ?? ''}
+                            onChange={(e) => handleEditFieldChange('customer_address', e.target.value)}
+                            placeholder="Full street address, landmark, or city"
+                            style={{ width: '100%', fontSize: '0.9rem', marginTop: '4px' }}
+                          />
+                          {editingField === 'customer_address' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('customer_address')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <strong className="info-val">{selectedEnquiry.customer_address || selectedEnquiry.address || '—'}</strong>
+                      )}
+                    </div>
+
+                    {/* 6. Requirement Category */}
+                    <div className="info-block">
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Requirement Category</span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('category_interest')}
+                            title="Edit Requirement Category"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'category_interest' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'category_interest' || editingField === 'all') ? (
+                        <div>
+                          <select
+                            className="admin-select"
+                            value={editFormData.category_interest ?? 'General / Other'}
+                            onChange={(e) => handleEditFieldChange('category_interest', e.target.value)}
+                            style={{ width: '100%', height: '36px', fontSize: '0.86rem', marginTop: '4px' }}
+                          >
+                            {SERVICE_CATEGORY_GROUPS.map((grp) => (
+                              <optgroup key={grp.group} label={grp.group}>
+                                {grp.categories.map((cat) => (
+                                  <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                              </optgroup>
+                            ))}
+                            <optgroup label="Other Categories">
+                              <option value="General / Other">General / Other</option>
+                              <option value="CCTV & Surveillance">CCTV & Surveillance</option>
+                              <option value="Biometric & Access Control">Biometric & Access Control</option>
+                              <option value="Networking & Wi-Fi">Networking & Wi-Fi</option>
+                              <option value="POS Systems & Billing Machines">POS Systems & Billing Machines</option>
+                              <option value="Software & Antivirus">Software & Antivirus</option>
+                            </optgroup>
+                          </select>
+                          {editingField === 'category_interest' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('category_interest')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <strong className="info-val">{selectedEnquiry.category_interest || 'General / Other'}</strong>
+                      )}
+                    </div>
+
+                    {/* 7. Enquiry Type */}
+                    <div className="info-block">
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Enquiry Type</span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('enquiry_type')}
+                            title="Edit Enquiry Type"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'enquiry_type' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'enquiry_type' || editingField === 'all') ? (
+                        <div>
+                          <select
+                            className="admin-select"
+                            value={editFormData.enquiry_type ?? 'general'}
+                            onChange={(e) => handleEditFieldChange('enquiry_type', e.target.value)}
+                            style={{ width: '100%', height: '36px', fontSize: '0.86rem', marginTop: '4px' }}
+                          >
+                            <option value="general">General Enquiry</option>
+                            <option value="product">Product Information</option>
+                            <option value="quotation">Price Quotation</option>
+                            <option value="service_request">Service &amp; Repair Request</option>
+                          </select>
+                          {editingField === 'enquiry_type' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('enquiry_type')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <strong className="info-val" style={{ textTransform: 'capitalize' }}>
+                          {(selectedEnquiry.enquiry_type || 'general').replace('_', ' ')}
+                        </strong>
+                      )}
+                    </div>
+
+                    {/* 8. Specific Requirement Title */}
+                    <div className="info-block" style={{ gridColumn: '1 / -1' }}>
+                      <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Specific Requirement Title / Model Requested</span>
+                        {canUserEditEnquiry && !isEditingEnquiry && (
+                          <button
+                            type="button"
+                            className="field-edit-btn"
+                            onClick={() => handleStartEdit('service_requested')}
+                            title="Edit Requirement Title"
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                        {editingField === 'service_requested' && (
+                          <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                        )}
+                      </span>
+                      {isEditingEnquiry && (editingField === 'service_requested' || editingField === 'all') ? (
+                        <div>
+                          <input
+                            type="text"
+                            className="admin-input"
+                            value={editFormData.service_requested ?? ''}
+                            onChange={(e) => handleEditFieldChange('service_requested', e.target.value)}
+                            placeholder="e.g. Dell Latitude 5420 Laptop Battery Replacement"
+                            style={{ width: '100%', fontSize: '0.9rem', marginTop: '4px' }}
+                          />
+                          {editingField === 'service_requested' && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={() => handleSaveEdit('service_requested')}
+                                style={{ padding: '3px 10px', fontSize: '0.78rem' }}
+                              >
+                                {isSavingEdit ? 'Saving...' : '✓ Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-outline btn-sm"
+                                disabled={isSavingEdit}
+                                onClick={handleCancelEdit}
+                                style={{ padding: '3px 8px', fontSize: '0.78rem' }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="info-val" style={{ fontWeight: 600, color: '#1e293b' }}>
+                          {selectedEnquiry.service_requested || requirement}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section: Service & Repair Specifications */}
+                  {(() => {
+                    const sm = parseServiceEnquiry(selectedEnquiry)
+                    const showServiceSection = sm.isService || (isEditingEnquiry && editFormData.enquiry_type === 'service_request') || Boolean(selectedEnquiry.service_details)
+                    if (!showServiceSection) return null
+
+                    return (
+                      <div className="service-spec-panel" style={{ marginTop: '16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '14px' }}>
+                        <div className="service-spec-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="service-repair-badge" style={{ background: '#16a34a', color: '#ffffff', padding: '3px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700 }}>
+                              🛠️ Service / Repair Specifications
+                            </span>
+                            {sm.ticketNumber && (
+                              <span className="service-ticket-tag" style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600 }}>
+                                {sm.ticketNumber}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="service-spec-grid">
-                          {sm.productCategory && (
-                            <div className="info-block">
-                              <span className="info-label">Product Category</span>
-                              <strong className="info-val">{sm.productCategory}</strong>
-                            </div>
-                          )}
-                          {sm.requestType && (
-                            <div className="info-block">
-                              <span className="info-label">Request Type</span>
-                              <strong className="info-val">{sm.requestType}</strong>
-                            </div>
-                          )}
-                          {sm.brandModel && (
-                            <div className="info-block">
-                              <span className="info-label">Brand &amp; Model</span>
-                              <strong className="info-val">{sm.brandModel}</strong>
-                            </div>
-                          )}
-                          {sm.serialInvoice && (
-                            <div className="info-block">
-                              <span className="info-label">Serial / Invoice</span>
-                              <strong className="info-val">{sm.serialInvoice}</strong>
-                            </div>
-                          )}
-                          {sm.purchaseDate && (
-                            <div className="info-block">
-                              <span className="info-label">Purchase Date</span>
-                              <strong className="info-val">{sm.purchaseDate}</strong>
-                            </div>
-                          )}
-                          {sm.serviceLocation && (
-                            <div className="info-block">
-                              <span className="info-label">Service Location</span>
-                              <strong className="info-val">{sm.serviceLocation}</strong>
-                            </div>
-                          )}
-                          {sm.preferredVisitDate && (
-                            <div className="info-block">
-                              <span className="info-label">Preferred Visit Date</span>
-                              <strong className="info-val">{sm.preferredVisitDate}</strong>
-                            </div>
-                          )}
-                          {sm.diagnosticsSummary && (
-                            <div className="info-block" style={{ gridColumn: '1 / -1' }}>
-                              <span className="info-label">Diagnostic Symptoms</span>
+                        <div className="service-spec-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                          {/* Customer Type */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Customer Type</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('customer_type')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'customer_type' || editingField === 'all') ? (
+                              <div>
+                                <select className="admin-select" value={editFormData.customer_type ?? 'Individual'} onChange={(e) => handleEditFieldChange('customer_type', e.target.value)} style={{ width: '100%', height: '34px', fontSize: '0.85rem' }}>
+                                  <option value="Individual">Individual</option>
+                                  <option value="Business">Business</option>
+                                  <option value="Corporate">Corporate</option>
+                                </select>
+                                {editingField === 'customer_type' && (
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('customer_type')} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>✓ Save</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.customerType || selectedEnquiry.service_details?.customer_type || 'Individual'}</strong>
+                            )}
+                          </div>
+
+                          {/* Product Category */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Product Category</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('product_category')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'product_category' || editingField === 'all') ? (
+                              <div>
+                                <input type="text" className="admin-input" value={editFormData.product_category ?? ''} onChange={(e) => handleEditFieldChange('product_category', e.target.value)} placeholder="e.g. Laptop, CCTV" style={{ width: '100%', fontSize: '0.85rem' }} />
+                                {editingField === 'product_category' && (
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('product_category')} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>✓ Save</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.productCategory || selectedEnquiry.service_details?.product_category || '—'}</strong>
+                            )}
+                          </div>
+
+                          {/* Request Type */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Request Type</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('request_type')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'request_type' || editingField === 'all') ? (
+                              <div>
+                                <select className="admin-select" value={editFormData.request_type ?? 'On-site Service'} onChange={(e) => handleEditFieldChange('request_type', e.target.value)} style={{ width: '100%', height: '34px', fontSize: '0.85rem' }}>
+                                  <option value="On-site Service">On-site Service</option>
+                                  <option value="Carry-in Service">Carry-in Service</option>
+                                  <option value="Pickup & Delivery">Pickup & Delivery</option>
+                                  <option value="Consultation">Consultation</option>
+                                </select>
+                                {editingField === 'request_type' && (
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('request_type')} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>✓ Save</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.requestType || selectedEnquiry.service_details?.request_type || '—'}</strong>
+                            )}
+                          </div>
+
+                          {/* Brand & Model */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Brand &amp; Model</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('brand')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'brand' || editingField === 'all') ? (
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <input type="text" className="admin-input" value={editFormData.brand ?? ''} onChange={(e) => handleEditFieldChange('brand', e.target.value)} placeholder="Brand" style={{ width: '50%', fontSize: '0.85rem' }} />
+                                <input type="text" className="admin-input" value={editFormData.model_number ?? ''} onChange={(e) => handleEditFieldChange('model_number', e.target.value)} placeholder="Model" style={{ width: '50%', fontSize: '0.85rem' }} />
+                                {editingField === 'brand' && (
+                                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('brand')} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✓</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 4px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.brandModel || (selectedEnquiry.service_details?.brand ? `${selectedEnquiry.service_details.brand} ${selectedEnquiry.service_details.model_number || ''}` : '—')}</strong>
+                            )}
+                          </div>
+
+                          {/* Serial & Invoice */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Serial / Invoice</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('serial_number')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'serial_number' || editingField === 'all') ? (
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <input type="text" className="admin-input" value={editFormData.serial_number ?? ''} onChange={(e) => handleEditFieldChange('serial_number', e.target.value)} placeholder="Serial No" style={{ width: '50%', fontSize: '0.85rem' }} />
+                                <input type="text" className="admin-input" value={editFormData.invoice_number ?? ''} onChange={(e) => handleEditFieldChange('invoice_number', e.target.value)} placeholder="Invoice No" style={{ width: '50%', fontSize: '0.85rem' }} />
+                                {editingField === 'serial_number' && (
+                                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('serial_number')} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✓</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 4px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.serialInvoice || selectedEnquiry.service_details?.serial_number || '—'}</strong>
+                            )}
+                          </div>
+
+                          {/* Purchase Date */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Purchase Date</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('purchase_date')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'purchase_date' || editingField === 'all') ? (
+                              <div>
+                                <input type="date" className="admin-input" value={editFormData.purchase_date ?? ''} onChange={(e) => handleEditFieldChange('purchase_date', e.target.value)} style={{ width: '100%', fontSize: '0.85rem' }} />
+                                {editingField === 'purchase_date' && (
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('purchase_date')} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>✓ Save</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.purchaseDate || selectedEnquiry.service_details?.purchase_date || '—'}</strong>
+                            )}
+                          </div>
+
+                          {/* Service Location & Site Address */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Service Location</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('service_location')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'service_location' || editingField === 'all') ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <select className="admin-select" value={editFormData.service_location ?? 'In-shop'} onChange={(e) => handleEditFieldChange('service_location', e.target.value)} style={{ width: '100%', height: '34px', fontSize: '0.85rem' }}>
+                                  <option value="In-shop">In-shop (Carry-in)</option>
+                                  <option value="On-site">On-site (At Customer Location)</option>
+                                </select>
+                                <input type="text" className="admin-input" value={editFormData.site_address ?? ''} onChange={(e) => handleEditFieldChange('site_address', e.target.value)} placeholder="Site address / branch" style={{ width: '100%', fontSize: '0.82rem' }} />
+                                {editingField === 'service_location' && (
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('service_location')} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>✓ Save</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.serviceLocation || selectedEnquiry.service_details?.service_location || '—'}</strong>
+                            )}
+                          </div>
+
+                          {/* Preferred Visit Date */}
+                          <div className="info-block">
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Preferred Visit Date</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('preferred_visit_date')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'preferred_visit_date' || editingField === 'all') ? (
+                              <div>
+                                <input type="date" className="admin-input" value={editFormData.preferred_visit_date ?? ''} onChange={(e) => handleEditFieldChange('preferred_visit_date', e.target.value)} style={{ width: '100%', fontSize: '0.85rem' }} />
+                                {editingField === 'preferred_visit_date' && (
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('preferred_visit_date')} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>✓ Save</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong className="info-val">{sm.preferredVisitDate || selectedEnquiry.service_details?.preferred_visit_date || '—'}</strong>
+                            )}
+                          </div>
+
+                          {/* Diagnostics */}
+                          <div className="info-block" style={{ gridColumn: '1 / -1' }}>
+                            <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>Diagnostic Symptoms</span>
+                              {canUserEditEnquiry && !isEditingEnquiry && (
+                                <button type="button" className="field-edit-btn" onClick={() => handleStartEdit('diagnostics')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb' }}>✏️</button>
+                              )}
+                            </span>
+                            {isEditingEnquiry && (editingField === 'diagnostics' || editingField === 'all') ? (
+                              <div>
+                                <input type="text" className="admin-input" value={editFormData.diagnostics ?? ''} onChange={(e) => handleEditFieldChange('diagnostics', e.target.value)} placeholder="e.g. No display, overheating, liquid spill" style={{ width: '100%', fontSize: '0.85rem' }} />
+                                {editingField === 'diagnostics' && (
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                    <button type="button" className="btn-primary btn-sm" disabled={isSavingEdit} onClick={() => handleSaveEdit('diagnostics')} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>✓ Save</button>
+                                    <button type="button" className="btn-outline btn-sm" disabled={isSavingEdit} onClick={handleCancelEdit} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
                               <strong className="info-val" style={{ color: '#0369a1' }}>
-                                🔍 {sm.diagnosticsSummary}
+                                {sm.diagnosticsSummary || selectedEnquiry.service_details?.diagnostics ? `🔍 ${sm.diagnosticsSummary || selectedEnquiry.service_details?.diagnostics}` : '—'}
                               </strong>
-                            </div>
-                          )}
-                          {sm.attachmentUrl && (
-                            <div className="info-block" style={{ gridColumn: '1 / -1' }}>
-                              <span className="info-label">Attachment</span>
-                              <a
-                                href={sm.attachmentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="info-val-link"
-                              >
-                                📎 View Uploaded Document / Photo
-                              </a>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     )
                   })()}
 
-                  <div>
-                    <span className="info-label" style={{ display: 'block', marginBottom: '4px' }}>Problem Description / Customer Note</span>
-                    <div className="enquiry-message-card" style={{ background: '#ffffff', padding: '10px 14px' }}>
-                      <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b' }}>
-                        {(() => {
-                          const sm = parseServiceEnquiry(selectedEnquiry)
-                          return sm.isService && sm.problemDescription ? sm.problemDescription : (selectedEnquiry.message || 'No message provided')
-                        })()}
-                      </p>
-                    </div>
+                  {/* Problem Description / Customer Note */}
+                  <div style={{ marginTop: '14px' }}>
+                    <span className="info-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span>Problem Description / Customer Note <span style={{ color: '#ef4444' }}>*</span></span>
+                      {canUserEditEnquiry && !isEditingEnquiry && (
+                        <button
+                          type="button"
+                          className="field-edit-btn"
+                          onClick={() => handleStartEdit('message')}
+                          title="Edit Problem Description"
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 4px', fontSize: '0.8rem', color: '#2563eb' }}
+                        >
+                          ✏️
+                        </button>
+                      )}
+                      {editingField === 'message' && (
+                        <span style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>EDITING</span>
+                      )}
+                    </span>
+                    {isEditingEnquiry && (editingField === 'message' || editingField === 'all') ? (
+                      <div>
+                        <textarea
+                          className="admin-textarea"
+                          rows={4}
+                          value={editFormData.message ?? ''}
+                          onChange={(e) => handleEditFieldChange('message', e.target.value)}
+                          placeholder="Detailed customer message / problem description..."
+                          style={{ width: '100%', fontSize: '0.9rem', borderColor: editFormErrors.message ? '#ef4444' : undefined }}
+                        />
+                        {editFormErrors.message && (
+                          <span style={{ color: '#ef4444', fontSize: '0.75rem', display: 'block', marginTop: '2px' }}>
+                            {editFormErrors.message}
+                          </span>
+                        )}
+                        {editingField === 'message' && (
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                            <button
+                              type="button"
+                              className="btn-primary btn-sm"
+                              disabled={isSavingEdit}
+                              onClick={() => handleSaveEdit('message')}
+                              style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                            >
+                              {isSavingEdit ? 'Saving...' : '✓ Save Problem Description'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-outline btn-sm"
+                              disabled={isSavingEdit}
+                              onClick={handleCancelEdit}
+                              style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                            >
+                              ✕ Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="enquiry-message-card" style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                        <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', fontSize: '0.9rem' }}>
+                          {(() => {
+                            const sm = parseServiceEnquiry(selectedEnquiry)
+                            return sm.isService && sm.problemDescription ? sm.problemDescription : (selectedEnquiry.message || 'No message provided')
+                          })()}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -4982,6 +5966,59 @@ export default function AdminEnquiriesPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Full-Edit Sticky Save Changes Bar */}
+                {isEditingEnquiry && editingField === 'all' && (
+                  <div
+                    style={{
+                      position: 'sticky',
+                      bottom: 0,
+                      background: '#eff6ff',
+                      borderTop: '2px solid #2563eb',
+                      padding: '12px 18px',
+                      zIndex: 30,
+                      boxShadow: '0 -4px 14px rgba(37, 99, 235, 0.12)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>✏️</span> Multi-Field Edit Mode
+                      </strong>
+                      <span style={{ fontSize: '0.78rem', color: '#475569' }}>
+                        Review your modifications across sections, then click Save All Changes.
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="admin-input"
+                        placeholder="Reason for change / permanent audit note (optional)..."
+                        value={editSummaryNote}
+                        onChange={(e) => setEditSummaryNote(e.target.value)}
+                        style={{ flex: 1, minWidth: '220px', fontSize: '0.84rem' }}
+                      />
+                      <button
+                        type="button"
+                        id="save-all-enquiry-changes-btn"
+                        className="btn-primary"
+                        disabled={isSavingEdit}
+                        onClick={() => handleSaveEdit(null)}
+                        style={{ padding: '8px 18px', fontSize: '0.84rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <span>💾</span> {isSavingEdit ? 'Saving All Changes...' : 'Save All Changes'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        disabled={isSavingEdit}
+                        onClick={handleCancelEdit}
+                        style={{ padding: '8px 14px', fontSize: '0.84rem' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Modal Footer: Customer Communication Actions & Close */}
                 {(() => {
