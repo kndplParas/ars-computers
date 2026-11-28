@@ -40,7 +40,12 @@
  *   - Rate limits are enforced inside the database (per identifier, per IP).
  */
 
-import { getNotificationConfig, sendNotificationEmail, escapeHtml } from './notificationService.js'
+import {
+  getNotificationConfig,
+  sendNotificationEmail,
+  NotificationRecipientRejectedError,
+  escapeHtml
+} from './notificationService.js'
 
 const EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 const OTP_SECRET_MIN_LENGTH = 32
@@ -279,14 +284,26 @@ export async function handleTrackingOtpRequest(request, env) {
 
       const config = getNotificationConfig(env)
       const email = buildOtpEmail({ code: data.otp_code, expiresInMinutes: data.expires_in_minutes })
-      await sendNotificationEmail(config, {
-        to: data.delivery_email,
-        subject: email.subject,
-        text: email.text,
-        html: email.html,
-        // Unique per send attempt without revealing anything.
-        idempotencyKey: `ars-otp-${clientHash.slice(0, 16)}-${Date.now()}`
-      })
+      try {
+        await sendNotificationEmail(config, {
+          to: data.delivery_email,
+          subject: email.subject,
+          text: email.text,
+          html: email.html,
+          // Unique per send attempt without revealing anything.
+          idempotencyKey: `ars-otp-${clientHash.slice(0, 16)}-${Date.now()}`
+        })
+      } catch (deliveryError) {
+        if (deliveryError instanceof NotificationRecipientRejectedError) {
+          // Log recipient rejection with sanitized category and status code only.
+          // Never log raw provider bodies, unmasked emails, OTP codes, or secrets.
+          console.warn(
+            `[tracking-otp] Email delivery rejected: recipient deliverability validation failure (HTTP ${deliveryError.statusCode || 422}).`
+          )
+          return noStoreJson({ success: true, message: GENERIC_OTP_MESSAGE })
+        }
+        throw deliveryError
+      }
     }
 
     // Identical generic success in every path: delivered, undelivered,

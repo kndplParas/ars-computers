@@ -30,6 +30,16 @@ export class NotificationConfigurationError extends Error {
   }
 }
 
+export class NotificationRecipientRejectedError extends Error {
+  constructor(message, { statusCode, provider, details } = {}) {
+    super(message)
+    this.name = 'NotificationRecipientRejectedError'
+    this.statusCode = statusCode || 422
+    this.provider = provider || 'email'
+    this.details = details || ''
+  }
+}
+
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
@@ -519,9 +529,29 @@ export async function sendNotificationEmail(
     if (!response.ok) {
       const detail = await readErrorMessage(response)
       const safeDetail = detail.replaceAll(String(to), maskEmail(to))
-      throw new Error(
-        `Email provider rejected the message (HTTP ${response.status}${safeDetail ? `: ${safeDetail}` : ''}).`
-      )
+      const errorMessage = `Email provider rejected the message (HTTP ${response.status}${safeDetail ? `: ${safeDetail}` : ''}).`
+
+      // Specifically identify invalid/unroutable/sandbox recipient rejection from Resend:
+      // Only classify as NotificationRecipientRejectedError when the response status is 422 or 400
+      // AND the error detail explicitly identifies a recipient/delivery target failure:
+      // - The `to` field specifically (e.g. `Invalid \`to\` field`, `field "to"`, `parameter 'to'`)
+      // - Explicit recipient references (e.g. `invalid recipient`, `recipient email address`, `testing email address`, `recipient domain`, `mailbox`)
+      // Unrelated 422/400 validation errors (e.g. "Failed to parse request", "Unable to validate payload", invalid `from`)
+      // must NOT be matched and must remain standard errors so they are treated as genuine failures.
+      const isSenderFailure = /(?:^|\W)(?:from(?:`|'|"|\s)|`from`|sender)(?:\W|$)/i.test(detail)
+      const isRecipientFailure =
+        !isSenderFailure &&
+        (response.status === 422 || response.status === 400) &&
+        /(?:(?:`|'|")to(?:`|'|")|field\s+["'`]?to["'`]?|parameter\s+["'`]?to["'`]?|\bto\s+field|\bto\s+address|\brecipient\b|\btesting email address\b|\brecipient domain\b|\bmailbox\b|\bmx record\b)/i.test(detail)
+
+      if (isRecipientFailure) {
+        throw new NotificationRecipientRejectedError(errorMessage, {
+          statusCode: response.status,
+          provider: 'resend',
+          details: safeDetail
+        })
+      }
+      throw new Error(errorMessage)
     }
 
     let messageId = null
